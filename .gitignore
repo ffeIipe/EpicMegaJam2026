@@ -73,3 +73,10 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# FMOD native libs (required by the plugin build; not generated)
+!Plugins/FMODStudio/Binaries/
+!Plugins/FMODStudio/Binaries/Win64/
+!Plugins/FMODStudio/Binaries/Win64/fmod*.dll
+!Plugins/FMODStudio/Binaries/Win64/fmod*.lib
+!Plugins/FMODStudio/Binaries/Win64/resonanceaudio.dll
