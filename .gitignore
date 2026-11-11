@@ -80,3 +80,8 @@ DerivedDataCache/*
 !Plugins/FMODStudio/Binaries/Win64/fmod*.dll
 !Plugins/FMODStudio/Binaries/Win64/fmod*.lib
 !Plugins/FMODStudio/Binaries/Win64/resonanceaudio.dll
+
+# FMOD Studio project (generated/local folders; keep Assets, Metadata, Scripts, .fspro)
+FMODStudio/**/Cache/
+FMODStudio/**/Build/
+FMODStudio/**/Local/
