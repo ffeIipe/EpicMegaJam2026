@@ -10,14 +10,14 @@
     <Platform Name="Win64-arm64ec" />
   </Configurations>
   <Folder Name="/Engine/">
-    <Project Path="Intermediate/ProjectFiles/UE5.vcxproj" Id="81dbfed1-43ba-3b2c-9284-841fb69a5d12">
+    <Project Path="Intermediate/ProjectFiles/UE5.vcxproj" Id="707b2c09-fde1-33d5-867a-31bb06c5c410">
       <BuildType Project="BuiltWithUnrealBuildTool" />
       <Platform Project="Win64" />
       <Build Project="false" />
     </Project>
   </Folder>
   <Folder Name="/Games/">
-    <Project Path="Intermediate/ProjectFiles/EpicMegaJam2026.vcxproj" Id="5bc1dc5a-f663-3aad-bba7-7a577799bd2f">
+    <Project Path="Intermediate/ProjectFiles/EpicMegaJam2026.vcxproj" Id="fb88e128-3a3a-3c2a-841a-2b51d874aeed">
       <BuildType Solution="DebugGame Editor|Win64" Project="DebugGame_Editor" />
       <BuildType Solution="DebugGame Editor|Win64-arm64" Project="Win64_arm64_DebugGame_Editor" />
       <BuildType Solution="DebugGame Editor|Win64-arm64ec" Project="Win64_arm64ec_DebugGame_Editor" />
@@ -34,9 +34,9 @@
     </Project>
   </Folder>
   <Folder Name="/Visualizers/">
-    <File Path="C:/UnrealVersions/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natjmc" />
-    <File Path="C:/UnrealVersions/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natstepfilter" />
-    <File Path="C:/UnrealVersions/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natvis" />
+    <File Path="C:/Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natjmc" />
+    <File Path="C:/Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natstepfilter" />
+    <File Path="C:/Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natvis" />
   </Folder>
   <Properties Name="ddbf523f-7eb6-4887-bd51-85a714ff87eb">
     <Property Name="AvailablePlatforms" Value="Win64" />
