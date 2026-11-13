@@ -35,6 +35,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
 	UPROPERTY() TObjectPtr<UWidget> Prompt;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptKeyText;
 	// Bottom-center hotbar: the tapes the player carries (UAC_Inventory::Hotbar)
 	UPROPERTY() TArray<TObjectPtr<UBorder>> HotbarFrames;
 	UPROPERTY() TArray<TObjectPtr<UImage>> HotbarCovers;

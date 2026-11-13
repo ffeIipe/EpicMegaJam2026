@@ -1,6 +1,7 @@
 #include "UI/DCHudWidgets.h"
 #include "Core/DCGameMode.h"
 #include "Core/DCPlayerController.h"
+#include "Core/DCSettings.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -42,7 +43,7 @@ void UDCHUDWidget::NativeOnInitialized()
 	RentText = DCUI::Text(WidgetTree, V, TEXT(""));
 	HeldText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Accent::StaticClass());
 
-	// Crosshair with the interaction prompt ("[CLICK] Talk to the customer") under it
+	// Crosshair with the interaction prompt ("[E] Talk to the customer") under it
 	UVerticalBox* Center = WidgetTree->ConstructWidget<UVerticalBox>();
 	UCanvasPanelSlot* CS = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Center);
 	CS->SetAnchors(FAnchors(0.5f, 0.5f));
@@ -55,7 +56,8 @@ void UDCHUDWidget::NativeOnInitialized()
 	UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
 	PromptPlate->SetContent(H);
 	UCommonBorder* Cap = DCUI::Border(WidgetTree, H, UDCBorder_KeyCap::StaticClass(), FMargin(8.f, 4.f));
-	Cap->SetContent(DCUI::Text(WidgetTree, nullptr, TEXT("CLICK"), UDCText_Heading::StaticClass()));
+	PromptKeyText = DCUI::Text(WidgetTree, nullptr, TEXT("E"), UDCText_Heading::StaticClass()); // set each tick from the rebindable key
+	Cap->SetContent(PromptKeyText);
 	Cast<UHorizontalBoxSlot>(Cap->Slot)->SetVerticalAlignment(VAlign_Center);
 	PromptText = DCUI::Text(WidgetTree, H, TEXT(""));
 	UHorizontalBoxSlot* TextSlot = Cast<UHorizontalBoxSlot>(PromptText->Slot);
@@ -101,6 +103,7 @@ void UDCHUDWidget::NativeOnInitialized()
 		HotbarTexts.Add(Label);
 	}
 	ShownHotbar.Init(NAME_None, HotbarSize);
+	Tapes->SetVisibility(ESlateVisibility::Collapsed); // DEPRECATED v1 (step 8): tapes are picked in the VHS player now, nothing fills it
 }
 
 void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -138,6 +141,7 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	const ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer());
 	const FText PromptLabel = PC ? PC->GetInteractPrompt() : FText::GetEmpty();
 	PromptText->SetText(PromptLabel);
+	PromptKeyText->SetText(UDCSettings::Get()->Interact.GetDisplayName(false).ToUpper());
 	Prompt->SetVisibility(PromptLabel.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 }
 
@@ -209,7 +213,7 @@ void UDCReviewToastWidget::ShowReview(const FReview& Review, int32 Stars, float 
 {
 	TitleText->SetText(Review.FilmTitle);
 	StarsText->SetText(FText::FromString(DCUI::Stars(Stars)));
-	LineText->SetText(Review.Line);
+	LineText->SetText(Review.FeedbackLine.IsEmpty() ? Review.Line : FText::Format(INVTEXT("{0}\n{1}"), Review.Line, Review.FeedbackLine));
 	MoneyText->SetText(FText::FromString(Review.MoneyDelta == 0 ? FString() : FString::Printf(TEXT("%+d"), Review.MoneyDelta)));
 	MoneyText->SetColorAndOpacity(FSlateColor(Review.MoneyDelta < 0 ? DCPalette::Red : DCPalette::Lime));
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);

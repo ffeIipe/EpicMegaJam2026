@@ -9,6 +9,7 @@ ADCGameMode::ADCGameMode()
 	ClientDirector = CreateDefaultSubobject<UAC_ClientDirector>(TEXT("ClientDirector"));
 	Inventory = CreateDefaultSubobject<UAC_Inventory>(TEXT("Inventory"));
 	FilmCrafting = CreateDefaultSubobject<UAC_FilmCrafting>(TEXT("FilmCrafting"));
+	Unlocks = CreateDefaultSubobject<UAC_Unlocks>(TEXT("Unlocks"));
 	DefaultPawnClass = ADCCounterCamera::StaticClass();
 	PlayerControllerClass = ADCPlayerController::StaticClass();
 }

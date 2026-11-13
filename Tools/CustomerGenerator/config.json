@@ -1,0 +1,25 @@
+{
+  "seed": 2026,
+  "npc_root": "Characters/NPCs",
+  "exclude_if_name_contains": ["Exotic"],
+  "skills": ["Funny", "Scary", "Brave", "Thoughtful", "Romantic"],
+  "dominant_weight": 3,
+  "secondary_weight_min": 1,
+  "secondary_weight_max": 2,
+  "role_skill": {
+    "Police": "Brave",
+    "Sheriff": "Brave",
+    "Firefighter": "Brave",
+    "Doctor": "Thoughtful"
+  },
+  "temperaments": {
+    "Cheerful":    { "weight": 4, "tier_min": 1, "tier_max": 5, "patience_mult": 1.2, "tip_mult": 1.2 },
+    "Grumpy":      { "weight": 3, "tier_min": 1, "tier_max": 5, "patience_mult": 0.8, "tip_mult": 0.7 },
+    "Shy":         { "weight": 3, "tier_min": 1, "tier_max": 3, "patience_mult": 1.0, "tip_mult": 0.9 },
+    "Pretentious": { "weight": 2, "tier_min": 3, "tier_max": 5, "patience_mult": 0.9, "tip_mult": 1.5 }
+  },
+  "names": {
+    "Male": ["Dale", "Walt", "Gus", "Ray", "Hank", "Lou", "Otis", "Vince", "Moe", "Earl", "Stan", "Wade", "Cliff", "Rex", "Duke", "Abe", "Ned", "Bert", "Carl", "Floyd", "Gil", "Hugo", "Ike", "Jed", "Kurt", "Leo", "Mack", "Norm", "Orson", "Pete", "Quinn", "Russ", "Sid", "Tom", "Vic", "Wally", "Zeke", "Arlo", "Boone", "Chet", "Dewey", "Elmer", "Fritz", "Grady", "Harlan", "Irwin", "Jasper", "Kirk", "Lyle", "Merle", "Nash", "Oscar", "Percy", "Reed", "Silas", "Titus", "Ulysses", "Virgil", "Wendell", "Xavier", "Yancy", "Zane", "Alvin", "Barney", "Chuck", "Doug", "Eddie", "Frank"],
+    "Female": ["Marge", "Dot", "Edna", "Ruth", "Peg", "Lola", "Vera", "Gail", "Fern", "Hazel", "Iris", "June", "Kay", "Lena", "Mabel", "Nora", "Opal", "Pearl", "Rita", "Sue", "Trudy", "Una", "Viv", "Wanda", "Zelda", "Alma", "Bess", "Cora", "Dina", "Elsie", "Faye", "Greta", "Hattie", "Ida", "Josie", "Kitty", "Lucille", "Maude", "Nell", "Olive", "Polly", "Queenie", "Rosa", "Stella", "Tessa", "Ursula", "Velma", "Winnie", "Xena", "Yvonne", "Zora", "Agnes", "Birdie", "Cleo", "Dolly", "Esme", "Flo", "Gert", "Hilda", "Inez", "Jean", "Kit", "Lil", "Mona", "Nina"]
+  }
+}

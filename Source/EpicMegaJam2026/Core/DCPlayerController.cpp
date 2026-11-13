@@ -2,6 +2,7 @@
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
 #include "Core/DCInteractable.h"
+#include "Core/DCSettings.h"
 #include "UI/DCWidgets.h"
 #include "UI/DCHudWidgets.h"
 #include "UI/DCMenuWidgets.h"
@@ -44,6 +45,7 @@ void ADCPlayerController::Cue(const TCHAR* Name) const
 void ADCPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+	UDCSettings::Get()->Apply(); // saved volume
 	LookRot = GetPawn() ? GetPawn()->GetActorRotation() : FRotator::ZeroRotator;
 	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || !GM->Config)
@@ -87,12 +89,11 @@ void ADCPlayerController::BeginPlay()
 void ADCPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ADCPlayerController::OnClick);
+	// Interact, return-tape and movement keys are rebindable (UDCSettings): PlayerTick polls them
 	for (const FKey& Key : {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine})
 	{
 		InputComponent->BindKey(Key, IE_Pressed, this, &ADCPlayerController::OnHotbarKey);
 	}
-	InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &ADCPlayerController::ReturnSelectedTape);
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADCPlayerController::TogglePause).bExecuteWhenPaused = true;
 #if !UE_BUILD_SHIPPING
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ADCPlayerController::ToggleDebugAttributes);
@@ -150,9 +151,19 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 		return;
 	}
 
+	UDCSettings* Settings = UDCSettings::Get();
+	if (WasInputKeyJustPressed(Settings->Interact))
+	{
+		OnInteract();
+	}
+	if (WasInputKeyJustPressed(Settings->ReturnTape))
+	{
+		ReturnSelectedTape();
+	}
+
 	float DX = 0.f, DY = 0.f;
 	GetInputMouseDelta(DX, DY);
-	const float Sens = GM->Config->MouseSensitivity;
+	const float Sens = GM->Config->MouseSensitivity * Settings->MouseSensitivityScale;
 	LookRot.Yaw = FRotator::NormalizeAxis(LookRot.Yaw + DX * Sens);
 	LookRot.Pitch = FMath::Clamp(LookRot.Pitch + DY * Sens, -GM->Config->LookPitchLimit, GM->Config->LookPitchLimit);
 	FRotator Rot = LookRot;
@@ -165,15 +176,15 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 	SetControlRotation(Rot);
 
 	const FRotationMatrix YawMatrix(FRotator(0.f, LookRot.Yaw, 0.f));
-	const FVector Move = YawMatrix.GetScaledAxis(EAxis::X) * ((IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (IsInputKeyDown(EKeys::S) ? 1.f : 0.f))
-		+ YawMatrix.GetScaledAxis(EAxis::Y) * ((IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (IsInputKeyDown(EKeys::A) ? 1.f : 0.f));
+	const FVector Move = YawMatrix.GetScaledAxis(EAxis::X) * ((IsInputKeyDown(Settings->MoveForward) ? 1.f : 0.f) - (IsInputKeyDown(Settings->MoveBack) ? 1.f : 0.f))
+		+ YawMatrix.GetScaledAxis(EAxis::Y) * ((IsInputKeyDown(Settings->MoveRight) ? 1.f : 0.f) - (IsInputKeyDown(Settings->MoveLeft) ? 1.f : 0.f));
 	if (!Move.IsNearlyZero())
 	{
 		GetPawn()->AddMovementInput(Move.GetSafeNormal());
 	}
 }
 
-// ---------------------------------------------------------------- Click interaction
+// ---------------------------------------------------------------- Interaction (key from UDCSettings, E by default)
 
 void ADCPlayerController::TraceTarget(ADCClient*& OutClient, const ADCInteractable*& OutProp) const
 {
@@ -224,7 +235,7 @@ FText ADCPlayerController::GetInteractPrompt() const
 	return Prop ? Prop->GetLabel() : FText::GetEmpty();
 }
 
-void ADCPlayerController::OnClick()
+void ADCPlayerController::OnInteract()
 {
 	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || IsBlockedByUI())
@@ -262,6 +273,9 @@ void ADCPlayerController::OnClick()
 		break;
 	case EInteractType::VHSPlayer:
 		PushScreen<UDCFilmCraftingWidget>(RootLayout, FilmCraftingWidgetClass);
+		break;
+	case EInteractType::Computer:
+		PushScreen<UDCComputerWidget>(RootLayout, ComputerWidgetClass);
 		break;
 	}
 }
@@ -445,7 +459,7 @@ void ADCPlayerController::DebugSpawnTutorialClient()
 {
 	if (ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
 	{
-		GM->ClientDirector->SpawnClient(GM->ClientDirector->TutorialArchetypeRow, EClientCategory::Casual);
+		GM->ClientDirector->SpawnClient(GM->ClientDirector->TutorialArchetypeRow);
 	}
 }
 

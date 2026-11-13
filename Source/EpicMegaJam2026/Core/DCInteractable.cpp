@@ -53,7 +53,8 @@ FText ADCInteractable::GetLabel() const
 	// TODO(DESIGN): placeholder wording; the doc only asks for an outline on aimed props
 	switch (InteractType)
 	{
-	case EInteractType::CashRegister: return FText::FromString(TEXT("Supplier catalog"));
+	case EInteractType::CashRegister: return FText::FromString(TEXT("Supplier: buy tapes"));
+	case EInteractType::Computer: return FText::FromString(TEXT("Computer: unlocks"));
 	case EInteractType::VHSPlayer: return FText::FromString(TEXT("VHS player: make a film"));
 	case EInteractType::Shelf: return FText::Format(FText::FromString(TEXT("{0} shelf")), StaticEnum<EGenre>()->GetDisplayNameTextByValue((int64)ShelfGenre));
 	default: return FText::GetEmpty();

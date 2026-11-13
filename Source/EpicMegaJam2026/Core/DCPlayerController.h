@@ -1,4 +1,4 @@
-// Input (WASD movement, free mouse look), click interaction, menus and game juice.
+// Input (rebindable movement, free mouse look), key interaction (E by default), menus and game juice.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -14,6 +14,7 @@ class UDCReviewToastWidget;
 class UDCEndScreenWidget;
 class UDCDaySummaryWidget;
 class UDCSupplierWidget;
+class UDCComputerWidget;
 class UDCShelfWidget;
 class UDCTutorialWidget;
 class UDCMainMenuWidget;
@@ -39,6 +40,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCEndScreenWidget> VictoryWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCDaySummaryWidget> DaySummaryWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCSupplierWidget> SupplierWidgetClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCComputerWidget> ComputerWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCShelfWidget> ShelfWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCTutorialWidget> TutorialWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCMainMenuWidget> MainMenuWidgetClass;
@@ -55,12 +57,12 @@ public:
 	virtual void PlayerTick(float DeltaTime) override;
 
 	UFUNCTION(BlueprintCallable) void StartShake();
-	// What a click would do right now ("Talk to the customer"), empty when nothing usable is under the crosshair.
+	// What the interact key would do right now ("Talk to the customer"), empty when nothing usable is under the crosshair.
 	UFUNCTION(BlueprintPure) FText GetInteractPrompt() const;
 
 private:
 	// Input
-	void OnClick();
+	void OnInteract();
 	void OnHotbarKey(FKey Key);
 	void ReturnSelectedTape();
 	void TogglePause();

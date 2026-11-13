@@ -1,0 +1,12 @@
+500 tapes
+Horror: 50
+Comedy: 50
+Action: 50
+Romance: 50
+Drama: 50
+SciFi: 50
+Adventure: 50
+Thriller: 50
+Experimental: 50
+BMovie: 50
+VALIDATION OK

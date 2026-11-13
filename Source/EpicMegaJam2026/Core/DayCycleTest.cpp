@@ -46,15 +46,44 @@ namespace
 			{
 				UAC_Inventory* Inv = GM->Inventory;
 				GM->Config->MovieBudgetGoal = 1000000;
-				Test->TestEqual(TEXT("starter tapes"), Inv->OwnedVHS.Num(), 9);
-				Test->TestFalse(TEXT("Date Night too expensive at $50"), Inv->BuyCatalog("DateNight"));
-				E->AddMoney(100);
-				Test->TestFalse(TEXT("Blockbusters locked on day 1"), Inv->CanBuyCatalog("Blockbusters"));
-				Test->TestTrue(TEXT("buy Date Night"), Inv->BuyCatalog("DateNight"));
-				Test->TestEqual(TEXT("money after purchase"), E->Money, 90);
-				Test->TestEqual(TEXT("tapes after purchase"), Inv->OwnedVHS.Num(), 14);
-				Test->TestFalse(TEXT("cannot buy twice"), Inv->BuyCatalog("DateNight"));
-				Test->TestEqual(TEXT("purchase is not earnings"), E->DayEarned, 100);
+				Test->TestEqual(TEXT("starting tapes (3 rows, 5 copies)"), Inv->GetOwnedVHS().Num(), 3);
+				UAC_Unlocks* U = GM->Unlocks;
+				Test->TestEqual(TEXT("starting slots"), GM->FilmCrafting->UnlockedSlots, 3);
+				Test->TestEqual(TEXT("starting star level"), U->UnlockedStarTier, 1);
+				Test->TestEqual(TEXT("starting genres"), U->GetGenreCount(), 3);
+
+				// Supplier: genre unlocked and stars within the license
+				Test->TestTrue(TEXT("1 star Horror on sale"), Inv->IsTapeForSale("VHS_Horror_1_02"));
+				Test->TestFalse(TEXT("Romance locked"), Inv->IsTapeForSale("VHS_Romance_1_01"));
+				Test->TestFalse(TEXT("2 stars locked"), Inv->IsTapeForSale("VHS_Horror_2_01"));
+				Test->TestEqual(TEXT("1 star price"), Inv->GetTapePrice("VHS_Horror_1_02"), 4);
+				Test->TestTrue(TEXT("buy x5"), Inv->BuyTape("VHS_Horror_1_02", 5));
+				Test->TestEqual(TEXT("copies after purchase"), Inv->GetCount("VHS_Horror_1_02"), 5);
+				Test->TestEqual(TEXT("money after purchase"), E->Money, 30);
+				Test->TestFalse(TEXT("cannot buy a locked genre"), Inv->BuyTape("VHS_Romance_1_01"));
+				Test->TestFalse(TEXT("cannot afford x10"), Inv->BuyTape("VHS_Horror_1_02", 10));
+				Test->TestEqual(TEXT("purchase is not earnings"), E->DayEarned, 0);
+
+				// Computer: slots, star levels and genres, each bought once and in order
+				E->AddMoney(2000);
+				Test->TestFalse(TEXT("Slot_5 needs Slot_4"), U->CanBuyUnlock("Slot_5"));
+				Test->TestTrue(TEXT("buy Slot_4"), U->BuyUnlock("Slot_4"));
+				Test->TestEqual(TEXT("4 slots in the player"), GM->FilmCrafting->SlotRows.Num(), 4);
+				Test->TestTrue(TEXT("buy Slot_5"), U->BuyUnlock("Slot_5"));
+				Test->TestTrue(TEXT("fifth slot usable"), GM->FilmCrafting->SetSlot(4, "VHS_Horror_1_02"));
+				GM->FilmCrafting->ClearSlot(4);
+				Test->TestFalse(TEXT("cannot buy twice"), U->BuyUnlock("Slot_4"));
+				Test->TestFalse(TEXT("Stars_3 needs Stars_2"), U->CanBuyUnlock("Stars_3"));
+				Test->TestTrue(TEXT("buy Stars_2"), U->BuyUnlock("Stars_2"));
+				Test->TestEqual(TEXT("star level 2"), U->UnlockedStarTier, 2);
+				Test->TestTrue(TEXT("2 stars on sale now"), Inv->IsTapeForSale("VHS_Horror_2_01"));
+				Test->TestTrue(TEXT("buy Genre_Romance"), U->BuyUnlock("Genre_Romance"));
+				Test->TestTrue(TEXT("Romance on sale now"), Inv->IsTapeForSale("VHS_Romance_1_01"));
+				Test->TestFalse(TEXT("premium genre needs 6 genres"), U->CanBuyUnlock("Genre_Experimental"));
+				Test->TestTrue(TEXT("buy Genre_Drama"), U->BuyUnlock("Genre_Drama"));
+				Test->TestTrue(TEXT("buy Genre_SciFi"), U->BuyUnlock("Genre_SciFi"));
+				Test->TestEqual(TEXT("six genres"), U->GetGenreCount(), 6);
+				Test->TestTrue(TEXT("premium genre now buyable"), U->BuyUnlock("Genre_Experimental"));
 				return true;
 			}
 

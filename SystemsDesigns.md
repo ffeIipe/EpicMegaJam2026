@@ -249,6 +249,17 @@ El inventario inicial (sección 4.3) alcanza para los tres. Desde el cliente 4 e
 
 Si termina la Noche, todos los clientes que siguen en el local pasan a `Leaving` sin penalidad.
 
+### 5.6 Personas (propuesto el 13 nov, pendiente de confirmar con el equipo)
+
+Cada mesh de `Content/Characters/NPCs` es una **persona**: una cara con nombre, gustos fijos y temperamento, para que el jugador aprenda a la gente y no solo el pedido.
+
+- **Fila `DT_Customers` (`FCustomerData`, en `Data/DCCustomers.h`):** `DisplayName`, `Mesh`, `TasteBias` (`S_SkillVector`, 0 a 3), `Temperament` (`Cheerful`, `Grumpy`, `Shy`, `Pretentious`), `TierMin` / `TierMax`, `SpawnPhase`, `SpawnWeight`, `PatienceMult`, `TipMult`.
+- **Gustos:** en el paso 4 de la sección 5.2, las cintas de la receta se sortean ponderadas por `TasteBias` (más `GeneratorBiasFloor`, para que nada quede en cero). Los pedidos de una persona giran siempre alrededor de las mismas skills.
+- **Temperamento:** multiplica la paciencia base (sin pasar de `ClientPatienceMaxSec`) y la propina, y elige el tono de saludo, despedida y reseña (columna `Temperament` en `DT_Greetings`, `DT_FarewellLines` y `DT_ReviewLines`). Las pistas (`DT_HintLines`) no cambian.
+- **Elegir persona:** el director sortea entre las personas con `Tier` dentro de `[TierMin, TierMax]` y fase válida, por `SpawnWeight`, y usa su mesh. Las personas reemplazan a `DT_ClientArchetypes` cuando esté integrado.
+- **Generación:** `Tools/CustomerGenerator/` (Python 3, `config.json`) crea una fila por mesh, con semilla fija. Excluye los meshes `Exotic_dancer` por las reglas de la jam. Las skills dominantes de policías, bomberos y sheriff son `Brave`, y las de médicos `Thoughtful`.
+- **Pendiente `TODO(DESIGN)`:** frases de saludo, despedida y reseña por temperamento (mínimo 3 por temperamento), nombres definitivos, y si los clientes recurrentes recuerdan la última reseña (no está definido ni implementado).
+
 ## 6. Puntuación y recompensa
 
 La reacción del cliente sale de la **distancia** entre el perfil de la película y su `Target`. Todo se calcula en `BPFL_Scoring` con funciones puras, en el momento de la entrega.
@@ -382,8 +393,9 @@ El jugador es un personaje en primera persona (sin modelo visible, solo cámara)
 **Personaje (`BP_CounterCamera`):**
 
 - Se mueve con WASD (`WalkSpeed`, inicial 300 cm/s), con colisión contra el mobiliario y las paredes. Sin salto ni correr.
-- Mira con el mouse sin límite de yaw y con pitch de ±`LookPitchLimit` (inicial 80°). Sensibilidad (`MouseSensitivity`) en `DA_GameConfig`.
-- Interacción por click izquierdo con trazado desde el centro de la pantalla, con alcance `InteractRange` (inicial 450 cm: el cliente del mostrador queda a unos 360 cm del punto de inicio). Los objetos interactuables se resaltan con un outline al apuntarlos.
+- Mira con el mouse sin límite de yaw y con pitch de ±`LookPitchLimit` (inicial 80°). Sensibilidad base (`MouseSensitivity`) en `DA_GameConfig`; el jugador la multiplica desde Opciones (`UDCSettings.MouseSensitivityScale`).
+- Teclas por defecto: `E` interactuar, `Q` devolver cinta, WASD mover. Se pueden cambiar desde Opciones del menú de pausa y se guardan por usuario (`GameUserSettings.ini`). Si se asigna una tecla que ya usa otra acción, las dos se intercambian. Los slots de hotbar (1-9) y `Esc` no se reasignan.
+- Interacción con la tecla de interactuar (`E`) con trazado desde el centro de la pantalla, con alcance `InteractRange` (inicial 450 cm: el cliente del mostrador queda a unos 360 cm del punto de inicio). Los objetos interactuables se resaltan con un outline al apuntarlos.
 
 **Cambio de zona:** no hay botón ni transición. El jugador camina por la puerta entre el mostrador y el depósito. El HUD no tiene botón de zona.
 
@@ -423,7 +435,7 @@ Toda la UI es UMG, en inglés, con estilo VHS/CRT (scanlines y tipografía tipo 
 | `WBP_ReviewToast` | Notificación de la página ficticia de reseñas (*"ReelTalk.net"*): título de la película, estrellas de 1 a 5 según la reacción, frase, línea de feedback (si no fue perfecto) y +/− plata. | Al llegar cada crítica, 4 s |
 | `WBP_DaySummary` | Ver sección 8. | Al cerrar cada día |
 | `WBP_GameOver` / `WBP_Victory` | Pantalla final con día alcanzado y botón de reiniciar. | Al perder o ganar |
-| `WBP_MainMenu` / `WBP_Pause` | Jugar, salir / continuar, reiniciar, salir. | Inicio / tecla `Esc` |
+| `WBP_MainMenu` / `WBP_Pause` | Jugar, salir / continuar, opciones (teclas, volumen general, sensibilidad), reiniciar, salir. | Inicio / tecla `Esc` |
 
 **Tutorial mínimo (hook de 15 a 20 s):** en la primera partida aparecen tres carteles contextuales, uno por vez: al llegar el primer cliente (*"Listen to what they want"*), al entrar al depósito (*"Pick tapes and combine them"*) y al tener una película en mano (*"Bring it back to the counter"*). Se desactivan con `bShowTutorial`.
 
@@ -480,6 +492,7 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | `DT_ClientTiers` | `S_ClientTierData` | Tier (int 1 a 5), DebugName (Text), RecipeTapesMin / RecipeTapesMax (int), RecipeStarMin / RecipeStarMax (int), MaxHintedSkills (int), PayMultiplier (float), SpawnWeight (float) |
 | `DT_ClientArchetypes` | `S_ClientArchetypeData` | DebugName (Text), Mesh (Skeletal Mesh), SpawnPhase (`E_SpawnPhase`), SpawnWeight (float), AllowedGenres (Array `E_Genre`, vacío = cualquiera desbloqueado), bTutorialOnly (bool). **Sin `FixedPreferences`.** |
 | `DT_ScriptedOrders` | `S_ScriptedOrderData` | Index (int), Target (`S_SkillVector`), HintedSkills (Array `S_HintedSkill`), ArchetypeRow (Name) |
+| `DT_Customers` | `S_CustomerData` | DisplayName (Text), Mesh (Skeletal Mesh), TasteBias (`S_SkillVector`), Temperament (`E_Temperament`), TierMin / TierMax (int), SpawnPhase (`E_SpawnPhase`), SpawnWeight (float), PatienceMult / TipMult (float). Generada por script (sección 5.6). |
 | `DT_HintLines` | `S_HintLineData` | Skill (`E_Skill`), Level (`E_HintLevel`), Text (Text) |
 | `DT_Greetings` | `S_LineData` | Text, SpawnPhase |
 | `DT_FarewellLines` | `S_LineData` | Text, SpawnPhase |

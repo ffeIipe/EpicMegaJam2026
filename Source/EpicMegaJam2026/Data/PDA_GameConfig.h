@@ -23,6 +23,41 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> FarewellTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ReviewLineTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> DayTable;
+	// v2 (section 11.3). CatalogTable and CategoryTable above are DEPRECATED (steps 6 and 7).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ClientTierTable;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ScriptedOrderTable;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> FeedbackLineTable;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> UnlockTable;
+	// Customer personas (section 5.6)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> CustomerTable;
+
+	// --- Skills (section 3, 4.1)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 SkillCap = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 TapeSkillMax = 3;
+	// Skill points of a tape by stars, index 0 = 1 star
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") TArray<int32> StarPoints;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 TapesPerStar = 10;
+	// Used by the VHS generator (section 4.2) so any skill can show up on a tape
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") float GeneratorBiasFloor = 0.25f;
+
+	// --- Hints (section 5.4)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hints") int32 HintHighMin = 3;
+
+	// --- Progression and inventory (sections 4.3, 7.1)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 StartUnlockedSlots = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 MaxSlots = 5;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 StartUnlockedStarTier = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 PremiumMinGenres = 6;
+	// DT_VHS row -> copies. TODO(DESIGN): rows exist after step 4 (pure tapes `_01` of 1 star)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory") TMap<FName, int32> StartingTapes;
+	// Price of one tape by stars, index 0 = 1 star
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory") TArray<int32> TapePriceByStar;
+
+	// --- Scoring v2 (section 6)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float LovedMaxError = 0.10f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float LikedMaxError = 0.35f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float NeutralMaxError = 0.65f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 TipAtPerfect = 12;
 
 	// --- Time
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Time") float DayDurationSec = 300.f;
@@ -44,23 +79,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Criterio") float CriterioPatienceBonusSec = 10.f;
 
 	// --- Crafting
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") TMap<EFilmSlot, float> SlotMultipliers;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") int32 MaxFilmTitleLength = 30;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") int32 MaxHeldFilms = 1;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") bool bShowSecondaryGenres = false;
-
-	// --- Scoring
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float AvoidBonus = 3.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float RatingStep = 0.1f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float LovedThreshold = 8.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float LikedThreshold = 3.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float NeutralThreshold = 0.f;
 
 	// --- Economy
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 StartMoney = 50;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 MovieBudgetGoal = 400;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 BaseRentalPrice = 10;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") float MoneyPerPoint = 2.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 ComplaintFine = 15;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 RentIncreaseAfterLastDay = 40;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") float ReviewDelaySec = 15.f;
@@ -103,9 +128,11 @@ public:
 
 	UPDA_GameConfig()
 	{
-		SlotMultipliers.Add(EFilmSlot::Intro, 1.f);
-		SlotMultipliers.Add(EFilmSlot::Middle, 1.f);
-		SlotMultipliers.Add(EFilmSlot::Ending, 1.f);
+		StarPoints = { 3, 4, 5, 6, 7 };
+		TapePriceByStar = { 4, 6, 9, 14, 20 };
+		StartingTapes.Add("VHS_Horror_1_01", 2);
+		StartingTapes.Add("VHS_Comedy_1_01", 2);
+		StartingTapes.Add("VHS_Action_1_01", 1);
 		ReviewStars.Add(EReaction::Loved, 5);
 		ReviewStars.Add(EReaction::Liked, 4);
 		ReviewStars.Add(EReaction::Neutral, 3);
