@@ -156,10 +156,18 @@ public:
 	// DT_VHS row names the player owns. Tapes are never consumed.
 	UPROPERTY(BlueprintReadOnly) TArray<FName> OwnedVHS;
 	UPROPERTY(BlueprintReadOnly) TArray<FName> OwnedCatalogs;
+	// Tapes the player carries (HotbarSize slots, NAME_None = empty). Taken from the shelves, used at the VHS player.
+	UPROPERTY(BlueprintReadOnly) TArray<FName> Hotbar;
+	UPROPERTY(BlueprintReadOnly) int32 SelectedHotbar = 0;
 
 	virtual void BeginPlay() override;
 
 	UFUNCTION(BlueprintCallable) bool HasVHS(FName Row) const { return OwnedVHS.Contains(Row); }
+	UFUNCTION(BlueprintCallable) bool IsCarried(FName Row) const { return Hotbar.Contains(Row); }
+	// Puts an owned tape in the first free hotbar slot; false when it is not owned, already carried, or the hotbar is full.
+	UFUNCTION(BlueprintCallable) bool TakeTape(FName Row);
+	// Puts a carried tape back on the shelves, also dropping it from the film being assembled.
+	UFUNCTION(BlueprintCallable) void ReturnTape(FName Row);
 	UFUNCTION(BlueprintCallable) TArray<FName> GetOwnedVHSByGenre(EGenre Genre) const;
 	UFUNCTION(BlueprintCallable) bool GetVHSData(FName Row, FVHSData& Out) const;
 	UFUNCTION(BlueprintCallable) void AddCatalog(FName CatalogRow);
@@ -185,6 +193,8 @@ public:
 	// Rejects tapes not owned or already used in another slot.
 	UFUNCTION(BlueprintCallable) bool SetSlot(EFilmSlot Slot, FName VHSRow);
 	UFUNCTION(BlueprintCallable) void ClearSlot(EFilmSlot Slot);
+	// Empties whichever slots hold this tape (it left the hotbar).
+	UFUNCTION(BlueprintCallable) void ClearTape(FName VHSRow);
 	UFUNCTION(BlueprintCallable) bool AreSlotsFull() const;
 	UFUNCTION(BlueprintCallable) bool CanConfirm() const;
 	UFUNCTION(BlueprintCallable) bool ConfirmFilm(FText Title);

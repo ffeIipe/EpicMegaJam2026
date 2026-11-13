@@ -5,6 +5,8 @@
 #include "UI/DCWidgets.h"
 #include "UI/DCHudWidgets.h"
 #include "UI/DCMenuWidgets.h"
+#include "UI/DCCommonUI.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Containers/Ticker.h"
 #include "Misc/App.h"
@@ -18,6 +20,14 @@ namespace
 		W->AddToViewport(ZOrder);
 		W->SetVisibility(Visibility);
 		return W;
+	}
+
+	// Replaces whatever screen is up (the stack has no transition, so the old one is gone right away)
+	template <typename T>
+	T* PushScreen(UDCRootLayout* Root, TSubclassOf<T> Cls)
+	{
+		Root->Stack->ClearWidgets();
+		return Root->Stack->AddWidget<T>(Cls ? Cls : TSubclassOf<T>(T::StaticClass()));
 	}
 }
 
@@ -34,13 +44,12 @@ void ADCPlayerController::Cue(const TCHAR* Name) const
 void ADCPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	ResetLook();
+	LookRot = GetPawn() ? GetPawn()->GetActorRotation() : FRotator::ZeroRotator;
 	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || !GM->Config)
 	{
 		return;
 	}
-	const ESlateVisibility Hidden = ESlateVisibility::Collapsed;
 	const ESlateVisibility PassThrough = ESlateVisibility::SelfHitTestInvisible;
 
 	HUDWidget = MakeWidget<UDCHUDWidget>(this, HUDWidgetClass, 0, PassThrough);
@@ -48,25 +57,8 @@ void ADCPlayerController::BeginPlay()
 	OrderPanelWidget->Setup(GM->ClientDirector);
 	TutorialWidget = MakeWidget<UDCTutorialWidget>(this, TutorialWidgetClass, 2, PassThrough);
 	ReviewToastWidget = MakeWidget<UDCReviewToastWidget>(this, ReviewToastWidgetClass, 3, PassThrough);
-
-	DialogueWidget = MakeWidget<UDCDialogueWidget>(this, DialogueWidgetClass, 4, Hidden);
-	DialogueWidget->OnButton.AddDynamic(this, &ADCPlayerController::OnDialogueButton);
-	FilmCraftingWidget = MakeWidget<UDCFilmCraftingWidget>(this, FilmCraftingWidgetClass, 4, Hidden);
-	FilmCraftingWidget->Setup(GM->Inventory, GM->FilmCrafting, GM->Config);
-	FilmCraftingWidget->OnBackToCounter.AddDynamic(this, &ADCPlayerController::CloseModal);
-	SupplierWidget = MakeWidget<UDCSupplierWidget>(this, SupplierWidgetClass, 4, Hidden);
-	SupplierWidget->Setup(GM->Inventory, GM->Economy, GM->DayNightCycle, GM->Config);
-	SupplierWidget->OnClose.AddDynamic(this, &ADCPlayerController::CloseModal);
-	ShelfWidget = MakeWidget<UDCShelfWidget>(this, ShelfWidgetClass, 4, Hidden);
-	ShelfWidget->Setup(GM->Inventory, GM->Config);
-	ShelfWidget->OnClose.AddDynamic(this, &ADCPlayerController::CloseModal);
-
-	DaySummaryWidget = MakeWidget<UDCDaySummaryWidget>(this, DaySummaryWidgetClass, 10, Hidden);
-	DaySummaryWidget->OnOpenStore.AddDynamic(this, &ADCPlayerController::HandleOpenStore);
-	PauseWidget = MakeWidget<UDCPauseWidget>(this, PauseWidgetClass, 11, Hidden);
-	PauseWidget->OnContinue.AddDynamic(this, &ADCPlayerController::HandleContinue);
-	MainMenuWidget = MakeWidget<UDCMainMenuWidget>(this, MainMenuWidgetClass, 12, Hidden);
-	MainMenuWidget->OnPlay.AddDynamic(this, &ADCPlayerController::HandlePlay);
+	RootLayout = MakeWidget<UDCRootLayout>(this, nullptr, 4, PassThrough);
+	RootLayout->Stack->OnDisplayedWidgetChanged().AddUObject(this, &ADCPlayerController::HandleScreenChanged);
 
 	GM->ClientDirector->OnReviewReceived.AddDynamic(this, &ADCPlayerController::HandleReview);
 	GM->ClientDirector->OnClientReachedCounter.AddDynamic(this, &ADCPlayerController::HandleClientReached);
@@ -78,21 +70,29 @@ void ADCPlayerController::BeginPlay()
 	GM->Economy->OnMoneyChanged.AddDynamic(this, &ADCPlayerController::HandleMoneyChanged);
 	GM->DayNightCycle->OnDayClosed.AddDynamic(this, &ADCPlayerController::HandleDayClosed);
 	GM->DayNightCycle->OnPhaseChanged.AddDynamic(this, &ADCPlayerController::HandlePhaseChanged);
-	OnZoneChanged.AddDynamic(this, &ADCPlayerController::HandleZoneChangedForTutorial);
+	TArray<AActor*> Zones;
+	UGameplayStatics::GetAllActorsWithTag(this, BackRoomZoneTag, Zones);
+	for (AActor* Zone : Zones)
+	{
+		Zone->OnActorBeginOverlap.AddDynamic(this, &ADCPlayerController::HandleZoneOverlap);
+	}
 
-	ApplyInputMode();
 	// Unattended runs (automated tests) skip the menu so the game starts by itself
 	if (GM->Config->bShowMainMenu && !FApp::IsUnattended())
 	{
-		OpenFullScreen(MainMenuWidget);
+		PushScreen<UDCMainMenuWidget>(RootLayout, MainMenuWidgetClass);
 	}
 }
 
 void ADCPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-	InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ADCPlayerController::ToggleZone);
 	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ADCPlayerController::OnClick);
+	for (const FKey& Key : {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine})
+	{
+		InputComponent->BindKey(Key, IE_Pressed, this, &ADCPlayerController::OnHotbarKey);
+	}
+	InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &ADCPlayerController::ReturnSelectedTape);
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADCPlayerController::TogglePause).bExecuteWhenPaused = true;
 #if !UE_BUILD_SHIPPING
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ADCPlayerController::ToggleDebugAttributes);
@@ -100,150 +100,41 @@ void ADCPlayerController::SetupInputComponent()
 #endif
 }
 
-// ---------------------------------------------------------------- Input mode and modals
+// ---------------------------------------------------------------- Screens
 
-void ADCPlayerController::ApplyInputMode()
+bool ADCPlayerController::IsBlockedByUI() const
 {
-	const bool bUI = Modal != EDCModal::None || bFullScreenUI;
-	SetShowMouseCursor(bUI);
-	if (bUI)
-	{
-		FInputModeGameAndUI Mode;
-		Mode.SetHideCursorDuringCapture(false);
-		SetInputMode(Mode);
-	}
-	else
-	{
-		SetInputMode(FInputModeGameOnly());
-	}
+	return RootLayout && RootLayout->Stack->GetActiveWidget() != nullptr;
 }
 
-UUserWidget* ADCPlayerController::GetModalWidget() const
+void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 {
-	switch (Modal)
+	const UDCScreen* DCScreen = Cast<UDCScreen>(Screen);
+	SetPause(DCScreen && DCScreen->bPausesGame);
+	if (!Cast<UDCDialogueWidget>(Screen))
 	{
-	case EDCModal::Dialogue: return DialogueWidget;
-	case EDCModal::Supplier: return SupplierWidget;
-	case EDCModal::Shelf: return ShelfWidget;
-	case EDCModal::Crafting: return FilmCraftingWidget;
-	default: return nullptr;
+		DialogueClient.Reset();
 	}
 }
 
-void ADCPlayerController::OpenModal(EDCModal NewModal, UUserWidget* Widget)
+void ADCPlayerController::CloseScreen()
 {
-	CloseModal();
-	Modal = NewModal;
-	Widget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	ApplyInputMode();
-}
-
-void ADCPlayerController::CloseModal()
-{
-	if (UUserWidget* W = GetModalWidget())
+	if (UCommonActivatableWidget* Screen = RootLayout ? RootLayout->Stack->GetActiveWidget() : nullptr)
 	{
-		W->SetVisibility(ESlateVisibility::Collapsed);
+		Screen->DeactivateWidget();
 	}
-	DialogueClient.Reset();
-	Modal = EDCModal::None;
-	ApplyInputMode();
 }
-
-void ADCPlayerController::OpenFullScreen(UUserWidget* Widget)
-{
-	CloseModal();
-	if (ActiveFullScreen)
-	{
-		ActiveFullScreen->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	ActiveFullScreen = Widget;
-	bFullScreenUI = true;
-	Widget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	ApplyInputMode();
-	SetPause(true);
-}
-
-void ADCPlayerController::HandleContinue()
-{
-	if (ActiveFullScreen)
-	{
-		ActiveFullScreen->SetVisibility(ESlateVisibility::Collapsed);
-		ActiveFullScreen = nullptr;
-	}
-	bFullScreenUI = false;
-	SetPause(false);
-	ApplyInputMode();
-}
-
-void ADCPlayerController::HandlePlay() { HandleContinue(); }
 
 void ADCPlayerController::TogglePause()
 {
-	if (bFullScreenUI)
+	// Only reached in game mode: with a screen up, Esc is the CommonUI back action
+	if (RootLayout && !IsBlockedByUI())
 	{
-		if (ActiveFullScreen == PauseWidget)
-		{
-			HandleContinue();
-		}
-		return; // menu, summary and end screens aren't dismissed with Esc
-	}
-	if (PauseWidget)
-	{
-		OpenFullScreen(PauseWidget);
+		PushScreen<UDCPauseWidget>(RootLayout, PauseWidgetClass);
 	}
 }
 
-// ---------------------------------------------------------------- Zones
-
-void ADCPlayerController::ResetLook()
-{
-	LookOffset = FRotator::ZeroRotator;
-	if (GetPawn())
-	{
-		SetControlRotation(GetPawn()->GetActorRotation());
-	}
-}
-
-void ADCPlayerController::ToggleZone()
-{
-	if (bFullScreenUI)
-	{
-		return;
-	}
-	CloseModal();
-	SwitchZone(CurrentZone == EZone::Counter ? EZone::BackRoom : EZone::Counter);
-}
-
-void ADCPlayerController::SwitchZone(EZone Target)
-{
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (bTransitioning || Target == CurrentZone || !GM || !GM->Config || !GetPawn())
-	{
-		return;
-	}
-	TArray<AActor*> Anchors;
-	UGameplayStatics::GetAllActorsWithTag(this, Target == EZone::Counter ? CounterAnchorTag : BackRoomAnchorTag, Anchors);
-	if (Anchors.Num() == 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("SwitchZone: no anchor actor tagged for the target zone"));
-		return;
-	}
-	FromTransform = GetPawn()->GetActorTransform();
-	ToTransform = Anchors[0]->GetActorTransform();
-	TargetZone = Target;
-	TransitionTime = 0.f;
-	bTransitioning = true;
-	// TODO(DESIGN): the doc calls for LS_ToBackRoom / LS_ToCounter Level Sequences; this is a plain lerp until art provides them.
-}
-
-void ADCPlayerController::OnArrived()
-{
-	bTransitioning = false;
-	CurrentZone = TargetZone;
-	ResetLook();
-	Cue(TEXT("ZoneChange"));
-	OnZoneChanged.Broadcast(CurrentZone);
-}
+// ---------------------------------------------------------------- Movement and look
 
 void ADCPlayerController::PlayerTick(float DeltaTime)
 {
@@ -254,23 +145,7 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 	{
 		return; // BP_DC_GameMode must have DA_GameConfig assigned
 	}
-
-	if (bTransitioning)
-	{
-		TransitionTime += DeltaTime;
-		const float Duration = FMath::Max(GM->Config->ZoneTransitionSec, KINDA_SMALL_NUMBER);
-		const float Alpha = FMath::SmoothStep(0.f, 1.f, TransitionTime / Duration);
-		FTransform T;
-		T.Blend(FromTransform, ToTransform, Alpha);
-		GetPawn()->SetActorTransform(T);
-		SetControlRotation(T.Rotator());
-		if (TransitionTime >= Duration)
-		{
-			OnArrived();
-		}
-		return;
-	}
-	if (Modal != EDCModal::None || bFullScreenUI)
+	if (IsBlockedByUI())
 	{
 		return;
 	}
@@ -278,9 +153,9 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 	float DX = 0.f, DY = 0.f;
 	GetInputMouseDelta(DX, DY);
 	const float Sens = GM->Config->MouseSensitivity;
-	LookOffset.Yaw = FMath::Clamp(LookOffset.Yaw + DX * Sens, -GM->Config->LookYawLimit, GM->Config->LookYawLimit);
-	LookOffset.Pitch = FMath::Clamp(LookOffset.Pitch + DY * Sens, -GM->Config->LookPitchLimit, GM->Config->LookPitchLimit);
-	FRotator Rot = GetPawn()->GetActorRotation() + LookOffset;
+	LookRot.Yaw = FRotator::NormalizeAxis(LookRot.Yaw + DX * Sens);
+	LookRot.Pitch = FMath::Clamp(LookRot.Pitch + DY * Sens, -GM->Config->LookPitchLimit, GM->Config->LookPitchLimit);
+	FRotator Rot = LookRot;
 	if (ShakeLeft > 0.f)
 	{
 		ShakeLeft -= DeltaTime;
@@ -288,43 +163,88 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 		Rot += FRotator(FMath::FRandRange(-Strength, Strength), FMath::FRandRange(-Strength, Strength), 0.f);
 	}
 	SetControlRotation(Rot);
+
+	const FRotationMatrix YawMatrix(FRotator(0.f, LookRot.Yaw, 0.f));
+	const FVector Move = YawMatrix.GetScaledAxis(EAxis::X) * ((IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (IsInputKeyDown(EKeys::S) ? 1.f : 0.f))
+		+ YawMatrix.GetScaledAxis(EAxis::Y) * ((IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (IsInputKeyDown(EKeys::A) ? 1.f : 0.f));
+	if (!Move.IsNearlyZero())
+	{
+		GetPawn()->AddMovementInput(Move.GetSafeNormal());
+	}
 }
 
 // ---------------------------------------------------------------- Click interaction
 
-void ADCPlayerController::OnClick()
+void ADCPlayerController::TraceTarget(ADCClient*& OutClient, const ADCInteractable*& OutProp) const
 {
-	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (!GM || IsBlockedByUI() || !PlayerCameraManager)
+	OutClient = nullptr;
+	OutProp = nullptr;
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (!GM || !GM->Config || !PlayerCameraManager)
 	{
 		return;
 	}
 	const FVector Start = PlayerCameraManager->GetCameraLocation();
-	const FVector End = Start + PlayerCameraManager->GetCameraRotation().Vector() * InteractRange;
+	const FVector End = Start + PlayerCameraManager->GetCameraRotation().Vector() * GM->Config->InteractRange;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(GetPawn()); // the camera sits inside the player's own capsule
 	FHitResult Hit;
 
 	// Clients (pawns): only the one at the front of the queue can be served
-	if (CurrentZone == EZone::Counter && GetWorld()->LineTraceSingleByObjectType(Hit, Start, End, FCollisionObjectQueryParams(ECC_Pawn)))
+	if (GetWorld()->LineTraceSingleByObjectType(Hit, Start, End, FCollisionObjectQueryParams(ECC_Pawn), Params))
 	{
 		ADCClient* Client = Cast<ADCClient>(Hit.GetActor());
 		if (Client && Client->IsAtFront() && Client == GM->ClientDirector->GetFrontClient())
 		{
-			const bool bDeliver = Client->bOrderAcknowledged && GM->FilmCrafting->HeldFilms.Num() > 0;
-			DialogueClient = Client;
-			DialogueWidget->Show(bDeliver ? FText::FromString(FString::Printf(TEXT("\"%s\""), *GM->FilmCrafting->HeldFilms[0].Title.ToString())) : Client->Runtime.OrderText,
-				FText::FromString(bDeliver ? TEXT("Here you go") : TEXT("Coming right up")));
-			OpenModal(EDCModal::Dialogue, DialogueWidget);
-			Cue(TEXT("DialogueOpen"));
+			OutClient = Client;
 			return;
 		}
 	}
+	if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
+	{
+		OutProp = Cast<ADCInteractable>(Hit.GetActor());
+	}
+}
 
-	// Props
-	if (!GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility))
+FText ADCPlayerController::GetInteractPrompt() const
+{
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (!GM || IsBlockedByUI())
+	{
+		return FText::GetEmpty();
+	}
+	ADCClient* Client;
+	const ADCInteractable* Prop;
+	TraceTarget(Client, Prop);
+	if (Client)
+	{
+		const bool bDeliver = Client->bOrderAcknowledged && GM->FilmCrafting->HeldFilms.Num() > 0;
+		return FText::FromString(bDeliver ? TEXT("Hand over the film") : TEXT("Talk to the customer"));
+	}
+	return Prop ? Prop->GetLabel() : FText::GetEmpty();
+}
+
+void ADCPlayerController::OnClick()
+{
+	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (!GM || IsBlockedByUI())
 	{
 		return;
 	}
-	const ADCInteractable* Prop = Cast<ADCInteractable>(Hit.GetActor());
+	ADCClient* Client;
+	const ADCInteractable* Prop;
+	TraceTarget(Client, Prop);
+	if (Client)
+	{
+		const bool bDeliver = Client->bOrderAcknowledged && GM->FilmCrafting->HeldFilms.Num() > 0;
+		UDCDialogueWidget* Dialogue = PushScreen<UDCDialogueWidget>(RootLayout, DialogueWidgetClass);
+		Dialogue->OnButton.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueButton); // pooled screens come back already bound
+		Dialogue->Show(bDeliver ? FText::FromString(FString::Printf(TEXT("\"%s\""), *GM->FilmCrafting->HeldFilms[0].Title.ToString())) : Client->Runtime.OrderText,
+			FText::FromString(bDeliver ? TEXT("Here you go") : TEXT("Coming right up")));
+		DialogueClient = Client;
+		Cue(TEXT("DialogueOpen"));
+		return;
+	}
 	if (!Prop)
 	{
 		return;
@@ -333,20 +253,40 @@ void ADCPlayerController::OnClick()
 	switch (Prop->InteractType)
 	{
 	case EInteractType::CashRegister:
-		OpenModal(EDCModal::Supplier, SupplierWidget);
-		SupplierWidget->Refresh();
+		PushScreen<UDCSupplierWidget>(RootLayout, SupplierWidgetClass);
 		break;
-	case EInteractType::BackRoomDoor:
-		ToggleZone();
+	case EInteractType::BackRoomDoor: // legacy value, kept so saved InteractType values don't shift: the door is walked through now
 		break;
 	case EInteractType::Shelf:
-		ShelfWidget->ShowGenre(Prop->ShelfGenre);
-		OpenModal(EDCModal::Shelf, ShelfWidget);
+		PushScreen<UDCShelfWidget>(RootLayout, ShelfWidgetClass)->ShowGenre(Prop->ShelfGenre);
 		break;
 	case EInteractType::VHSPlayer:
-		OpenModal(EDCModal::Crafting, FilmCraftingWidget);
-		FilmCraftingWidget->Refresh();
+		PushScreen<UDCFilmCraftingWidget>(RootLayout, FilmCraftingWidgetClass);
 		break;
+	}
+}
+
+void ADCPlayerController::OnHotbarKey(FKey Key)
+{
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (!GM || IsBlockedByUI())
+	{
+		return;
+	}
+	static const TArray<FKey> Keys = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
+	const int32 Index = Keys.IndexOfByKey(Key);
+	if (GM->Inventory->Hotbar.IsValidIndex(Index))
+	{
+		GM->Inventory->SelectedHotbar = Index;
+	}
+}
+
+void ADCPlayerController::ReturnSelectedTape()
+{
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (GM && !IsBlockedByUI() && GM->Inventory->Hotbar.IsValidIndex(GM->Inventory->SelectedHotbar))
+	{
+		GM->Inventory->ReturnTape(GM->Inventory->Hotbar[GM->Inventory->SelectedHotbar]);
 	}
 }
 
@@ -366,7 +306,7 @@ void ADCPlayerController::OnDialogueButton()
 			Client->bOrderAcknowledged = true;
 		}
 	}
-	CloseModal();
+	CloseScreen();
 }
 
 // ---------------------------------------------------------------- Game events
@@ -418,15 +358,20 @@ void ADCPlayerController::HandleClientReached(AActor* Client)
 
 void ADCPlayerController::HandleClientLeft(AActor* Client, bool bServed)
 {
+	if (Client && Client == DialogueClient.Get())
+	{
+		CloseScreen(); // ran out of patience mid-conversation: don't leave their dialogue up
+	}
 	if (bServed && TutorialWidget)
 	{
 		TutorialWidget->HideHint(); // the loop was understood: hide whatever sign is up
 	}
 }
 
-void ADCPlayerController::HandleZoneChangedForTutorial(EZone NewZone)
+void ADCPlayerController::HandleZoneOverlap(AActor* Zone, AActor* Other)
 {
-	if (NewZone == EZone::BackRoom)
+	// Only once a customer has asked for something, so the hint lands when it's useful
+	if (Other == GetPawn() && bTutorialClientShown)
 	{
 		ShowTutorial(TEXT("Pick 3 tapes: Intro, Middle, Ending"), bTutorialBackRoomShown);
 	}
@@ -445,13 +390,14 @@ void ADCPlayerController::ShowTutorial(const TCHAR* Text, bool& bFlag)
 
 void ADCPlayerController::HandleDayClosed(const FDaySummary& Summary)
 {
-	DaySummaryWidget->Show(Summary);
-	OpenFullScreen(DaySummaryWidget);
+	UDCDaySummaryWidget* Screen = PushScreen<UDCDaySummaryWidget>(RootLayout, DaySummaryWidgetClass);
+	Screen->OnOpenStore.AddUniqueDynamic(this, &ADCPlayerController::HandleOpenStore);
+	Screen->Show(Summary);
 }
 
 void ADCPlayerController::HandleOpenStore()
 {
-	HandleContinue();
+	CloseScreen();
 	GetWorld()->GetAuthGameMode<ADCGameMode>()->DayNightCycle->StartNextDay();
 }
 
@@ -469,10 +415,7 @@ void ADCPlayerController::HandleVictory()
 
 void ADCPlayerController::ShowEndScreen(TSubclassOf<UDCEndScreenWidget> Cls)
 {
-	UDCEndScreenWidget* Screen = CreateWidget<UDCEndScreenWidget>(this, Cls);
-	Screen->AddToViewport(20);
-	Screen->Show(GetWorld()->GetAuthGameMode<ADCGameMode>()->DayNightCycle->DayIndex);
-	OpenFullScreen(Screen);
+	PushScreen<UDCEndScreenWidget>(RootLayout, Cls)->Show(GetWorld()->GetAuthGameMode<ADCGameMode>()->DayNightCycle->DayIndex);
 }
 
 // ---------------------------------------------------------------- Juice and debug

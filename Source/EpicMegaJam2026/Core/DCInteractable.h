@@ -8,6 +8,7 @@
 
 class UStaticMeshComponent;
 class UTextRenderComponent;
+class UWidgetComponent;
 
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API ADCInteractable : public AActor
@@ -21,11 +22,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction") EGenre ShelfGenre = EGenre::Horror;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UStaticMeshComponent> Mesh;
-	// Only used by the cash register: the 3D money counter
+	// Hidden: only the anchor of LabelWidget now, kept so the label placement already set per prop in the maps survives
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UTextRenderComponent> MoneyDisplay;
+	// Floating label in the UI style: the prop name, or the money on the cash register
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UWidgetComponent> LabelWidget;
 
 	virtual void BeginPlay() override;
 
+	// What the prop does, shown above it in the world and in the HUD prompt when aimed at. Empty = no label.
+	FText GetLabel() const;
+
 private:
 	UFUNCTION() void OnMoneyChanged(int32 NewMoney, int32 Delta);
+	void SetLabelText(const FText& Text) const;
 };

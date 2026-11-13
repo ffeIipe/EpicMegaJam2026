@@ -1,4 +1,4 @@
-// Input, limited mouse look, zone switching, click interaction, menus and game juice.
+// Input (WASD movement, free mouse look), click interaction, menus and game juice.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -18,12 +18,10 @@ class UDCShelfWidget;
 class UDCTutorialWidget;
 class UDCMainMenuWidget;
 class UDCPauseWidget;
+class UDCRootLayout;
+class UCommonActivatableWidget;
 class ADCClient;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZoneChanged, EZone, NewZone);
-
-UENUM()
-enum class EDCModal : uint8 { None, Dialogue, Supplier, Shelf, Crafting };
+class ADCInteractable;
 
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API ADCPlayerController : public APlayerController
@@ -31,6 +29,7 @@ class EPICMEGAJAM2026_API ADCPlayerController : public APlayerController
 	GENERATED_BODY()
 public:
 	// Widget classes: the code-built defaults are used when a WBP_ subclass isn't assigned.
+	// Screens (dialogue, supplier, shelf, crafting, menus) are pushed on the CommonUI stack of the root layout.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCFilmCraftingWidget> FilmCraftingWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCDialogueWidget> DialogueWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCOrderPanelWidget> OrderPanelWidgetClass;
@@ -45,42 +44,33 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCMainMenuWidget> MainMenuWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCPauseWidget> PauseWidgetClass;
 
-	// Level actors carrying these tags define where the camera sits in each zone.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zones") FName CounterAnchorTag = "Zone_Counter";
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zones") FName BackRoomAnchorTag = "Zone_BackRoom";
-
 	// Juice (tunable on BP_DC_PlayerController)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") float ShakeDuration = 0.3f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") float ShakeMagnitudeDeg = 1.5f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction") float InteractRange = 3000.f;
-
-	UPROPERTY(BlueprintAssignable) FOnZoneChanged OnZoneChanged;
-	UPROPERTY(BlueprintReadOnly) EZone CurrentZone = EZone::Counter;
+	// Entering a level actor with this tag (a trigger box over the back room) shows the "Pick 3 tapes" hint.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tutorial") FName BackRoomZoneTag = "Zone_BackRoom";
 
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
 
-	// Re-anchor the look limits to the pawn's current rotation (call after a zone change).
-	UFUNCTION(BlueprintCallable) void ResetLook();
-	// Moves the camera to the other zone over ZoneTransitionSec; look input is blocked meanwhile.
-	UFUNCTION(BlueprintCallable) void SwitchZone(EZone Target);
-	UFUNCTION(BlueprintCallable) void ToggleZone();
 	UFUNCTION(BlueprintCallable) void StartShake();
+	// What a click would do right now ("Talk to the customer"), empty when nothing usable is under the crosshair.
+	UFUNCTION(BlueprintPure) FText GetInteractPrompt() const;
 
 private:
 	// Input
 	void OnClick();
+	void OnHotbarKey(FKey Key);
+	void ReturnSelectedTape();
 	void TogglePause();
 	void DebugSpawnTutorialClient();
 	void ToggleDebugAttributes();
 
-	// Modal panels (dialogue, supplier, shelf, crafting): cursor shown, look blocked
-	void OpenModal(EDCModal Modal, UUserWidget* Widget);
-	UFUNCTION() void CloseModal();
-	void ApplyInputMode();
-	bool IsBlockedByUI() const { return Modal != EDCModal::None || bFullScreenUI || bTransitioning; }
-	UUserWidget* GetModalWidget() const;
+	// A screen is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
+	bool IsBlockedByUI() const;
+	void HandleScreenChanged(UCommonActivatableWidget* Screen);
+	void CloseScreen();
 
 	// Game events
 	UFUNCTION() void OnDialogueButton();
@@ -89,43 +79,28 @@ private:
 	UFUNCTION() void HandleVictory();
 	UFUNCTION() void HandleDayClosed(const FDaySummary& Summary);
 	UFUNCTION() void HandleOpenStore();
-	UFUNCTION() void HandlePlay();
-	UFUNCTION() void HandleContinue();
 	UFUNCTION() void HandleClientReached(AActor* Client);
 	UFUNCTION() void HandleClientLeft(AActor* Client, bool bServed);
 	UFUNCTION() void HandleFilmCreated(const FCreatedFilm& Film);
 	UFUNCTION() void HandleRentCharged(int32 Amount);
 	UFUNCTION() void HandlePhaseChanged(EPhase Phase, int32 DayIndex);
 	UFUNCTION() void HandleMoneyChanged(int32 NewMoney, int32 Delta);
-	UFUNCTION() void HandleZoneChangedForTutorial(EZone NewZone);
+	UFUNCTION() void HandleZoneOverlap(AActor* Zone, AActor* Other);
+	// The front client or the prop under the crosshair within InteractRange (at most one is set)
+	void TraceTarget(ADCClient*& OutClient, const ADCInteractable*& OutProp) const;
 	void ShowEndScreen(TSubclassOf<UDCEndScreenWidget> Cls);
-	void OpenFullScreen(UUserWidget* Widget);
 	void ShowTutorial(const TCHAR* Text, bool& bFlag);
-	void OnArrived();
 	void HitStop();
 	void Cue(const TCHAR* Name) const;
 
-	EDCModal Modal = EDCModal::None;
-	bool bFullScreenUI = false; // main menu, pause, summary or end screen is up
-	bool bTransitioning = false;
-	float TransitionTime = 0.f;
 	float ShakeLeft = 0.f;
-	EZone TargetZone = EZone::Counter;
-	FRotator LookOffset = FRotator::ZeroRotator; // Pitch/Yaw offset from the base rotation
-	FTransform FromTransform, ToTransform;
+	FRotator LookRot = FRotator::ZeroRotator; // Mouse look without the shake on top
 	TWeakObjectPtr<ADCClient> DialogueClient;
 	bool bTutorialClientShown = false, bTutorialBackRoomShown = false, bTutorialFilmShown = false;
 
-	UPROPERTY() TObjectPtr<UDCFilmCraftingWidget> FilmCraftingWidget;
-	UPROPERTY() TObjectPtr<UDCDialogueWidget> DialogueWidget;
 	UPROPERTY() TObjectPtr<UDCOrderPanelWidget> OrderPanelWidget;
 	UPROPERTY() TObjectPtr<UDCHUDWidget> HUDWidget;
 	UPROPERTY() TObjectPtr<UDCReviewToastWidget> ReviewToastWidget;
-	UPROPERTY() TObjectPtr<UDCDaySummaryWidget> DaySummaryWidget;
-	UPROPERTY() TObjectPtr<UDCSupplierWidget> SupplierWidget;
-	UPROPERTY() TObjectPtr<UDCShelfWidget> ShelfWidget;
 	UPROPERTY() TObjectPtr<UDCTutorialWidget> TutorialWidget;
-	UPROPERTY() TObjectPtr<UDCMainMenuWidget> MainMenuWidget;
-	UPROPERTY() TObjectPtr<UDCPauseWidget> PauseWidget;
-	UPROPERTY() TObjectPtr<UUserWidget> ActiveFullScreen;
+	UPROPERTY() TObjectPtr<UDCRootLayout> RootLayout;
 };

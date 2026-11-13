@@ -1,77 +1,54 @@
 #include "UI/DCMenuWidgets.h"
 #include "UI/DCWidgets.h"
 #include "Components/DCComponents.h"
+#include "Core/DCGameMode.h"
 #include "Data/PDA_GameConfig.h"
 #include "Blueprint/WidgetTree.h"
-#include "Components/VerticalBox.h"
 #include "Components/HorizontalBox.h"
-#include "Components/Border.h"
-#include "Components/TextBlock.h"
-#include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 namespace
 {
-	UTextBlock* MenuAddText(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Text)
-	{
-		UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
-		T->SetText(FText::FromString(Text));
-		Parent->AddChild(T);
-		return T;
-	}
+	const FAnchors Center(0.5f, 0.5f);
+	const FVector2D Middle(0.5f, 0.5f);
 
-	// Canvas + dark border anchored on screen; returns the content box
-	UVerticalBox* MenuMakePanel(UWidgetTree* Tree, FAnchors Anchors, FVector2D Alignment, FVector2D Position, UBorder** OutBorder = nullptr)
+	// Stacked menu buttons, stretched to the panel width
+	UDCButton* MenuButton(UWidgetTree* Tree, UVerticalBox* Parent, const TCHAR* Label)
 	{
-		UCanvasPanel* Canvas = Tree->ConstructWidget<UCanvasPanel>();
-		Tree->RootWidget = Canvas;
-		UBorder* Border = Tree->ConstructWidget<UBorder>();
-		Border->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.85f));
-		Border->SetPadding(FMargin(20.f));
-		UCanvasPanelSlot* S = Canvas->AddChildToCanvas(Border);
-		S->SetAnchors(Anchors);
-		S->SetAlignment(Alignment);
-		S->SetPosition(Position);
-		S->SetAutoSize(true);
-		UVerticalBox* V = Tree->ConstructWidget<UVerticalBox>();
-		Border->SetContent(V);
-		if (OutBorder) *OutBorder = Border;
-		return V;
-	}
-
-	UDCPayloadButton* MenuAddButton(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Label, FName Payload, UTextBlock** OutText = nullptr)
-	{
-		UDCPayloadButton* Btn = Tree->ConstructWidget<UDCPayloadButton>();
-		Btn->Init(Payload);
-		UTextBlock* T = MenuAddText(Tree, Btn, Label);
-		if (OutText) *OutText = T;
-		Parent->AddChild(Btn);
+		UDCButton* Btn = DCUI::Button(Tree, Parent, Label);
+		Cast<UVerticalBoxSlot>(Btn->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 		return Btn;
 	}
-
-	const FAnchors Center(0.5f, 0.5f);
 }
 
 // ---------------------------------------------------------------- Day summary
 
+UDCDaySummaryWidget::UDCDaySummaryWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	bPausesGame = true;
+	bIsBackHandler = false; // only "Open the store" closes it
+}
+
 void UDCDaySummaryWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UVerticalBox* V = MenuMakePanel(WidgetTree, Center, FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	TitleText = MenuAddText(WidgetTree, V, TEXT(""));
-	BodyText = MenuAddText(WidgetTree, V, TEXT(""));
-	MenuAddButton(WidgetTree, V, TEXT("Open the store"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCDaySummaryWidget::HandleOpen);
+	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
+	TitleText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Title::StaticClass());
+	TitleText->SetMargin(FMargin(0.f, 0.f, 0.f, 12.f));
+	BodyText = DCUI::Text(WidgetTree, V, TEXT(""));
+	MenuButton(WidgetTree, V, TEXT("Open the store"))->OnPayloadClicked.AddDynamic(this, &UDCDaySummaryWidget::HandleOpen);
 }
 
 void UDCDaySummaryWidget::Show(const FDaySummary& S)
 {
-	TitleText->SetText(FText::FromString(FString::Printf(TEXT("Day %d complete"), S.DayIndex)));
+	TitleText->SetText(FText::FromString(FString::Printf(TEXT("DAY %d COMPLETE"), S.DayIndex)));
 	BodyText->SetText(FText::FromString(FString::Printf(
 		TEXT("Clients served: %d\nClients lost: %d\nLoved: %d   Liked: %d   Neutral: %d   Hated: %d\nMoney earned: $%d\nRent paid: $%d\nMoney: $%d / goal $%d"),
 		S.ClientsServed, S.ClientsLost, S.Loved, S.Liked, S.Neutral, S.Hated, S.MoneyEarned, S.RentPaid, S.MoneyNow, S.Goal)));
-	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 // ---------------------------------------------------------------- Supplier
@@ -79,22 +56,23 @@ void UDCDaySummaryWidget::Show(const FDaySummary& S)
 void UDCSupplierWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UVerticalBox* V = MenuMakePanel(WidgetTree, Center, FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	MenuAddText(WidgetTree, V, TEXT("SUPPLIER"));
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	Inventory = GM->Inventory;
+	DayNight = GM->DayNightCycle;
+	Config = GM->Config;
+	GM->Economy->OnMoneyChanged.AddDynamic(this, &UDCSupplierWidget::OnMoneyChanged);
+	Inventory->OnInventoryChanged.AddDynamic(this, &UDCSupplierWidget::OnInventoryChanged);
+
+	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
+	DCUI::Header(WidgetTree, V, TEXT("SUPPLIER"), TEXT("Tape catalogs for the store"));
 	List = WidgetTree->ConstructWidget<UVerticalBox>();
-	V->AddChild(List);
-	MenuAddButton(WidgetTree, V, TEXT("Close"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCSupplierWidget::HandleClose);
+	DCUI::Border(WidgetTree, V, UDCBorder_Inset::StaticClass(), FMargin(12.f))->SetContent(List);
 }
 
-void UDCSupplierWidget::Setup(UAC_Inventory* InInventory, UAC_Economy* InEconomy, UAC_DayNightCycle* InDayNight, UPDA_GameConfig* InConfig)
+void UDCSupplierWidget::NativeOnActivated()
 {
-	Inventory = InInventory;
-	Economy = InEconomy;
-	DayNight = InDayNight;
-	Config = InConfig;
-	Economy->OnMoneyChanged.AddDynamic(this, &UDCSupplierWidget::OnMoneyChanged);
-	Inventory->OnInventoryChanged.AddDynamic(this, &UDCSupplierWidget::OnInventoryChanged);
-	Refresh();
+	Super::NativeOnActivated();
+	Refresh(); // catalogs unlock by day
 }
 
 void UDCSupplierWidget::Refresh()
@@ -113,9 +91,19 @@ void UDCSupplierWidget::Refresh()
 		}
 		const bool bOwned = Inventory->OwnedCatalogs.Contains(P.Key);
 		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-		List->AddChild(H);
-		MenuAddText(WidgetTree, H, FString::Printf(TEXT("%s - %s (%d tapes)  $%d   "), *Row->DisplayName.ToString(), *Row->Description.ToString(), Row->VHSRows.Num(), Row->Price));
-		UDCPayloadButton* Btn = MenuAddButton(WidgetTree, H, bOwned ? TEXT("Owned") : TEXT("Buy"), P.Key);
+		List->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 6.f));
+		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
+		UHorizontalBoxSlot* InfoSlot = H->AddChildToHorizontalBox(Info);
+		InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		InfoSlot->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+		DCUI::Text(WidgetTree, Info, Row->DisplayName.ToString().ToUpper(), UDCText_Heading::StaticClass());
+		DCUI::Text(WidgetTree, Info, Row->Description.ToString())->SetWrapTextAt(420.f);
+		DCUI::Text(WidgetTree, Info, FString::Printf(TEXT("%d tapes"), Row->VHSRows.Num()), UDCText_Accent::StaticClass());
+		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("$%d"), Row->Price), UDCText_Heading::StaticClass()))->SetVerticalAlignment(VAlign_Center);
+		UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, bOwned ? TEXT("OWNED") : TEXT("BUY"), P.Key);
+		UHorizontalBoxSlot* BtnSlot = H->AddChildToHorizontalBox(Btn);
+		BtnSlot->SetVerticalAlignment(VAlign_Center);
+		BtnSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCSupplierWidget::HandleBuy);
 		Btn->SetIsEnabled(!bOwned && Inventory->CanBuyCatalog(P.Key)); // disabled when owned or too expensive
 	}
@@ -131,17 +119,19 @@ void UDCSupplierWidget::HandleBuy(FName CatalogRow)
 void UDCShelfWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UVerticalBox* V = MenuMakePanel(WidgetTree, Center, FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	MenuAddText(WidgetTree, V, TEXT("SHELF"));
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
+	DCUI::Header(WidgetTree, V, TEXT("VHS INVENTORY"));
 	List = WidgetTree->ConstructWidget<UDCInventoryWidget>();
 	V->AddChild(List);
-	MenuAddButton(WidgetTree, V, TEXT("Close"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCShelfWidget::HandleClose);
+	List->Setup(GM->Inventory, GM->Config, false);
+	GM->Inventory->OnInventoryChanged.AddDynamic(List, &UDCInventoryWidget::Refresh);
+	List->OnVHSPicked.AddDynamic(this, &UDCShelfWidget::OnTapePicked);
 }
 
-void UDCShelfWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig)
+void UDCShelfWidget::OnTapePicked(FName VHSRow)
 {
-	List->Setup(InInventory, InConfig);
-	InInventory->OnInventoryChanged.AddDynamic(List, &UDCInventoryWidget::Refresh);
+	GetWorld()->GetAuthGameMode<ADCGameMode>()->Inventory->TakeTape(VHSRow); // refreshes the list: the tape leaves the shelf
 }
 
 void UDCShelfWidget::ShowGenre(EGenre Genre)
@@ -154,10 +144,11 @@ void UDCShelfWidget::ShowGenre(EGenre Genre)
 void UDCTutorialWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UBorder* Border = nullptr;
-	UVerticalBox* V = MenuMakePanel(WidgetTree, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, -140.f), &Border);
+	UCommonBorder* Border = nullptr;
+	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, -140.f), &Border, UDCBorder_Header::StaticClass());
+	Border->SetPadding(DCUI::HeaderPadding);
 	Panel = Border;
-	HintText = MenuAddText(WidgetTree, V, TEXT(""));
+	HintText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Heading::StaticClass());
 	Panel->SetVisibility(ESlateVisibility::Collapsed);
 }
 
@@ -174,13 +165,19 @@ void UDCTutorialWidget::HideHint()
 
 // ---------------------------------------------------------------- Main menu / pause
 
+UDCMainMenuWidget::UDCMainMenuWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	bPausesGame = true;
+	bIsBackHandler = false;
+}
+
 void UDCMainMenuWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UVerticalBox* V = MenuMakePanel(WidgetTree, Center, FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	MenuAddText(WidgetTree, V, TEXT("DIRECTOR'S CUT")); // TODO(DESIGN): final game name
-	MenuAddButton(WidgetTree, V, TEXT("Play"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandlePlay);
-	MenuAddButton(WidgetTree, V, TEXT("Quit"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleQuit);
+	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
+	DCUI::Header(WidgetTree, V, TEXT("DIRECTOR'S CUT")); // TODO(DESIGN): final game name
+	MenuButton(WidgetTree, V, TEXT("PLAY"))->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandlePlay);
+	MenuButton(WidgetTree, V, TEXT("QUIT"))->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleQuit);
 }
 
 void UDCMainMenuWidget::HandleQuit(FName Unused)
@@ -188,14 +185,19 @@ void UDCMainMenuWidget::HandleQuit(FName Unused)
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 
+UDCPauseWidget::UDCPauseWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	bPausesGame = true;
+}
+
 void UDCPauseWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UVerticalBox* V = MenuMakePanel(WidgetTree, Center, FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	MenuAddText(WidgetTree, V, TEXT("PAUSED"));
-	MenuAddButton(WidgetTree, V, TEXT("Continue"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleContinue);
-	MenuAddButton(WidgetTree, V, TEXT("Restart"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleRestart);
-	MenuAddButton(WidgetTree, V, TEXT("Quit"), NAME_None)->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleQuit);
+	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
+	DCUI::Header(WidgetTree, V, TEXT("PAUSED"));
+	MenuButton(WidgetTree, V, TEXT("CONTINUE"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleContinue);
+	MenuButton(WidgetTree, V, TEXT("RESTART"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleRestart);
+	MenuButton(WidgetTree, V, TEXT("QUIT"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleQuit);
 }
 
 void UDCPauseWidget::HandleRestart(FName Unused)

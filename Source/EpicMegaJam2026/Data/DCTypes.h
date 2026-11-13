@@ -6,6 +6,7 @@
 #include "DCTypes.generated.h"
 
 class UStaticMesh;
+class UTexture2D;
 class USkeletalMesh;
 
 // ---------------------------------------------------------------- Enums (11.1)
@@ -33,9 +34,6 @@ enum class EReaction : uint8 { Loved, Liked, Neutral, Hated };
 
 UENUM(BlueprintType)
 enum class EFilmSlot : uint8 { Intro, Middle, Ending };
-
-UENUM(BlueprintType)
-enum class EZone : uint8 { Counter, BackRoom };
 
 UENUM(BlueprintType)
 enum class EInteractType : uint8 { CashRegister, BackRoomDoor, Shelf, VHSPlayer };
@@ -144,6 +142,9 @@ struct FVHSData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 1, ClampMax = 5)) int32 Rating = 3;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FName CatalogId;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) TSoftObjectPtr<UStaticMesh> MeshOverride;
+	// Shown on shelves and in the VHS player; empty = genre-colored placeholder
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) TSoftObjectPtr<UTexture2D> Cover;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (MultiLine = true)) FText Synopsis;
 };
 
 USTRUCT(BlueprintType)

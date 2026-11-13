@@ -57,8 +57,8 @@ Toda la lógica de reglas vive en componentes del GameMode. Los actores del mund
 | `AC_Inventory` | VHS y catálogos que tiene el jugador, compra de catálogos. |
 | `AC_FilmCrafting` | Slots Intro/Nudo/Desenlace, título, película en mano. |
 | `BPFL_Scoring` | Funciones puras de puntuación (sección 6). Sin estado. |
-| `BP_DC_PlayerController` | Input, mirar con el mouse, cambio de zona, abrir menús. |
-| `BP_CounterCamera` | Pawn sin cuerpo con cámara fija y rotación limitada. |
+| `BP_DC_PlayerController` | Input (WASD, mouse), interacción, abrir menús. |
+| `BP_CounterCamera` | Character en primera persona: movimiento WASD y cámara con el mouse. |
 | `BP_Client` | NPC: movimiento, estado, paciencia visible (opcional), diálogo. |
 | `BP_ClientQueue` | Puntos de fila ordenados frente al mostrador. |
 | `BP_BrowsePoint` | Punto de estante donde un cliente se queda mirando antes de hacer fila. |
@@ -93,7 +93,9 @@ Los colores son propuestos (salvo rosa y verde, que están en el board) y viven 
 
 ## 4. VHS y combinación
 
-Una película se arma con 3 VHS distintos, uno por slot (Intro, Nudo, Desenlace). Las cintas **no se gastan**: quedan en el inventario y se pueden volver a usar en la próxima película.
+Una película se arma con 3 VHS distintos, uno por slot (Intro, Nudo, Desenlace). Las cintas **no se gastan**: al confirmar la película vuelven a las estanterías y se pueden volver a usar en la próxima.
+
+**Hotbar (estilo Minecraft):** el jugador lleva las cintas en `HotbarSize` casilleros (inicial 3) en el centro inferior de la pantalla. Las toma de las estanterías y solo puede armar películas con las que lleva. Teclas `1`–`9` seleccionan el casillero (se resalta en lima) y `Q` devuelve la cinta seleccionada a su estantería. Con la hotbar llena no se puede tomar otra.
 
 **Cada VHS (`S_VHSData`, fila de `DT_VHS`) tiene:**
 
@@ -292,15 +294,15 @@ Cada día dura 10 minutos: Día de `DayDurationSec` (300 s) y Noche de `NightDur
 
 ## 9. Espacios, cámara e interacción
 
-El jugador no tiene cuerpo ni se desplaza: es una cámara en primera persona fija en dos posiciones, Mostrador y Depósito. Esto viene del board ("NO MOVERSE") y evita programar un personaje en tercera persona.
+El jugador es un personaje en primera persona (sin modelo visible, solo cámara) que se mueve libremente por el local y el depósito. No hay tercera persona.
 
-**Cámara (`BP_CounterCamera`):**
+**Personaje (`BP_CounterCamera`):**
 
-- Mira con el mouse: yaw de ±`LookYawLimit` (inicial 90°, o sea 180° en total) y pitch de ±`LookPitchLimit` (inicial 45°) respecto de la orientación base de cada posición.
-- Sensibilidad en `DA_GameConfig`.
-- Interacción por click izquierdo con trazado desde el centro de la pantalla. Los objetos interactuables se resaltan con un outline al apuntarlos.
+- Se mueve con WASD (`WalkSpeed`, inicial 300 cm/s), con colisión contra el mobiliario y las paredes. Sin salto ni correr.
+- Mira con el mouse sin límite de yaw y con pitch de ±`LookPitchLimit` (inicial 80°). Sensibilidad (`MouseSensitivity`) en `DA_GameConfig`.
+- Interacción por click izquierdo con trazado desde el centro de la pantalla, con alcance `InteractRange` (inicial 450 cm: el cliente del mostrador queda a unos 360 cm del punto de inicio). Los objetos interactuables se resaltan con un outline al apuntarlos.
 
-**Cambio de zona:** un botón en el HUD (*"Back room"* / *"Counter"*) reproduce una Level Sequence (`LS_ToBackRoom` / `LS_ToCounter`) que gira la cámara y abre la puerta del depósito. Duración máxima `ZoneTransitionSec` (inicial 1.5 s). Durante la transición se bloquea el input pero el tiempo sigue corriendo. También se puede usar la tecla `Tab`.
+**Cambio de zona:** no hay botón ni transición. El jugador camina por la puerta entre el mostrador y el depósito. El HUD no tiene botón de zona.
 
 **Mostrador — interactuables:**
 
@@ -308,17 +310,16 @@ El jugador no tiene cuerpo ni se desplaza: es una cámara en primera persona fij
 | --- | --- |
 | Cliente en el frente | Abre el diálogo del pedido o, si hay película en mano, la entrega. |
 | Caja registradora | Muestra la plata actual (contador 3D) y abre el menú del proveedor. |
-| Puerta del depósito | Igual que el botón *"Back room"*. |
 
 **Depósito — interactuables:**
 
 | Objeto | Acción |
 | --- | --- |
-| Estanterías | Abren la lista del inventario filtrada por el género de esa estantería. |
+| Estanterías | Abren la lista de cintas que quedan en ellas, filtrada por el género de esa estantería. Elegir una la pasa a la hotbar y la saca de la lista. |
 | Reproductor VHS + TV CRT | Abren el panel de armado (3 slots, título, confirmar). Al confirmar se reproduce la animación de meter el VHS en el reproductor y un efecto de estática en la TV. |
 | Cajas en el piso | Cosmético: aparecen al comprar catálogos. |
 
-La selección de VHS se hace en la UI (lista por categoría), no agarrando cintas 3D, como propone el board para simplificar.
+Las cintas se toman desde la UI de la estantería (lista por categoría) y se llevan en la hotbar. No son objetos 3D que se agarran, como propone el board, para simplificar.
 
 **Local — ambiente:** los estantes y exhibidores del salón tienen VHS decorativos. Los clientes caminan hasta un `BP_BrowsePoint` libre frente a esos estantes, miran unos segundos y después hacen fila. No afecta la puntuación ni el inventario. Los clientes se mueven con Nav Mesh y `AI MoveTo` simple, sin Behavior Tree.
 
@@ -328,10 +329,10 @@ Toda la UI es UMG, en inglés, con estilo VHS/CRT (scanlines y tipografía tipo 
 
 | Widget | Contenido | Cuándo se ve |
 | --- | --- | --- |
-| `WBP_HUD` | Plata, meta (barra de progreso hacia `MovieBudgetGoal`), día y fase, reloj, renta de esta noche, botón de cambio de zona, película en mano. | Siempre en juego |
+| `WBP_HUD` | Plata, meta (barra de progreso hacia `MovieBudgetGoal`), día y fase, reloj, renta de esta noche, película en mano. | Siempre en juego |
 | `WBP_OrderPanel` | Texto del pedido del cliente del frente y su paciencia como barra. | Mientras haya un cliente en el mostrador, también en el depósito |
 | `WBP_Dialogue` | Frase del cliente y botón *"Coming right up"* o *"Here you go"* (entrega, muestra el título). | Al interactuar con el cliente |
-| `WBP_Inventory` | Lista de VHS por género (pestañas con el color del género), cada fila con título y estrellas. | Al abrir una estantería o el panel de armado |
+| `WBP_Inventory` | Lista de VHS por género (pestañas con el color del género), cada fila con título y estrellas. | Al abrir una estantería (cintas que quedan en ella) o el panel de armado (solo las de la hotbar) |
 | `WBP_FilmCrafting` | Tres slots (Intro, Nudo, Desenlace) que se llenan desde el inventario, campo de título, botón confirmar, botón descartar. | En el reproductor del depósito |
 | `WBP_Supplier` | Catálogos disponibles con precio, géneros y botón de compra (deshabilitado sin plata o si ya está comprado). | Desde la caja registradora |
 | `WBP_ReviewToast` | Notificación de la página ficticia de reseñas (*"ReelTalk.net"*): título de la película, estrellas de 1 a 5 según la reacción, frase y +/− plata. | Al llegar cada crítica, 4 s |
@@ -414,8 +415,8 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | Economía | BaseRentalPrice / MoneyPerPoint / ComplaintFine | 10 / 2 / 15 |
 | Economía | RentIncreaseAfterLastDay | 40 |
 | Economía | ReviewDelaySec | 15 |
-| Cámara | LookYawLimit / LookPitchLimit / MouseSensitivity | 90 / 45 / 1.0 |
-| Cámara | ZoneTransitionSec | 1.5 |
+| Jugador | WalkSpeed / InteractRange / HotbarSize | 300 / 450 / 3 |
+| Cámara | LookPitchLimit / MouseSensitivity | 80 / 1.0 |
 | Juice | HitStopSec | 0.08 |
 | UI | bShowTutorial | true |
 | Luz | DayLightColor, DayLightIntensity, NightLightColor, NightLightIntensity | A definir por arte |
@@ -425,8 +426,8 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 Cada paso termina con algo jugable en PIE. No empieces el siguiente sin que el anterior compile y funcione.
 
 1. **Datos:** enums, structs, todas las Data Tables vacías con su struct, `PDA_GameConfig` y `DA_GameConfig` con los valores iniciales. Cargar `DT_Genres`, el catálogo inicial en `DT_VHS`, `DT_Catalogs`, `DT_ClientCategories` y `DT_DayProgression`.
-2. **Núcleo:** `BP_DC_GameMode` con sus componentes vacíos y los Event Dispatchers. `BP_CounterCamera` y `BP_DC_PlayerController` con la mirada limitada en el mostrador.
-3. **Armado sin clientes:** `AC_Inventory`, `AC_FilmCrafting`, `WBP_Inventory` y `WBP_FilmCrafting`. Se puede armar y confirmar una película desde el depósito con su cambio de zona.
+2. **Núcleo:** `BP_DC_GameMode` con sus componentes vacíos y los Event Dispatchers. `BP_CounterCamera` y `BP_DC_PlayerController` con movimiento WASD y mirada con el mouse.
+3. **Armado sin clientes:** `AC_Inventory`, `AC_FilmCrafting`, `WBP_Inventory` y `WBP_FilmCrafting`. Se puede armar y confirmar una película desde el depósito, caminando hasta él.
 4. **Puntuación:** `BPFL_Scoring` completo. Probar los tres ejemplos de la sección 6.3 con un Blueprint de test y verificar que den exactamente esos resultados.
 5. **Un cliente:** `BP_Client` con sus estados, `BP_ClientQueue`, diálogo de pistas y paciencia. Spawn manual del `TutorialClient`. Entrega, pago y crítica.
 6. **Economía:** `AC_Economy`, `WBP_HUD`, `WBP_ReviewToast`, victoria y derrota.
@@ -436,7 +437,7 @@ Cada paso termina con algo jugable en PIE. No empieces el siguiente sin que el a
 
 **Fuera de alcance (no implementar):**
 
-- Personaje del jugador con cuerpo o movimiento. El modelado de un "Personaje Principal" del board queda solo como arte opcional, por ejemplo unas manos.
+- Cuerpo visible del jugador o cámara en tercera persona. El modelado de un "Personaje Principal" del board queda solo como arte opcional, por ejemplo unas manos.
 - IA conversacional (Convai u otras), voces generadas y árboles de diálogo.
 - Guardado entre sesiones: cada partida empieza de cero.
 - Destrucción de VHS como castigo (aparece en el board, pero el equipo definió que las cintas no se pierden).

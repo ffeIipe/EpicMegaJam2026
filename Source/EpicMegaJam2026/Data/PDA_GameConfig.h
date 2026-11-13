@@ -66,10 +66,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") float ReviewDelaySec = 15.f;
 
 	// --- Camera
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookYawLimit = 90.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookPitchLimit = 45.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookPitchLimit = 80.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float MouseSensitivity = 1.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float ZoneTransitionSec = 1.5f;
+	// --- Player
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player") float WalkSpeed = 300.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player") float InteractRange = 450.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player", meta = (ClampMin = 1)) int32 HotbarSize = 3;
 
 	// --- Clock (in-store fictional hours: day 10:00-22:00, night 22:00-04:00)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clock") float ClockDayStartHour = 10.f;

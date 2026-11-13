@@ -1,111 +1,100 @@
-// Placeholder UMG widgets (trees built in code). Style/layout is for art to redo in WBP_ subclasses.
+// Code-built CommonUI widgets for the tapes: inventory (tabs + rows/tiles), VHS player crafting, dialogue, order panel.
+// Style lives in UI/DCCommonUI; WBP_ subclasses can still be assigned on the player controller.
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
-#include "Components/Button.h"
+#include "UI/DCCommonUI.h"
 #include "Data/DCTypes.h"
 #include "DCWidgets.generated.h"
 
 class UAC_Inventory;
 class UAC_FilmCrafting;
+class UAC_ClientDirector;
 class UPDA_GameConfig;
 class UHorizontalBox;
-class UScrollBox;
 class UTextBlock;
 class UEditableTextBox;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPayloadClicked, FName, Payload);
-
-// Button that reports a name when clicked
-UCLASS()
-class EPICMEGAJAM2026_API UDCPayloadButton : public UButton
-{
-	GENERATED_BODY()
-public:
-	UPROPERTY() FOnPayloadClicked OnPayloadClicked;
-	FName Payload;
-	void Init(FName InPayload);
-private:
-	UFUNCTION() void HandleClicked() { OnPayloadClicked.Broadcast(Payload); }
-};
+class UImage;
+class UProgressBar;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVHSPicked, FName, VHSRow);
 
-// WBP_Inventory: genre tabs + tape list (title and stars)
+// WBP_Inventory: genre tabs (ALL + DT_Genres, cycled with the tab actions) and the owned tapes,
+// as cover tiles (VHS player) or as rows with a detail panel (shelves)
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCInventoryWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCInventoryWidget : public UCommonUserWidget
 {
 	GENERATED_BODY()
 public:
 	UPROPERTY(BlueprintAssignable) FOnVHSPicked OnVHSPicked;
 
-	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig);
+	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInGrid);
 	UFUNCTION(BlueprintCallable) void Refresh();
-	UFUNCTION(BlueprintCallable) void SetGenre(EGenre Genre) { SelectedGenre = Genre; Refresh(); }
+	UFUNCTION(BlueprintCallable) void SetGenre(EGenre Genre);
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
-	UFUNCTION() void OnTabClicked(FName GenreName);
-	UFUNCTION() void OnTapeClicked(FName Row) { OnVHSPicked.Broadcast(Row); }
+	UFUNCTION() void OnTabClicked(FName Tab) { SelectedTab = Tab; Refresh(); }
+	UFUNCTION() void OnTapeClicked(FName Row);
+	void CycleTab(int32 Dir);
+	void ShowDetail(FName Row);
 
 	UPROPERTY() TObjectPtr<UAC_Inventory> Inventory;
 	UPROPERTY() TObjectPtr<UPDA_GameConfig> Config;
 	UPROPERTY() TObjectPtr<UHorizontalBox> Tabs;
-	UPROPERTY() TObjectPtr<UScrollBox> List;
-	EGenre SelectedGenre = EGenre::Horror;
+	UPROPERTY() TObjectPtr<UPanelWidget> List;
+	UPROPERTY() TObjectPtr<UWidget> Detail;
+	UPROPERTY() TObjectPtr<UImage> DetailCover;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailTitle;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailStars;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailGenre;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailSynopsis;
+	FName SelectedTab = "All"; // "All" or an EGenre name
+	FName SelectedTape;
+	bool bGrid = false;
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBackToCounter);
-
-// WBP_FilmCrafting: 3 slots, title, confirm, discard
+// WBP_FilmCrafting ("Combine VHS"): pick 3 tapes from the grid, they fill Intro, Middle, Ending in order; name it and combine
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCFilmCraftingWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCFilmCraftingWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(BlueprintAssignable) FOnBackToCounter OnBackToCounter;
-
-	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UAC_FilmCrafting* InCrafting, UPDA_GameConfig* InConfig);
 	UFUNCTION(BlueprintCallable) void Refresh();
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeOnActivated() override;
 
 private:
-	UFUNCTION() void OnSlotClicked(FName SlotName);
 	UFUNCTION() void OnClearClicked(FName SlotName);
 	UFUNCTION() void OnPicked(FName VHSRow);
 	UFUNCTION() void OnConfirm(FName Unused);
 	UFUNCTION() void OnDiscard(FName Unused);
-	UFUNCTION() void OnBack(FName Unused) { OnBackToCounter.Broadcast(); }
 	UFUNCTION() void OnFilmStateChanged() { Refresh(); }
-
-	UDCPayloadButton* MakeButton(const FString& Label, FName Payload, class UPanelWidget* Parent, UTextBlock** OutText = nullptr);
 
 	UPROPERTY() TObjectPtr<UAC_Inventory> Inventory;
 	UPROPERTY() TObjectPtr<UAC_FilmCrafting> Crafting;
 	UPROPERTY() TObjectPtr<UPDA_GameConfig> Config;
 	UPROPERTY() TObjectPtr<UDCInventoryWidget> Picker;
 	UPROPERTY() TObjectPtr<UEditableTextBox> TitleBox;
-	UPROPERTY() TObjectPtr<UDCPayloadButton> ConfirmButton;
-	UPROPERTY() TObjectPtr<UDCPayloadButton> DiscardButton;
-	UPROPERTY() TObjectPtr<UTextBlock> StatusText;
-	UPROPERTY() TObjectPtr<UTextBlock> HeldText;
-	UPROPERTY() TMap<EFilmSlot, TObjectPtr<UTextBlock>> SlotTexts;
-	EFilmSlot ActiveSlot = EFilmSlot::Intro;
+	UPROPERTY() TObjectPtr<UDCButton> ConfirmButton;
+	UPROPERTY() TObjectPtr<UDCButton> DiscardButton;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> SlotsHeader;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> StatusText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
+	UPROPERTY() TMap<EFilmSlot, TObjectPtr<UCommonTextBlock>> SlotTexts;
+	UPROPERTY() TMap<EFilmSlot, TObjectPtr<UImage>> SlotCovers;
+	UPROPERTY() TMap<EFilmSlot, TObjectPtr<UDCButton>> SlotClears;
 };
-
-class UProgressBar;
-class UAC_ClientDirector;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDialogueButton);
 
 // WBP_Dialogue: client phrase + one button ("Coming right up" / "Here you go")
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCDialogueWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCDialogueWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
@@ -117,8 +106,8 @@ protected:
 
 private:
 	UFUNCTION() void HandleButton(FName Unused) { OnButton.Broadcast(); }
-	UPROPERTY() TObjectPtr<UTextBlock> LineText;
-	UPROPERTY() TObjectPtr<UTextBlock> ButtonText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> LineText;
+	UPROPERTY() TObjectPtr<UDCButton> Button;
 };
 
 // WBP_OrderPanel: the front client's order and patience bar, visible in both zones
@@ -135,7 +124,7 @@ protected:
 
 private:
 	UPROPERTY() TObjectPtr<UAC_ClientDirector> Director;
-	UPROPERTY() TObjectPtr<UTextBlock> OrderText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> OrderText;
 	UPROPERTY() TObjectPtr<UProgressBar> PatienceBar;
 	UPROPERTY() TObjectPtr<UWidget> PanelRoot;
 };

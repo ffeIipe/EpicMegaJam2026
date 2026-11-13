@@ -1,12 +1,11 @@
-// Step 7-9 widgets: day summary, supplier, shelf popup, tutorial hint, main menu, pause (code-built placeholders).
+// Screens: day summary, supplier, shelf popup, main menu, pause; plus the tutorial sign (code-built, styled by UI/DCCommonUI).
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "UI/DCCommonUI.h"
 #include "Data/DCTypes.h"
 #include "DCMenuWidgets.generated.h"
 
-class UTextBlock;
 class UVerticalBox;
 class UAC_Inventory;
 class UAC_Economy;
@@ -18,10 +17,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuButton);
 
 // WBP_DaySummary
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCDaySummaryWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCDaySummaryWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
+	UDCDaySummaryWidget(const FObjectInitializer& ObjectInitializer);
 	UPROPERTY(BlueprintAssignable) FOnMenuButton OnOpenStore;
 	UFUNCTION(BlueprintCallable) void Show(const FDaySummary& Summary);
 
@@ -30,50 +30,45 @@ protected:
 
 private:
 	UFUNCTION() void HandleOpen(FName Unused) { OnOpenStore.Broadcast(); }
-	UPROPERTY() TObjectPtr<UTextBlock> TitleText;
-	UPROPERTY() TObjectPtr<UTextBlock> BodyText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> TitleText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> BodyText;
 };
 
 // WBP_Supplier: catalogs with price and buy button
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCSupplierWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCSupplierWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(BlueprintAssignable) FOnMenuButton OnClose;
-	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UAC_Economy* InEconomy, UAC_DayNightCycle* InDayNight, UPDA_GameConfig* InConfig);
 	UFUNCTION(BlueprintCallable) void Refresh();
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeOnActivated() override;
 
 private:
 	UFUNCTION() void HandleBuy(FName CatalogRow);
-	UFUNCTION() void HandleClose(FName Unused) { OnClose.Broadcast(); }
 	UFUNCTION() void OnMoneyChanged(int32 NewMoney, int32 Delta) { Refresh(); }
 	UFUNCTION() void OnInventoryChanged() { Refresh(); }
 	UPROPERTY() TObjectPtr<UAC_Inventory> Inventory;
-	UPROPERTY() TObjectPtr<UAC_Economy> Economy;
 	UPROPERTY() TObjectPtr<UAC_DayNightCycle> DayNight;
 	UPROPERTY() TObjectPtr<UPDA_GameConfig> Config;
 	UPROPERTY() TObjectPtr<UVerticalBox> List;
 };
 
-// Shelf popup: inventory list filtered by the clicked shelf's genre
+// Shelf popup ("VHS Inventory"): rows + detail panel, opened on the clicked shelf's genre
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCShelfWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCShelfWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(BlueprintAssignable) FOnMenuButton OnClose;
-	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig);
 	UFUNCTION(BlueprintCallable) void ShowGenre(EGenre Genre);
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
-	UFUNCTION() void HandleClose(FName Unused) { OnClose.Broadcast(); }
+	UFUNCTION() void OnTapePicked(FName VHSRow);
 	UPROPERTY() TObjectPtr<UDCInventoryWidget> List;
 };
 
@@ -91,38 +86,38 @@ protected:
 
 private:
 	UPROPERTY() TObjectPtr<UWidget> Panel;
-	UPROPERTY() TObjectPtr<UTextBlock> HintText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> HintText;
 };
 
-// WBP_MainMenu
+// WBP_MainMenu: Play closes it
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCMainMenuWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCMainMenuWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(BlueprintAssignable) FOnMenuButton OnPlay;
+	UDCMainMenuWidget(const FObjectInitializer& ObjectInitializer);
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
-	UFUNCTION() void HandlePlay(FName Unused) { OnPlay.Broadcast(); }
+	UFUNCTION() void HandlePlay(FName Unused) { DeactivateWidget(); }
 	UFUNCTION() void HandleQuit(FName Unused);
 };
 
-// WBP_Pause
+// WBP_Pause: Continue (or Esc) closes it
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCPauseWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCPauseWidget : public UDCScreen
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(BlueprintAssignable) FOnMenuButton OnContinue;
+	UDCPauseWidget(const FObjectInitializer& ObjectInitializer);
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
-	UFUNCTION() void HandleContinue(FName Unused) { OnContinue.Broadcast(); }
+	UFUNCTION() void HandleContinue(FName Unused) { DeactivateWidget(); }
 	UFUNCTION() void HandleRestart(FName Unused);
 	UFUNCTION() void HandleQuit(FName Unused);
 };

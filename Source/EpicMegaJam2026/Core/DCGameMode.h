@@ -6,6 +6,7 @@
 #include "Data/PDA_GameConfig.h"
 #include "Components/DCComponents.h"
 #include "Core/DCAudioManager.h"
+#include "Core/DCCounterCamera.h"
 #include "DCGameMode.generated.h"
 
 UCLASS(Blueprintable)
@@ -15,6 +16,8 @@ class EPICMEGAJAM2026_API ADCGameMode : public AGameModeBase
 public:
 	ADCGameMode();
 	virtual void BeginPlay() override;
+	// Always the C++ player: BP_CounterCamera was reparented to plain Character in the editor and lost this class.
+	virtual UClass* GetDefaultPawnClassForController_Implementation(AController*) override { return ADCCounterCamera::StaticClass(); }
 
 	// Spawned at BeginPlay (BP_AudioManager on BP_DC_GameMode); may stay null.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio") TSubclassOf<ADCAudioManager> AudioManagerClass;

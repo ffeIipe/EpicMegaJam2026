@@ -2,6 +2,8 @@
 #include "Core/DCGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/WidgetComponent.h"
+#include "UI/DCHudWidgets.h"
 #include "UObject/ConstructorHelpers.h"
 
 ADCInteractable::ADCInteractable()
@@ -20,6 +22,15 @@ ADCInteractable::ADCInteractable()
 	MoneyDisplay->SetHorizontalAlignment(EHTA_Center);
 	MoneyDisplay->SetWorldSize(40.f);
 	MoneyDisplay->SetText(FText::GetEmpty());
+	MoneyDisplay->SetVisibility(false);
+	LabelWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("LabelWidget"));
+	LabelWidget->SetupAttachment(MoneyDisplay);
+	LabelWidget->SetWidgetClass(UDCWorldLabelWidget::StaticClass());
+	LabelWidget->SetWidgetSpace(EWidgetSpace::World);
+	LabelWidget->SetDrawAtDesiredSize(true);
+	LabelWidget->SetRelativeScale3D(FVector(0.5f)); // widget pixels are world units: half size keeps neighbouring shelf labels apart
+	LabelWidget->SetTwoSided(true);
+	LabelWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void ADCInteractable::BeginPlay()
@@ -27,8 +38,7 @@ void ADCInteractable::BeginPlay()
 	Super::BeginPlay();
 	if (InteractType != EInteractType::CashRegister)
 	{
-		MoneyDisplay->DestroyComponent();
-		MoneyDisplay = nullptr;
+		SetLabelText(GetLabel());
 		return;
 	}
 	if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
@@ -38,10 +48,27 @@ void ADCInteractable::BeginPlay()
 	}
 }
 
+FText ADCInteractable::GetLabel() const
+{
+	// TODO(DESIGN): placeholder wording; the doc only asks for an outline on aimed props
+	switch (InteractType)
+	{
+	case EInteractType::CashRegister: return FText::FromString(TEXT("Supplier catalog"));
+	case EInteractType::VHSPlayer: return FText::FromString(TEXT("VHS player: make a film"));
+	case EInteractType::Shelf: return FText::Format(FText::FromString(TEXT("{0} shelf")), StaticEnum<EGenre>()->GetDisplayNameTextByValue((int64)ShelfGenre));
+	default: return FText::GetEmpty();
+	}
+}
+
 void ADCInteractable::OnMoneyChanged(int32 NewMoney, int32 Delta)
 {
-	if (MoneyDisplay)
+	SetLabelText(FText::FromString(FString::Printf(TEXT("$ %d"), NewMoney)));
+}
+
+void ADCInteractable::SetLabelText(const FText& Text) const
+{
+	if (UDCWorldLabelWidget* Widget = Cast<UDCWorldLabelWidget>(LabelWidget->GetUserWidgetObject()))
 	{
-		MoneyDisplay->SetText(FText::FromString(FString::Printf(TEXT("$%d"), NewMoney)));
+		Widget->SetLabel(Text);
 	}
 }

@@ -90,6 +90,7 @@ void UAC_Inventory::BeginPlay()
 {
 	Super::BeginPlay();
 	const UPDA_GameConfig* Cfg = GetConfig(this);
+	Hotbar.Init(NAME_None, Cfg ? FMath::Max(Cfg->HotbarSize, 1) : 3);
 	if (!Cfg || !Cfg->CatalogTable)
 	{
 		return;
@@ -116,6 +117,33 @@ void UAC_Inventory::AddCatalog(FName CatalogRow)
 	for (const FName& Tape : Row->VHSRows)
 	{
 		OwnedVHS.AddUnique(Tape);
+	}
+	OnInventoryChanged.Broadcast();
+}
+
+bool UAC_Inventory::TakeTape(FName Row)
+{
+	const int32 Free = Hotbar.IndexOfByKey(NAME_None);
+	if (Row.IsNone() || !HasVHS(Row) || IsCarried(Row) || Free == INDEX_NONE)
+	{
+		return false;
+	}
+	Hotbar[Free] = Row;
+	OnInventoryChanged.Broadcast();
+	return true;
+}
+
+void UAC_Inventory::ReturnTape(FName Row)
+{
+	const int32 Index = Row.IsNone() ? INDEX_NONE : Hotbar.IndexOfByKey(Row);
+	if (Index == INDEX_NONE)
+	{
+		return;
+	}
+	Hotbar[Index] = NAME_None;
+	if (const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner()))
+	{
+		GM->FilmCrafting->ClearTape(Row);
 	}
 	OnInventoryChanged.Broadcast();
 }
@@ -174,6 +202,23 @@ void UAC_FilmCrafting::ClearSlot(EFilmSlot Slot)
 	}
 }
 
+void UAC_FilmCrafting::ClearTape(FName VHSRow)
+{
+	bool bRemoved = false;
+	for (auto It = Slots.CreateIterator(); It; ++It)
+	{
+		if (It.Value() == VHSRow)
+		{
+			It.RemoveCurrent();
+			bRemoved = true;
+		}
+	}
+	if (bRemoved)
+	{
+		OnFilmStateChanged.Broadcast();
+	}
+}
+
 bool UAC_FilmCrafting::AreSlotsFull() const
 {
 	return Slots.Contains(EFilmSlot::Intro) && Slots.Contains(EFilmSlot::Middle) && Slots.Contains(EFilmSlot::Ending);
@@ -221,6 +266,11 @@ bool UAC_FilmCrafting::ConfirmFilm(FText Title)
 	++FilmsCreated;
 	HeldFilms.Add(Film);
 	Slots.Empty();
+	// The tapes aren't consumed: they go back on the shelves, freeing the hotbar
+	for (const FName& Row : {Film.IntroRow, Film.MiddleRow, Film.EndingRow})
+	{
+		GM->Inventory->ReturnTape(Row);
+	}
 	OnFilmCreated.Broadcast(Film);
 	OnFilmStateChanged.Broadcast();
 	return true;
