@@ -8,7 +8,9 @@ public class EpicMegaJam2026 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "AIModule", "NavigationSystem", "GameplayTasks", "FMODStudio" });
+
+		PublicIncludePaths.Add(ModuleDirectory); // allows "Core/..." and "Data/..." includes
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

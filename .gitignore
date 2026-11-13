@@ -85,3 +85,10 @@ DerivedDataCache/*
 FMODStudio/**/Cache/
 FMODStudio/**/Build/
 FMODStudio/**/Local/
+
+# Local-only MCP tooling (EngineWire plugin + MCP server)
+Plugins/EngineWire/
+Tools/unreal-engine-mcp-server/
+
+# Contiene el token local de EngineWire
+.mcp.json
