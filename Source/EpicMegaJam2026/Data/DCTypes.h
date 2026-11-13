@@ -34,10 +34,6 @@ enum class EUnlockType : uint8 { Genre, Slot, StarTier };
 UENUM(BlueprintType)
 enum class EPolarity : uint8 { Likes, Dislikes };
 
-// DEPRECATED v1 (step 6: replaced by the integer Tier of FClientTierData)
-UENUM(BlueprintType)
-enum class EClientCategory : uint8 { Casual, Enthusiast, Cinephile };
-
 UENUM(BlueprintType)
 enum class EPhase : uint8 { Day, Night };
 
@@ -192,42 +188,12 @@ struct FVHSData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) EGenre PrimaryGenre = EGenre::Horror;
 	// v2 (section 4.1): 0 to TapeSkillMax each; the sum is StarPoints[Rating]
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FSkillVector Skills;
-	// DEPRECATED v1 (step 7): CatalogId
 	// v2: the stars of the tape
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 1, ClampMax = 5)) int32 Rating = 3;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) FName CatalogId;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) TSoftObjectPtr<UStaticMesh> MeshOverride;
 	// Shown on shelves and in the VHS player; empty = genre-colored placeholder
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) TSoftObjectPtr<UTexture2D> Cover;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (MultiLine = true)) FText Synopsis;
-};
-
-// DEPRECATED v1 (step 7): DT_Catalogs
-USTRUCT(BlueprintType)
-struct FCatalogData : public FTableRowBase
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText DisplayName;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Description;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Price = 0;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) TArray<FName> VHSRows;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 UnlockDay = 1;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bOwnedAtStart = false;
-};
-
-// DEPRECATED v1 (step 6): DT_ClientCategories, replaced by FClientTierData
-USTRUCT(BlueprintType)
-struct FClientCategoryData : public FTableRowBase
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) EClientCategory Category = EClientCategory::Casual;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 NumAttributes = 1;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 WeightMin = 1;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 WeightMax = 3;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 0, ClampMax = 1)) float PositiveChance = 0.6f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) float PayMultiplier = 1.f;
 };
 
 // DT_ClientTiers (section 5.1)

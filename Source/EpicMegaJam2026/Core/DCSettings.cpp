@@ -10,14 +10,13 @@ FKey& UDCSettings::Key(EDCAction Action)
 	case EDCAction::MoveBack: return MoveBack;
 	case EDCAction::MoveLeft: return MoveLeft;
 	case EDCAction::MoveRight: return MoveRight;
-	case EDCAction::ReturnTape: return ReturnTape;
 	default: return Interact;
 	}
 }
 
 const TCHAR* UDCSettings::ActionLabel(EDCAction Action)
 {
-	static const TCHAR* Labels[] = {TEXT("Interact"), TEXT("Move forward"), TEXT("Move back"), TEXT("Move left"), TEXT("Move right"), TEXT("Return tape")};
+	static const TCHAR* Labels[] = {TEXT("Interact"), TEXT("Move forward"), TEXT("Move back"), TEXT("Move left"), TEXT("Move right")};
 	return Labels[(int32)Action];
 }
 

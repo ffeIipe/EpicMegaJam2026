@@ -49,7 +49,7 @@ public:
 	// Juice (tunable on BP_DC_PlayerController)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") float ShakeDuration = 0.3f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") float ShakeMagnitudeDeg = 1.5f;
-	// Entering a level actor with this tag (a trigger box over the back room) shows the "Pick 3 tapes" hint.
+	// Entering a level actor with this tag (a trigger box over the back room) shows the "Pick tapes and combine them" hint.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tutorial") FName BackRoomZoneTag = "Zone_BackRoom";
 
 	virtual void BeginPlay() override;
@@ -63,8 +63,6 @@ public:
 private:
 	// Input
 	void OnInteract();
-	void OnHotbarKey(FKey Key);
-	void ReturnSelectedTape();
 	void TogglePause();
 	void DebugSpawnTutorialClient();
 	void ToggleDebugAttributes();
@@ -84,6 +82,7 @@ private:
 	UFUNCTION() void HandleClientReached(AActor* Client);
 	UFUNCTION() void HandleClientLeft(AActor* Client, bool bServed);
 	UFUNCTION() void HandleFilmCreated(const FCreatedFilm& Film);
+	UFUNCTION() void HandleUnlockPurchased(FName UnlockId);
 	UFUNCTION() void HandleRentCharged(int32 Amount);
 	UFUNCTION() void HandlePhaseChanged(EPhase Phase, int32 DayIndex);
 	UFUNCTION() void HandleMoneyChanged(int32 NewMoney, int32 Delta);

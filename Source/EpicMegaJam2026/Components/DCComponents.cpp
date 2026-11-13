@@ -163,7 +163,6 @@ void UAC_Inventory::BeginPlay()
 {
 	Super::BeginPlay();
 	const UPDA_GameConfig* Cfg = GetConfig(this);
-	Hotbar.Init(NAME_None, Cfg ? FMath::Max(Cfg->HotbarSize, 1) : 3);
 	if (!Cfg)
 	{
 		return;
@@ -205,29 +204,6 @@ TArray<FName> UAC_Inventory::GetOwnedVHS() const
 	Stock.GetKeys(Rows);
 	Rows.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
 	return Rows;
-}
-
-bool UAC_Inventory::TakeTape(FName Row)
-{
-	const int32 Free = Hotbar.IndexOfByKey(NAME_None);
-	if (Row.IsNone() || !HasVHS(Row) || IsCarried(Row) || Free == INDEX_NONE)
-	{
-		return false;
-	}
-	Hotbar[Free] = Row;
-	OnInventoryChanged.Broadcast();
-	return true;
-}
-
-void UAC_Inventory::ReturnTape(FName Row)
-{
-	const int32 Index = Row.IsNone() ? INDEX_NONE : Hotbar.IndexOfByKey(Row);
-	if (Index == INDEX_NONE)
-	{
-		return;
-	}
-	Hotbar[Index] = NAME_None;
-	OnInventoryChanged.Broadcast();
 }
 
 bool UAC_Inventory::GetVHSData(FName Row, FVHSData& Out) const

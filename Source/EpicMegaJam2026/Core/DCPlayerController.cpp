@@ -66,6 +66,7 @@ void ADCPlayerController::BeginPlay()
 	GM->ClientDirector->OnClientReachedCounter.AddDynamic(this, &ADCPlayerController::HandleClientReached);
 	GM->ClientDirector->OnClientLeft.AddDynamic(this, &ADCPlayerController::HandleClientLeft);
 	GM->FilmCrafting->OnFilmCreated.AddDynamic(this, &ADCPlayerController::HandleFilmCreated);
+	GM->Unlocks->OnUnlockPurchased.AddDynamic(this, &ADCPlayerController::HandleUnlockPurchased);
 	GM->Economy->OnGameOver.AddDynamic(this, &ADCPlayerController::HandleGameOver);
 	GM->Economy->OnVictory.AddDynamic(this, &ADCPlayerController::HandleVictory);
 	GM->Economy->OnRentCharged.AddDynamic(this, &ADCPlayerController::HandleRentCharged);
@@ -89,11 +90,7 @@ void ADCPlayerController::BeginPlay()
 void ADCPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-	// Interact, return-tape and movement keys are rebindable (UDCSettings): PlayerTick polls them
-	for (const FKey& Key : {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine})
-	{
-		InputComponent->BindKey(Key, IE_Pressed, this, &ADCPlayerController::OnHotbarKey);
-	}
+	// Interact and movement keys are rebindable (UDCSettings): PlayerTick polls them
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADCPlayerController::TogglePause).bExecuteWhenPaused = true;
 #if !UE_BUILD_SHIPPING
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ADCPlayerController::ToggleDebugAttributes);
@@ -155,10 +152,6 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 	if (WasInputKeyJustPressed(Settings->Interact))
 	{
 		OnInteract();
-	}
-	if (WasInputKeyJustPressed(Settings->ReturnTape))
-	{
-		ReturnSelectedTape();
 	}
 
 	float DX = 0.f, DY = 0.f;
@@ -280,30 +273,6 @@ void ADCPlayerController::OnInteract()
 	}
 }
 
-void ADCPlayerController::OnHotbarKey(FKey Key)
-{
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (!GM || IsBlockedByUI())
-	{
-		return;
-	}
-	static const TArray<FKey> Keys = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
-	const int32 Index = Keys.IndexOfByKey(Key);
-	if (GM->Inventory->Hotbar.IsValidIndex(Index))
-	{
-		GM->Inventory->SelectedHotbar = Index;
-	}
-}
-
-void ADCPlayerController::ReturnSelectedTape()
-{
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (GM && !IsBlockedByUI() && GM->Inventory->Hotbar.IsValidIndex(GM->Inventory->SelectedHotbar))
-	{
-		GM->Inventory->ReturnTape(GM->Inventory->Hotbar[GM->Inventory->SelectedHotbar]);
-	}
-}
-
 void ADCPlayerController::OnDialogueButton()
 {
 	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
@@ -356,6 +325,11 @@ void ADCPlayerController::HandlePhaseChanged(EPhase Phase, int32 DayIndex)
 	Cue(Phase == EPhase::Day ? TEXT("DayStart") : TEXT("NightStart"));
 }
 
+void ADCPlayerController::HandleUnlockPurchased(FName UnlockId)
+{
+	Cue(TEXT("UnlockPurchased"));
+}
+
 void ADCPlayerController::HandleFilmCreated(const FCreatedFilm& Film)
 {
 	Cue(TEXT("FilmCreated"));
@@ -387,7 +361,7 @@ void ADCPlayerController::HandleZoneOverlap(AActor* Zone, AActor* Other)
 	// Only once a customer has asked for something, so the hint lands when it's useful
 	if (Other == GetPawn() && bTutorialClientShown)
 	{
-		ShowTutorial(TEXT("Pick 3 tapes: Intro, Middle, Ending"), bTutorialBackRoomShown);
+		ShowTutorial(TEXT("Pick tapes and combine them"), bTutorialBackRoomShown);
 	}
 }
 

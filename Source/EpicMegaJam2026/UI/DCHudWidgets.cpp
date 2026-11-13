@@ -68,42 +68,6 @@ void UDCHUDWidget::NativeOnInitialized()
 	{
 		Cast<UVerticalBoxSlot>(W->Slot)->SetHorizontalAlignment(HAlign_Center);
 	}
-
-	// Hotbar, bottom center: the tapes picked from the shelves (Minecraft style)
-	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
-	const int32 HotbarSize = GM && GM->Config ? GM->Config->HotbarSize : 3;
-	UHorizontalBox* Tapes = WidgetTree->ConstructWidget<UHorizontalBox>();
-	UCanvasPanelSlot* TS = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Tapes);
-	TS->SetAnchors(FAnchors(0.5f, 1.f));
-	TS->SetAlignment(FVector2D(0.5f, 1.f));
-	TS->SetPosition(FVector2D(0.f, -24.f));
-	TS->SetAutoSize(true);
-	for (int32 i = 0; i < HotbarSize; ++i)
-	{
-		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(110.f);
-		Box->SetHeightOverride(110.f);
-		Tapes->AddChildToHorizontalBox(Box)->SetPadding(FMargin(4.f, 0.f));
-		UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(); // the selected slot lights up in lime
-		Frame->SetPadding(FMargin(4.f));
-		Box->AddChild(Frame);
-		UOverlay* Stack = WidgetTree->ConstructWidget<UOverlay>();
-		Frame->SetContent(Stack);
-		UImage* Cover = WidgetTree->ConstructWidget<UImage>();
-		Cover->SetColorAndOpacity(DCPalette::NavyLight);
-		Stack->AddChild(Cover);
-		UCommonTextBlock* Label = DCUI::Text(WidgetTree, Stack, FString::FromInt(i + 1));
-		Label->SetWrapTextAt(92.f);
-		Label->SetJustification(ETextJustify::Center);
-		UOverlaySlot* LabelSlot = Cast<UOverlaySlot>(Label->Slot);
-		LabelSlot->SetHorizontalAlignment(HAlign_Center);
-		LabelSlot->SetVerticalAlignment(VAlign_Center);
-		HotbarFrames.Add(Frame);
-		HotbarCovers.Add(Cover);
-		HotbarTexts.Add(Label);
-	}
-	ShownHotbar.Init(NAME_None, HotbarSize);
-	Tapes->SetVisibility(ESlateVisibility::Collapsed); // DEPRECATED v1 (step 8): tapes are picked in the VHS player now, nothing fills it
 }
 
 void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -137,54 +101,11 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	HeldText->SetText(GM->FilmCrafting->HeldFilms.Num() > 0
 		? FText::FromString(FString::Printf(TEXT("In hand: %s"), *GM->FilmCrafting->HeldFilms[0].Title.ToString()))
 		: FText::GetEmpty());
-	UpdateHotbar(*GM);
 	const ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer());
 	const FText PromptLabel = PC ? PC->GetInteractPrompt() : FText::GetEmpty();
 	PromptText->SetText(PromptLabel);
 	PromptKeyText->SetText(UDCSettings::Get()->Interact.GetDisplayName(false).ToUpper());
 	Prompt->SetVisibility(PromptLabel.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
-}
-
-void UDCHUDWidget::UpdateHotbar(const ADCGameMode& GM)
-{
-	const UAC_Inventory* Inventory = GM.Inventory;
-	for (int32 i = 0; i < HotbarCovers.Num(); ++i)
-	{
-		HotbarFrames[i]->SetBrushColor(Inventory->SelectedHotbar == i ? DCPalette::Lime : DCPalette::Navy);
-		const FName Row = Inventory->Hotbar.IsValidIndex(i) ? Inventory->Hotbar[i] : NAME_None;
-		if (ShownHotbar[i] == Row)
-		{
-			continue; // unchanged: don't re-request the cover texture every frame
-		}
-		ShownHotbar[i] = Row;
-
-		FVHSData Tape;
-		const bool bHas = !Row.IsNone() && Inventory->GetVHSData(Row, Tape);
-		UImage* Cover = HotbarCovers[i];
-		if (bHas && !Tape.Cover.IsNull())
-		{
-			Cover->SetColorAndOpacity(FLinearColor::White);
-			Cover->SetBrushFromSoftTexture(Tape.Cover);
-		}
-		else
-		{
-			FLinearColor Color = DCPalette::NavyLight;
-			if (bHas && GM.Config->GenreTable)
-			{
-				for (const TPair<FName, uint8*>& G : GM.Config->GenreTable->GetRowMap())
-				{
-					const FGenreData* Genre = reinterpret_cast<const FGenreData*>(G.Value);
-					if (Genre->Genre == Tape.PrimaryGenre)
-					{
-						Color = Genre->Color;
-					}
-				}
-			}
-			Cover->SetBrush(FSlateBrush());
-			Cover->SetColorAndOpacity(Color);
-		}
-		HotbarTexts[i]->SetText(bHas ? Tape.Title : FText::AsNumber(i + 1));
-	}
 }
 
 // ---------------------------------------------------------------- Review toast

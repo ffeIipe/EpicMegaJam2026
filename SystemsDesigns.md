@@ -2,7 +2,7 @@
 
 Nov 12, 2026 · @Felipe · **Rediseño v2 (cintas con skills): Nov 13, 2026**
 
-> **Rediseño v2 (13 nov).** El sistema de combinación cambió. Ya no se compara género contra género: cada VHS tiene 5 *skills* numéricas, cada pedido tiene un objetivo oculto en esas mismas skills y la reacción sale de la distancia entre la suma de las cintas y el pedido (referencia: ingredientes de Schedule I). Las cintas se **consumen** (son ingredientes), hay 3 slots que suben a 5, se empieza con 3 géneros y el resto se desbloquea desde una computadora. Las secciones 3 a 7, 11 y 12 están reescritas; las demás se ajustaron donde hacía falta. **El código existente en `Source/EpicMegaJam2026/` implementa el sistema anterior**: leé la sección 12.1 antes de tocar nada.
+> **Rediseño v2 (13 nov).** El sistema de combinación cambió. Ya no se compara género contra género: cada VHS tiene 5 *skills* numéricas, cada pedido tiene un objetivo oculto en esas mismas skills y la reacción sale de la distancia entre la suma de las cintas y el pedido (referencia: ingredientes de Schedule I). Las cintas se **consumen** (son ingredientes), hay 3 slots que suben a 5, se empieza con 3 géneros y el resto se desbloquea desde una computadora. Las secciones 3 a 7, 11 y 12 están reescritas; las demás se ajustaron donde hacía falta. **La migración del código y los datos al v2 está hecha (13 nov)**: el estado, lo que se quitó y lo que falta están en la sección 12.1.
 
 ## 0. Instrucciones para Claude (leer primero)
 
@@ -332,7 +332,7 @@ Una sola moneda: dólares (`Money`, entero). Entra por alquileres y propinas. Sa
 
 ### 7.1 Cintas, géneros y desbloqueos
 
-Ya no hay catálogos de paquetes (`DT_Catalogs` queda **deprecada**, sección 12.1): las cintas se compran sueltas y todo lo demás se desbloquea desde la computadora.
+Ya no hay catálogos de paquetes (`DT_Catalogs` se eliminó, sección 12.1): las cintas se compran sueltas y todo lo demás se desbloquea desde la computadora.
 
 **Proveedor (caja registradora, `WBP_Supplier`).** Vende cintas **de a una copia** (botones ×1 y ×5). Una cinta está a la venta si **su género está desbloqueado** y **`Rating ≤ UnlockedStarTier`**. Precio = `TapePriceByStar[Rating]` (inicial 4 / 6 / 9 / 14 / 20). Con 500 cintas la lista necesita pestañas por género (con el color) y filtro por estrellas. Al comprar, el stock sube al instante.
 
@@ -415,7 +415,7 @@ El jugador es un personaje en primera persona (sin modelo visible, solo cámara)
 | Reproductor VHS + TV CRT | Abren el panel de armado (slots, suma de skills en vivo, título, *"Combine"*). Al confirmar se reproduce la animación de meter el VHS en el reproductor y un efecto de estática en la TV. |
 | Cajas en el piso | Cosmético: aparecen al comprar cintas. |
 
-Las cintas se eligen directo del inventario dentro del panel de armado; no son objetos 3D que se agarran, como propone el board, para simplificar. La hotbar y la toma de cintas desde estanterías quedan deprecadas (sección 12.1).
+Las cintas se eligen directo del inventario dentro del panel de armado; no son objetos 3D que se agarran, como propone el board, para simplificar. La hotbar y la toma de cintas desde estanterías se eliminaron (sección 12.1).
 
 **Local — ambiente:** los estantes y exhibidores del salón tienen VHS decorativos. Los clientes caminan hasta un `BP_BrowsePoint` libre frente a esos estantes, miran unos segundos y después hacen fila. No afecta la puntuación ni el inventario. Los clientes se mueven con Nav Mesh y `AI MoveTo` simple, sin Behavior Tree.
 
@@ -501,7 +501,7 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | `DT_Unlocks` | `S_UnlockData` | UnlockId (Name), Type (`E_UnlockType`), Genre (`E_Genre`, si es de género), DisplayName (Text), Description (Text), Price (int), RequiresUnlocks (Array Name), MinGenresOwned (int, 0 = sin requisito) |
 | `DT_DayProgression` | `S_DayData` | DayIndex (int), DayClients (int), NightClients (int), RentAmount (int). **Sin pesos de categoría.** |
 
-**Se eliminan** (deprecadas, ver 12.1): `DT_Catalogs`, `DT_ClientCategories`.
+**Eliminadas** (ver 12.1): `DT_Catalogs`, `DT_ClientCategories`.
 
 ### 11.4 `DA_GameConfig` (instancia de `PDA_GameConfig`)
 
@@ -536,33 +536,32 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | UI | bShowTutorial | true |
 | Luz | DayLightColor, DayLightIntensity, NightLightColor, NightLightIntensity | A definir por arte |
 
-**Se eliminan:** `SlotMultipliers`, `bShowSecondaryGenres`, `AvoidBonus`, `RatingStep`, `LovedThreshold` / `LikedThreshold` / `NeutralThreshold` (reemplazados por los `*MaxError`), `MoneyPerPoint` (reemplazado por `TipAtPerfect`). `HotbarSize` queda sin uso (ver 12.1).
+**Se eliminan:** `SlotMultipliers`, `bShowSecondaryGenres`, `AvoidBonus`, `RatingStep`, `LovedThreshold` / `LikedThreshold` / `NeutralThreshold` (reemplazados por los `*MaxError`), `MoneyPerPoint` (reemplazado por `TipAtPerfect`). `HotbarSize` también se eliminó (ver 12.1).
 
 ## 12. Orden de implementación, alcance y preguntas abiertas
 
 ### 12.1 Estado del código y migración
 
-La v1 (sistema de géneros contra géneros) está implementada en C++ en `Source/EpicMegaJam2026/` y en los assets de `Content/DirectorsCut/`. **Nadie auditó ese código al escribir esta sección**: el primer paso es leerlo. Archivos que, por su nombre y contenido, hay que migrar:
+**La migración de la v1 (género contra género) al v2 (skills) está hecha (13 nov).** Los 8 pasos de 12.2 están implementados en `Source/EpicMegaJam2026/` y en `Content/DirectorsCut/`. Compila y pasan los tests automáticos (`DirectorsCut.Scoring`, `.Flow`, `.Supplier`, `.DayCycle.*`, `.Economy.*`), **cada uno en su propio proceso** (comparten el mundo y corridos juntos fallan por estado compartido). Lo que se probó en PIE: el panel de armado y la computadora. Lo que **no** se probó en PIE: el proveedor con el mouse real y una partida completa de varios días.
 
-| Archivo / asset | Qué cambia |
+| Área | Estado |
 | --- | --- |
-| `Data/DCTypes.h` | `EGenre` (10 valores, sin `Paranormal`), nuevos `ESkill`, `EHintLevel`, `EFeedbackDirection`, `EUnlockType`, `FSkillVector`. Quitar `EPolarity`, `EClientCategory`, `EFilmSlot`, `FGenreValue`, `FGenrePreference`. Reescribir `FCreatedFilm`, `FClientRuntime`, `FReview`, `FVHSData`, `FGenreData`, `FClientArchetypeData`, `FHintLineData`, `FReviewLineData`, `FDayData`; agregar los row structs nuevos. Agregar `Computer` a `EInteractType`. |
-| `Data/PDA_GameConfig.h` | Variables de la sección 11.4. |
-| `Core/BPFL_Scoring.*` y `Core/ScoringTest.cpp` | Reescribir con la sección 6. Los tests de la sección 6.5 reemplazan a los actuales. |
-| `Components/DCComponents.*` | `AC_Inventory` con cantidades, `AC_FilmCrafting` con N slots y consumo, `AC_Economy` con precios por estrella, nuevo `AC_Unlocks`. |
-| `Components/DCClientDirector.cpp`, `Core/DCClient.*` | Generación del pedido (5.2), pistas (5.4), niveles, pedidos scripteados, feedback en la crítica. |
-| `Core/ClientFlowTest.cpp`, `EconomyTest.cpp`, `DayCycleTest.cpp` | Ajustar a los cambios de arriba. |
-| `UI/*` y los `WBP_*` | `WBP_Inventory`, `WBP_FilmCrafting`, `WBP_Supplier`, `WBP_Shelf`, `WBP_ReviewToast` y tutorial; nuevo `WBP_Computer`. |
-| `Data/DT_*` y `DA_GameConfig` | **Al cambiar un row struct se pierden las filas existentes.** Antes de tocar un struct, exportar la tabla a CSV/JSON; después reimportar con los campos nuevos. |
+| `Data/DCTypes.h` | Hecho: `ESkill`, `EHintLevel`, `EFeedbackDirection`, `EUnlockType`, `FSkillVector`, row structs nuevos (`FClientTierData`, `FScriptedOrderData`, `FFeedbackLineData`, `FUnlockData`), `Computer` en `EInteractType`. Quitados `EClientCategory`, `EFilmSlot`, `FGenreValue`, `FGenrePreference`. **Quedan por decisión:** `Paranormal` en `EGenre` (lo usan `DT_Genres`, el arquetipo nocturno y `Shelf_Paranormal` del nivel; quitarlo exige tocar el nivel) y `EPolarity` con `FHintLineData.Genre/Polarity` (solo como registro de qué frases se migraron; las de SciFi y Paranormal llevan `bUnused`). |
+| `Data/PDA_GameConfig.h` | Hecho: variables de la sección 11.4. Quitadas `SlotMultipliers`, `AvoidBonus`, `RatingStep`, `*Threshold`, `MoneyPerPoint`, `bShowSecondaryGenres`, `HotbarSize`, `CatalogTable`, `CategoryTable`. |
+| `Core/BPFL_Scoring.*`, `ScoringTest.cpp` | Hecho (sección 6). El test cubre los 6 casos de 6.5 y la elección de la skill de feedback. |
+| `Components/DCComponents.*` | Hecho: `AC_Inventory` con cantidades y compra de cintas sueltas, `AC_FilmCrafting` con 3 a 5 slots, consumo y descarte con devolución, `AC_Unlocks` con compras, requisitos y efectos reales (slots, estrellas, géneros). |
+| `Components/DCClientDirector.cpp`, `Core/DCClient.*` | Hecho: niveles, receta, `Target` oculto, pistas, pedidos scripteados, feedback en la crítica, personas (5.6). |
+| `Core/*Test.cpp` | Ajustados. `ClientFlowTest` atiende los 3 pedidos scripteados con el inventario inicial y espera `Loved` con su propina. |
+| `UI/*` | Hecho: inventario con skills y copias, panel de armado con suma en vivo, `WBP_Supplier` por cintas, `WBP_Computer`, toast con feedback. Las pantallas son clases de C++ (`UDC*Widget`) con CommonUI; los `WBP_*` son subclases vacías o inexistentes (el controller usa las del código si no hay una asignada). `BP_Computer` es un `BP_Interactable` con `InteractType = Computer` y un cubo placeholder (hoy en el subnivel `L_Props`). |
+| `Data/DT_*` y `DA_GameConfig` | Hecho: `DT_Genres` (sesgos, semillas, colores v2, géneros nuevos), `DT_ClientTiers`, `DT_Unlocks`, `DT_ScriptedOrders`, `DT_FeedbackLines` (vacía), `DT_HintLines` migrada, `DT_VHS` con las 500 filas generadas por `Tools/VHSGenerator/`. `DT_DayProgression` ya no tiene los pesos de categoría. |
 
-**Qué queda deprecado (no borrar hasta confirmar con el equipo):**
+**Quitado (confirmado el 13 nov):** la hotbar (HUD, teclas `1`–`9` y `Q`, su opción en Opciones, `TakeTape`/`ReturnTape`), el flujo de catálogos y los assets `DT_Catalogs` y `DT_ClientCategories`, y las 35 filas v1 de `DT_VHS`. Las estanterías del depósito muestran el stock en solo lectura.
 
-- `DT_Catalogs`, `DT_ClientCategories` y el flujo de catálogos de `WBP_Supplier`.
-- **La hotbar** (`HotbarSize`, teclas `1`–`9` y `Q`) y la toma de cintas desde estanterías. Con cintas consumibles que se eligen directo del inventario en el panel de armado, la hotbar queda sin función. No usarla en el flujo de armado. Las estanterías del depósito pasan a mostrar el stock (solo lectura, con cantidades). Confirmar con el equipo si se borra (pregunta abierta abajo).
+**Cómo correr los tests** (motor en `C:\UnrealVersions\UE_5.8`): `UnrealEditor-Cmd.exe <uproject> /Game/DirectorsCut/Levels/L_VideoStore -game -nullrhi -unattended -nosplash -ExecCmds="Automation RunTests <grupo>; Quit"`, un grupo por proceso. Para compilar con UBT el editor tiene que estar cerrado (Live Coding lo bloquea).
 
 ### 12.2 Orden de implementación
 
-Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente sin eso. Los pasos 1 a 9 del diseño anterior (núcleo, economía, día y noche, clientes, UI, pulido) ya existen en el código; esta es la migración.
+Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente sin eso. Los pasos 1 a 9 del diseño anterior (núcleo, economía, día y noche, clientes, UI, pulido) ya existían en el código; esta fue la migración, y **los 8 pasos están hechos (13 nov)**. Lo que sigue es balance, contenido del equipo y playtest (12.3).
 
 1. **Auditoría:** leer `Source/EpicMegaJam2026/` y los Blueprints, y reportar qué de la sección 12.1 ya está hecho o difiere. No cambiar nada.
 2. **Datos:** enums, structs y row structs nuevos (11.1 a 11.3), `PDA_GameConfig` y `DA_GameConfig` (11.4). Cargar `DT_Genres` (con sesgos y semillas), `DT_ClientTiers`, `DT_Unlocks`, `DT_DayProgression` sin pesos y `DT_ScriptedOrders`. Dejar el proyecto compilando.
@@ -601,10 +600,18 @@ Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente
 - [ ] Las licencias de estrellas (`Stars_2` a `Stars_5`) y los slots 4 y 5 se compran en la computadora, junto con los géneros.
 - [ ] Géneros premium con precio 300 y requisito de 6 géneros desbloqueados.
 - [ ] Precios, `StarPoints`, niveles de cliente, `SkillCap` 10 y umbrales de reacción: todo es inicial y se ajusta en playtest.
-- [ ] Quitar la hotbar y la toma de cintas desde estanterías (12.1).
 - [ ] `MovieBudgetGoal`: subirlo o no, dada la nueva economía (7.1).
 - [ ] No hay botón "ir al depósito" al aceptar el pedido (el chat original lo mencionaba): se mantiene el recorrido libre en primera persona por la puerta.
 - [ ] La película descartada devuelve las cintas (4.4, regla 8).
+
+**Pendientes técnicos y de playtest (13 nov):**
+
+- [ ] Probar en PIE el proveedor con el mouse real y una partida de varios días (hoy solo hay tests automáticos y la prueba de la computadora y el panel de armado).
+- [ ] Decidir si se quita `Paranormal` (implica sacar `Shelf_Paranormal` del nivel y reasignar el arquetipo nocturno) y `EPolarity`.
+- [ ] Mover el cubo `Computer` al nivel persistente (hoy está en el subnivel `L_Props`) y reemplazarlo por el modelo de arte.
+- [ ] Pantallas como Blueprints (`WBP_Supplier`, `WBP_Computer`, etc.) si arte quiere editarlas en UMG; hoy son código.
+- [ ] Revisar el ancho del panel de armado y del proveedor en otras resoluciones.
+- [ ] Las personas (5.6) siguen propuestas: faltan las frases por temperamento.
 
 **Resueltas:**
 
@@ -615,3 +622,4 @@ Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente
 - [x] ~~Cuántas cintas hay y cómo se hacen.~~ 50 por género, generadas por script con semilla por género.
 - [x] ~~Cómo se puntúa.~~ Distancia total entre perfil y pedido, con umbrales (referencia Schedule I).
 - [x] ~~Director's Cut desde el minuto 0.~~ Disponible desde el segundo 0, con 3 slots.
+- [x] ~~¿Se quita la hotbar y la toma de cintas desde estanterías?~~ Sí, quitadas el 13 nov junto con los catálogos.

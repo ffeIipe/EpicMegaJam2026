@@ -192,9 +192,6 @@ public:
 
 	// v2 (section 4.3): copies of each DT_VHS row. Tapes are consumed when a film is combined.
 	UPROPERTY(BlueprintReadOnly) TMap<FName, int32> Stock;
-	// DEPRECATED v1 (step 8): tapes carried from the shelves. Nothing fills it any more; the HUD hides it.
-	UPROPERTY(BlueprintReadOnly) TArray<FName> Hotbar;
-	UPROPERTY(BlueprintReadOnly) int32 SelectedHotbar = 0;
 
 	virtual void BeginPlay() override;
 
@@ -205,10 +202,6 @@ public:
 	UFUNCTION(BlueprintCallable) bool ConsumeTape(FName Row, int32 Count = 1);
 	// Rows with at least one copy, sorted by name
 	UFUNCTION(BlueprintCallable) TArray<FName> GetOwnedVHS() const;
-	UFUNCTION(BlueprintCallable) bool IsCarried(FName Row) const { return Hotbar.Contains(Row); }
-	// DEPRECATED v1 (step 8): puts an owned tape in the first free hotbar slot.
-	UFUNCTION(BlueprintCallable) bool TakeTape(FName Row);
-	UFUNCTION(BlueprintCallable) void ReturnTape(FName Row);
 	UFUNCTION(BlueprintCallable) TArray<FName> GetOwnedVHSByGenre(EGenre Genre) const;
 	UFUNCTION(BlueprintCallable) bool GetVHSData(FName Row, FVHSData& Out) const;
 	// Supplier (section 7.1): price of one copy by the tape's stars, TapePriceByStar[Rating - 1]

@@ -15,15 +15,13 @@ public:
 	// --- Data Tables (assigned in DA_GameConfig)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> GenreTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> VHSTable;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> CatalogTable;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> CategoryTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ArchetypeTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> HintLineTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> GreetingTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> FarewellTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ReviewLineTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> DayTable;
-	// v2 (section 11.3). CatalogTable and CategoryTable above are DEPRECATED (steps 6 and 7).
+	// v2 (section 11.3)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ClientTierTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> ScriptedOrderTable;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tables") TObjectPtr<UDataTable> FeedbackLineTable;
@@ -96,7 +94,6 @@ public:
 	// --- Player
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player") float WalkSpeed = 300.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player") float InteractRange = 450.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player", meta = (ClampMin = 1)) int32 HotbarSize = 3;
 
 	// --- Clock (in-store fictional hours: day 10:00-22:00, night 22:00-04:00)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clock") float ClockDayStartHour = 10.f;

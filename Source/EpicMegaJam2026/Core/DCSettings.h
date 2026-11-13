@@ -7,7 +7,7 @@
 #include "DCSettings.generated.h"
 
 // Game actions the player can rebind; the controller polls their keys every tick
-enum class EDCAction : uint8 { Interact, MoveForward, MoveBack, MoveLeft, MoveRight, ReturnTape, Count };
+enum class EDCAction : uint8 { Interact, MoveForward, MoveBack, MoveLeft, MoveRight, Count };
 
 UCLASS(config = GameUserSettings)
 class EPICMEGAJAM2026_API UDCSettings : public UObject
@@ -19,7 +19,6 @@ public:
 	UPROPERTY(Config) FKey MoveBack = EKeys::S;
 	UPROPERTY(Config) FKey MoveLeft = EKeys::A;
 	UPROPERTY(Config) FKey MoveRight = EKeys::D;
-	UPROPERTY(Config) FKey ReturnTape = EKeys::Q;
 	// Multiplies PDA_GameConfig.MouseSensitivity
 	UPROPERTY(Config) float MouseSensitivityScale = 1.f;
 	UPROPERTY(Config) float MasterVolume = 1.f;
