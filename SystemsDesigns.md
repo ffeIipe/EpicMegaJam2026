@@ -1,6 +1,8 @@
 # Director's Cut: documento de diseño de sistemas
 
-Nov 12, 2026 · @Felipe · **Rediseño v2 (cintas con skills): Nov 13, 2026**
+Nov 12, 2026 · @Felipe · **Rediseño v2 (cintas con skills): Nov 13, 2026** · **Cambio de control v2.1 (cámara fija y secuencia al depósito): Nov 13, 2026**
+
+> **Cambio de control v2.1 (13 nov, código hecho el 14 nov; faltan nivel y arte).** El jugador **ya no se mueve**: está parado en el mostrador y solo gira la cámara, dentro de un rango limitado. Cuando el cliente llega al frente se abre solo el diálogo del pedido y el jugador lo acepta. Hay una tecla y un botón en el HUD para **ir al depósito** (en cualquier momento): disparan una **Level Sequence** que lleva la cámara al depósito y, al terminar, abre el panel de combinación de VHS. Al cerrar el panel (o al combinar) la secuencia se reproduce en reversa y la cámara vuelve al mostrador. Reescritas: secciones 9, 10 (filas afectadas) y 12.1b; ajustadas: 1, 2, 4.4, 5.4, 11 y 12. Cambios que no pidió el equipo y propuso Claude están marcados como *propuesto* en 12.3.
 
 > **Rediseño v2 (13 nov).** El sistema de combinación cambió. Ya no se compara género contra género: cada VHS tiene 5 *skills* numéricas, cada pedido tiene un objetivo oculto en esas mismas skills y la reacción sale de la distancia entre la suma de las cintas y el pedido (referencia: ingredientes de Schedule I). Las cintas se **consumen** (son ingredientes), hay 3 slots que suben a 5, se empieza con 3 géneros y el resto se desbloquea desde una computadora. Las secciones 3 a 7, 11 y 12 están reescritas; las demás se ajustaron donde hacía falta. **La migración del código y los datos al v2 está hecha (13 nov)**: el estado, lo que se quitó y lo que falta están en la sección 12.1.
 
@@ -31,10 +33,10 @@ El jugador es un cineasta frustrado que atiende un videoclub. Los clientes piden
 **Loop de un cliente:**
 
 1. **Llegada:** el cliente entra, recorre un estante (cosmético) y se suma a la fila del mostrador.
-2. **Pedido:** al llegar al frente, dice su pedido con frases que dejan entrever las skills que busca.
-3. **Elección:** el jugador va al depósito y llena sus slots con cintas del inventario (puede dejar slots vacíos o repetir una cinta).
+2. **Pedido:** al llegar al frente, dice su pedido con frases que dejan entrever las skills que busca y el jugador lo **acepta** (el diálogo se abre solo).
+3. **Elección:** el jugador va al depósito (tecla o botón: una secuencia de cámara lo lleva) y llena sus slots con cintas del inventario (puede dejar slots vacíos o repetir una cinta).
 4. **Creación:** el jugador le pone título y aprieta *"Combine"*: se gastan las cintas usadas.
-5. **Entrega:** vuelve al mostrador, entrega la película y cobra el precio base del alquiler.
+5. **Entrega:** la cámara vuelve sola al mostrador, se abre el diálogo de entrega, el jugador entrega la película y cobra el precio base del alquiler.
 6. **Crítica online:** unos segundos después llega la reseña: propina si le encantó o le gustó, nada si fue neutral, multa si la odió; si no fue perfecto, la reseña dice en qué falló.
 7. **Reinversión:** con la plata se compran cintas en el proveedor y se desbloquean géneros, slots y estrellas en la computadora.
 
@@ -48,7 +50,7 @@ Toda la lógica de reglas vive en componentes del GameMode. Los actores del mund
 
 **Prefijos:** `BP_` Blueprint actor · `AC_` Actor Component · `WBP_` widget · `S_` struct · `E_` enum · `DT_` Data Table · `PDA_` Primary Data Asset (clase) · `DA_` instancia de Data Asset · `BPFL_` Function Library · `LS_` Level Sequence · `SM_`/`SK_`/`M_`/`T_` arte.
 
-**Nivel:** un solo mapa `L_VideoStore` con tres zonas: local (mostrador, estantes, fila, puerta), depósito (estanterías y cajas) y un exterior simple (calle, árboles, poste).
+**Nivel:** un solo mapa `L_VideoStore` con tres zonas: local (mostrador, estantes, fila, puerta), depósito (estanterías, cajas, reproductor VHS y TV CRT; solo se ve desde la cámara de la secuencia, el jugador no camina hasta ahí) y un exterior simple (calle, árboles, poste).
 
 | Clase | Responsabilidad |
 | --- | --- |
@@ -60,8 +62,8 @@ Toda la lógica de reglas vive en componentes del GameMode. Los actores del mund
 | `AC_Unlocks` | Géneros, slots y nivel de estrellas desbloqueados, compra de desbloqueos. |
 | `AC_FilmCrafting` | Slots de combinación (3 a 5), título, perfil de skills, consumo de cintas, película en mano. |
 | `BPFL_Scoring` | Funciones puras de puntuación (sección 6). Sin estado. |
-| `BP_DC_PlayerController` | Input (WASD, mouse), interacción, abrir menús. |
-| `BP_CounterCamera` | Character en primera persona: movimiento WASD y cámara con el mouse. |
+| `BP_DC_PlayerController` | Input (mouse, tecla de interactuar, tecla de depósito), interacción, abrir menús, reproducir `LS_ToBackRoom` (adelante y en reversa), estado `E_CameraZone`. |
+| `BP_CounterCamera` | Pawn de cámara en primera persona, **sin movimiento**: parado en el mostrador, la cámara sigue al mouse con rango limitado (sección 9). |
 | `BP_Client` | NPC: movimiento, estado, paciencia visible (opcional), diálogo. |
 | `BP_ClientQueue` | Puntos de fila ordenados frente al mostrador. |
 | `BP_BrowsePoint` | Punto de estante donde un cliente se queda mirando antes de hacer fila. |
@@ -69,7 +71,7 @@ Toda la lógica de reglas vive en componentes del GameMode. Los actores del mund
 | `BP_Computer` | Computadora del mostrador: abre `WBP_Computer` (desbloqueos). Placeholder hasta que arte entregue el modelo. |
 | `BP_HUD` + widgets | Ver sección 10. |
 
-**Event Dispatchers principales:** `OnMoneyChanged(NewMoney, Delta)`, `OnPhaseChanged(Phase, DayIndex)`, `OnPhaseTimeTick(SecondsLeft)`, `OnClientReachedCounter(Client)`, `OnClientLeft(Client, bServed)`, `OnFilmCreated(Film)`, `OnReviewReceived(Review)`, `OnRentCharged(Amount)`, `OnGameOver()`, `OnVictory()`, `OnInventoryChanged()`, `OnUnlockPurchased(UnlockId)`.
+**Event Dispatchers principales:** `OnMoneyChanged(NewMoney, Delta)`, `OnPhaseChanged(Phase, DayIndex)`, `OnPhaseTimeTick(SecondsLeft)`, `OnClientReachedCounter(Client)`, `OnClientLeft(Client, bServed)`, `OnFilmCreated(Film)`, `OnReviewReceived(Review)`, `OnRentCharged(Amount)`, `OnGameOver()`, `OnVictory()`, `OnInventoryChanged()`, `OnUnlockPurchased(UnlockId)`, `OnCameraZoneChanged(Zone)`.
 
 ## 3. Skills y géneros
 
@@ -147,7 +149,7 @@ Las cintas se compran de a una copia en el proveedor y se desbloquean por géner
 
 El jugador tiene `UnlockedSlots` slots de combinación (inicial `StartUnlockedSlots` = 3, máximo `MaxSlots` = 5). Se suben desde la computadora (sección 7.1). Los slots no tienen nombre ni orden narrativo: son "Slot 1", "Slot 2", etc.
 
-**Flujo en el panel de armado (reproductor del depósito):** el jugador elige un slot, elige una cinta del inventario para ese slot, y repite con los demás. Aprieta *"Combine"*. Puede volver a tocar un slot lleno para cambiarlo o vaciarlo antes de combinar.
+**Flujo en el panel de armado (se abre solo al llegar al depósito, sección 9):** el jugador elige un slot, elige una cinta del inventario para ese slot, y repite con los demás. Aprieta *"Combine"*. Puede volver a tocar un slot lleno para cambiarlo o vaciarlo antes de combinar.
 
 **Reglas:**
 
@@ -159,7 +161,7 @@ El jugador tiene `UnlockedSlots` slots de combinación (inicial `StartUnlockedSl
 6. Al combinar se **gastan las copias** (1 por slot usado) y se crea un `S_CreatedFilm` = {`Title`, `SlotRows`, `SkillProfile`} que pasa a ser la **película en mano**. La película resultante **tiene aspecto visual propio**: el VHS toma una mezcla de los colores de género de sus cintas (placeholder: franjas de color por cinta).
 7. Solo se puede tener `MaxHeldFilms` películas en mano (inicial 1). Con una en mano, *"Combine"* queda deshabilitado hasta entregarla o descartarla.
 8. **Descartar la película en mano devuelve las cintas al inventario** y no tiene costo. No revela nada del pedido, así que no hay forma de abusar.
-9. El reproductor de VHS está disponible **desde el segundo 0** del Día 1. Tiene que ser notorio: es el tema de la jam.
+9. El depósito y el panel de armado están disponibles **desde el segundo 0** del Día 1, con o sin cliente en el mostrador. Tiene que ser notorio: es el tema de la jam.
 
 **Perfil de la película:**
 
@@ -218,7 +220,7 @@ El pedido se arma concatenando saludo + frases de pista + cierre. Las pistas dic
 - Cada fila de `DT_HintLines` = {`Skill`, `Level`, `Text`}. Hay al menos 3 frases por combinación skill y nivel (5 × 3 × 3 = 45 frases). Se elige una al azar sin repetir en el mismo día.
 - Las frases nunca nombran la skill ni el género.
 - **Reutilizar las frases ya escritas.** `DT_HintLines` ya tiene frases por género y polaridad. Se migran así: Horror → `Scary`, Comedy → `Funny`, Romance → `Romantic`, Action → `Brave`, Drama → `Thoughtful`; `Likes` → `High`, `Dislikes` → `None`. Quedan escritas **30 frases** (6 por skill). Las de SciFi y Paranormal no tienen skill: dejarlas en la tabla sin usar, no borrarlas. **Faltan** las 15 frases de nivel `Some` (3 por skill) y completar el mínimo de 3 en las combinaciones que hoy tengan menos: `TODO(DESIGN)`, las escribe el equipo.
-- El pedido queda escrito en un panel del HUD mientras el cliente siga en el local, para poder releerlo desde el depósito. El jugador responde con un único botón *"Coming right up"*.
+- El pedido queda escrito en un panel del HUD mientras el cliente siga en el local, para poder releerlo desde el depósito. El diálogo con el pedido **se abre solo** cuando el cliente llega al frente (sección 9) y el jugador lo acepta con un único botón *"Coming right up"*. Aceptar solo cierra el diálogo: no cambia la paciencia ni obliga a ir al depósito.
 
 **Pedidos scripteados (`DT_ScriptedOrders`).** Los primeros clientes enseñan la mecánica y solo usan Horror y Comedy (aunque Action también esté desbloqueado). Cada fila fija `Target`, las pistas exactas y el arquetipo:
 
@@ -388,32 +390,43 @@ Cada día dura 10 minutos: Día de `DayDurationSec` (300 s) y Noche de `NightDur
 
 ## 9. Espacios, cámara e interacción
 
-El jugador es un personaje en primera persona (sin modelo visible, solo cámara) que se mueve libremente por el local y el depósito. No hay tercera persona.
+El jugador es una cámara en primera persona (sin modelo visible) **parada en el mostrador**. **No se mueve**: no hay WASD, ni colisión del jugador, ni caminata hacia el depósito. Solo gira la cámara, dentro de un rango limitado. No hay tercera persona.
 
-**Personaje (`BP_CounterCamera`):**
+**Cámara (`BP_CounterCamera`):**
 
-- Se mueve con WASD (`WalkSpeed`, inicial 300 cm/s), con colisión contra el mobiliario y las paredes. Sin salto ni correr.
-- Mira con el mouse sin límite de yaw y con pitch de ±`LookPitchLimit` (inicial 80°). Sensibilidad base (`MouseSensitivity`) en `DA_GameConfig`; el jugador la multiplica desde Opciones (`UDCSettings.MouseSensitivityScale`).
-- Teclas por defecto: `E` interactuar, `Q` devolver cinta, WASD mover. Se pueden cambiar desde Opciones del menú de pausa y se guardan por usuario (`GameUserSettings.ini`). Si se asigna una tecla que ya usa otra acción, las dos se intercambian. Los slots de hotbar (1-9) y `Esc` no se reasignan.
-- Interacción con la tecla de interactuar (`E`) con trazado desde el centro de la pantalla, con alcance `InteractRange` (inicial 450 cm: el cliente del mostrador queda a unos 360 cm del punto de inicio). Los objetos interactuables se resaltan con un outline al apuntarlos.
+- Mira con el mouse dentro de un rango alrededor de la dirección inicial del mostrador: yaw de ±`LookYawLimit` (inicial 60°) y pitch de ±`LookPitchLimit` (inicial 30°). El rango se **corta** en los bordes (la cámara no sigue girando). El mostrador, la caja registradora, la computadora y el lugar del cliente del frente tienen que quedar dentro del rango.
+- Sensibilidad base (`MouseSensitivity`) en `DA_GameConfig`; el jugador la multiplica desde Opciones (`UDCSettings.MouseSensitivityScale`).
+- Teclas por defecto: `E` interactuar y `Space` ir al depósito (*propuesto*). Se pueden cambiar desde Opciones del menú de pausa y se guardan por usuario (`GameUserSettings.ini`). Si se asigna una tecla que ya usa otra acción, las dos se intercambian. `Esc` no se reasigna.
+- Interacción con `E` con trazado desde el centro de la pantalla, con alcance `InteractRange` (inicial 450 cm). Los objetos interactuables se resaltan con un outline al apuntarlos.
+- Durante las secuencias y en el depósito la cámara **no gira** ni se interactúa con el mundo.
 
-**Cambio de zona:** no hay botón ni transición. El jugador camina por la puerta entre el mostrador y el depósito. El HUD no tiene botón de zona.
+**Estados de cámara (`E_CameraZone`):** `Counter` (mira y interactúa) → `ToBackRoom` (secuencia en curso) → `BackRoom` (panel de armado abierto) → `ToCounter` (secuencia en reversa) → `Counter`. Cada cambio dispara `OnCameraZoneChanged(Zone)`.
 
-**Mostrador — interactuables:**
+**Aceptar el pedido (se abre solo).** Cuando un cliente llega al frente (`OnClientReachedCounter`) se abre `WBP_Dialogue` con su pedido, sin que el jugador apunte ni apriete nada. El botón es *"Coming right up"* si no hay película en mano o *"Here you go"* si la hay (entrega, igual que antes). Reglas del auto-apertura (*propuesto*):
+
+- Solo se abre con la cámara en `Counter` y **sin otra pantalla abierta** (proveedor, computadora, pausa). Si hay una, el diálogo se abre al cerrarla.
+- Se vuelve a abrir solo cada vez que la cámara vuelve a `Counter` con un cliente en el frente y **película en mano** (así se entrega sin apuntar). Con el cliente en el frente y sin película no se vuelve a abrir.
+- Si el jugador lo cierra con Back sin aceptar, puede reabrirlo con `E` sobre el cliente (única interacción que queda con él).
+- La paciencia no se detiene mientras el diálogo está abierto (sección 5.5).
+
+**Ir al depósito.** Tecla (`Space`) y botón en el HUD, **disponibles siempre** con la cámara en `Counter`, haya o no cliente y tenga o no el pedido aceptado. No se puede usar durante una secuencia, con otra pantalla abierta ni en pausa.
+
+1. Se pasa a `ToBackRoom`, se bloquea el input de mirar e interactuar y se reproduce `LS_ToBackRoom` (en `Cinematics/`) hacia adelante. La secuencia mueve la cámara del mostrador al depósito.
+2. Al terminar se pasa a `BackRoom` y se abre el panel de armado (`WBP_FilmCrafting`).
+3. **Volver:** Back (`Esc` o botón B; también el hint de la barra) cierra el panel y reproduce `LS_ToBackRoom` **en reversa** (`ToCounter`). Al terminar queda en `Counter`, y si hay cliente y película en mano se abre el diálogo de entrega.
+4. **Combinar:** al confirmar, se reproduce la animación de meter el VHS en el reproductor y la estática en la TV; después el panel se cierra y se vuelve al mostrador igual que con Back (*propuesto*). La película queda en mano.
+
+Mientras corre la secuencia (en cualquier sentido) y mientras se está en el depósito, **el tiempo del juego sigue corriendo**: la paciencia de los clientes, el reloj y los spawns no se detienen. Un cliente puede irse mientras el jugador está en el depósito; la película en mano se conserva para el siguiente. La duración de la secuencia la define arte, pero cuenta contra la paciencia (referencia propuesta: 1,5 a 2 s por sentido).
+
+**Mostrador — interactuables** (con `E`, apuntando):
 
 | Objeto | Acción |
 | --- | --- |
-| Cliente en el frente | Abre el diálogo del pedido o, si hay película en mano, la entrega. |
+| Cliente en el frente | Reabre el diálogo del pedido o de la entrega (la apertura normal es automática). |
 | Caja registradora | Muestra la plata actual (contador 3D) y abre el menú del proveedor (compra de cintas). |
 | Computadora (`BP_Computer`) | Abre `WBP_Computer`: desbloqueo de géneros, slots y estrellas. |
 
-**Depósito — interactuables:**
-
-| Objeto | Acción |
-| --- | --- |
-| Estanterías | Muestran el stock de cintas del jugador, filtrado por el género de esa estantería (solo lectura, con cantidades). |
-| Reproductor VHS + TV CRT | Abren el panel de armado (slots, suma de skills en vivo, título, *"Combine"*). Al confirmar se reproduce la animación de meter el VHS en el reproductor y un efecto de estática en la TV. |
-| Cajas en el piso | Cosmético: aparecen al comprar cintas. |
+**Depósito:** ya no tiene interactuables. Las estanterías (stock de solo lectura), el reproductor VHS y la TV CRT son **escenografía** que se ve al final de la secuencia; el panel de armado se abre solo al llegar. Las cajas en el piso siguen siendo cosméticas: aparecen al comprar cintas.
 
 Las cintas se eligen directo del inventario dentro del panel de armado; no son objetos 3D que se agarran, como propone el board, para simplificar. La hotbar y la toma de cintas desde estanterías se eliminaron (sección 12.1).
 
@@ -425,11 +438,11 @@ Toda la UI es UMG, en inglés, con estilo VHS/CRT (scanlines y tipografía tipo 
 
 | Widget | Contenido | Cuándo se ve |
 | --- | --- | --- |
-| `WBP_HUD` | Plata, meta (barra de progreso hacia `MovieBudgetGoal`), día y fase, reloj, renta de esta noche, película en mano. | Siempre en juego |
+| `WBP_HUD` | Plata, meta (barra de progreso hacia `MovieBudgetGoal`), día y fase, reloj, renta de esta noche, película en mano, botón e hint de tecla *"Back room"* (`Space`, visible solo con la cámara en `Counter`). | Siempre en juego |
 | `WBP_OrderPanel` | Texto del pedido del cliente del frente y su paciencia como barra. | Mientras haya un cliente en el mostrador, también en el depósito |
-| `WBP_Dialogue` | Frase del cliente y botón *"Coming right up"* o *"Here you go"* (entrega, muestra el título). | Al interactuar con el cliente |
-| `WBP_Inventory` | Lista de VHS por género (pestañas con el color del género), cada fila con título, estrellas, las 5 skills con número y cantidad de copias. | Al abrir una estantería (solo lectura) o al elegir cinta para un slot del panel de armado |
-| `WBP_FilmCrafting` | Slots de combinación (3 a 5) que se llenan desde el inventario (se puede dejar vacíos o repetir), suma de skills en vivo, campo de título, botón *"Combine"*, botón descartar. | En el reproductor del depósito |
+| `WBP_Dialogue` | Frase del cliente y botón *"Coming right up"* o *"Here you go"* (entrega, muestra el título). | Se abre solo al llegar el cliente al frente y al volver del depósito con película en mano (sección 9); se reabre con `E` sobre el cliente |
+| `WBP_Inventory` | Lista de VHS por género (pestañas con el color del género), cada fila con título, estrellas, las 5 skills con número y cantidad de copias. | Al elegir cinta para un slot del panel de armado (las estanterías ya no se abren) |
+| `WBP_FilmCrafting` | Slots de combinación (3 a 5) que se llenan desde el inventario (se puede dejar vacíos o repetir), suma de skills en vivo, campo de título, botón *"Combine"*, botón descartar. | Se abre solo al terminar `LS_ToBackRoom` (cámara en `BackRoom`) |
 | `WBP_Supplier` | Cintas a la venta (género desbloqueado y estrellas permitidas) con pestañas por género, filtro por estrellas, precio y botones ×1 / ×5 (deshabilitados sin plata). | Desde la caja registradora |
 | `WBP_Computer` | Lista de desbloqueos (géneros, slots, estrellas) con precio, requisitos y botón de compra (sección 7.1). | Desde la computadora |
 | `WBP_ReviewToast` | Notificación de la página ficticia de reseñas (*"ReelTalk.net"*): título de la película, estrellas de 1 a 5 según la reacción, frase, línea de feedback (si no fue perfecto) y +/− plata. | Al llegar cada crítica, 4 s |
@@ -437,7 +450,7 @@ Toda la UI es UMG, en inglés, con estilo VHS/CRT (scanlines y tipografía tipo 
 | `WBP_GameOver` / `WBP_Victory` | Pantalla final con día alcanzado y botón de reiniciar. | Al perder o ganar |
 | `WBP_MainMenu` / `WBP_Pause` | Jugar, salir / continuar, opciones (teclas, volumen general, sensibilidad), reiniciar, salir. | Inicio / tecla `Esc` |
 
-**Tutorial mínimo (hook de 15 a 20 s):** en la primera partida aparecen tres carteles contextuales, uno por vez: al llegar el primer cliente (*"Listen to what they want"*), al entrar al depósito (*"Pick tapes and combine them"*) y al tener una película en mano (*"Bring it back to the counter"*). Se desactivan con `bShowTutorial`.
+**Tutorial mínimo (hook de 15 a 20 s):** en la primera partida aparecen tres carteles contextuales, uno por vez: al llegar el primer cliente (*"Listen to what they want"*), al aceptar su pedido (*"Press SPACE to go to the back room"*, con la tecla leída de las acciones de input) y al llegar al depósito (*"Pick tapes and combine them"*). Ya no hay cartel de "volver": el regreso y la entrega son automáticos (*propuesto*). Se desactivan con `bShowTutorial`.
 
 **Game juice (del board):**
 
@@ -466,7 +479,8 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | `E_SpawnPhase` | Day, Night, Any |
 | `E_ClientState` | Entering, Browsing, Queued, AtCounter, Served, Leaving |
 | `E_Reaction` | Loved, Liked, Neutral, Hated |
-| `E_InteractType` | CashRegister, BackRoomDoor, Shelf, VHSPlayer, **Computer** (nuevo) |
+| `E_InteractType` | CashRegister, BackRoomDoor, Shelf, VHSPlayer, Computer. Con la v2.1 `BackRoomDoor`, `Shelf` y `VHSPlayer` quedan **sin uso** (se conservan para no mover los valores guardados). |
+| `E_CameraZone` | Counter, ToBackRoom, BackRoom, ToCounter (nuevo, v2.1) |
 
 **Se eliminan:** `E_Polarity`, `E_ClientCategory` (reemplazada por el entero `Tier` de 1 a 5) y `E_FilmSlot` (los slots son índices).
 
@@ -530,13 +544,14 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | Economía | BaseRentalPrice / TipAtPerfect / ComplaintFine | 10 / 12 / 15 |
 | Economía | RentIncreaseAfterLastDay | 40 |
 | Economía | ReviewDelaySec | 15 |
-| Jugador | WalkSpeed / InteractRange | 300 / 450 |
-| Cámara | LookPitchLimit / MouseSensitivity | 80 / 1.0 |
+| Jugador | InteractRange | 450 |
+| Cámara | LookYawLimit / LookPitchLimit / MouseSensitivity | 60 / 30 / 1.0 |
+| Cámara | BackRoomSequence (referencia a `LS_ToBackRoom`, sin hardcodear el path) | asset de arte |
 | Juice | HitStopSec | 0.08 |
 | UI | bShowTutorial | true |
 | Luz | DayLightColor, DayLightIntensity, NightLightColor, NightLightIntensity | A definir por arte |
 
-**Se eliminan:** `SlotMultipliers`, `bShowSecondaryGenres`, `AvoidBonus`, `RatingStep`, `LovedThreshold` / `LikedThreshold` / `NeutralThreshold` (reemplazados por los `*MaxError`), `MoneyPerPoint` (reemplazado por `TipAtPerfect`). `HotbarSize` también se eliminó (ver 12.1).
+**Se eliminan:** `SlotMultipliers`, `bShowSecondaryGenres`, `AvoidBonus`, `RatingStep`, `LovedThreshold` / `LikedThreshold` / `NeutralThreshold` (reemplazados por los `*MaxError`), `MoneyPerPoint` (reemplazado por `TipAtPerfect`). `HotbarSize` también se eliminó (ver 12.1). Con la v2.1 se elimina también `WalkSpeed` (12.1b).
 
 ## 12. Orden de implementación, alcance y preguntas abiertas
 
@@ -555,7 +570,21 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | `UI/*` | Hecho: inventario con skills y copias, panel de armado con suma en vivo, `WBP_Supplier` por cintas, `WBP_Computer`, toast con feedback. Las pantallas son clases de C++ (`UDC*Widget`) con CommonUI; los `WBP_*` son subclases vacías o inexistentes (el controller usa las del código si no hay una asignada). `BP_Computer` es un `BP_Interactable` con `InteractType = Computer` y un cubo placeholder (hoy en el subnivel `L_Props`). |
 | `Data/DT_*` y `DA_GameConfig` | Hecho: `DT_Genres` (sesgos, semillas, colores v2, géneros nuevos), `DT_ClientTiers`, `DT_Unlocks`, `DT_ScriptedOrders`, `DT_FeedbackLines` (vacía), `DT_HintLines` migrada, `DT_VHS` con las 500 filas generadas por `Tools/VHSGenerator/`. `DT_DayProgression` ya no tiene los pesos de categoría. |
 
-**Quitado (confirmado el 13 nov):** la hotbar (HUD, teclas `1`–`9` y `Q`, su opción en Opciones, `TakeTape`/`ReturnTape`), el flujo de catálogos y los assets `DT_Catalogs` y `DT_ClientCategories`, y las 35 filas v1 de `DT_VHS`. Las estanterías del depósito muestran el stock en solo lectura.
+**Quitado (confirmado el 13 nov):** la hotbar (HUD, teclas `1`–`9` y `Q`, su opción en Opciones, `TakeTape`/`ReturnTape`), el flujo de catálogos y los assets `DT_Catalogs` y `DT_ClientCategories`, y las 35 filas v1 de `DT_VHS`. Las estanterías del depósito mostraban el stock en solo lectura (con la v2.1 ya no son interactuables, ver 12.1b).
+
+### 12.1b Cambio de control v2.1: qué cambia en el código (código hecho el 14 nov; falta nivel y arte)
+
+Hecho en código (compila, pasan `DirectorsCut.Camera`, `Flow`, `Supplier`, `DayCycle` y `Economy`). Sin `LS_ToBackRoom` la cámara se desliza a un actor con tag `BackRoomCamera` (o solo espera `BackRoomTransitionSec`). El botón del HUD es un hint de tecla: el mouse está capturado en juego. `UDCShelfWidget` y `WBP_Shelf` quedan sin uso. Pendiente en el nivel: colocar `BackRoomCamera`, asignar `BackRoomSequence` en `DA_GameConfig` y quitar `Zone_BackRoom`, estanterías y reproductor como interactuables. Áreas tocadas:
+
+| Área | Cambio |
+|---|---|
+| `Core/DCCounterCamera.*` | Quitar el movimiento (WASD, `WalkSpeed`, colisión) y el yaw libre. Mirar con rango limitado `LookYawLimit` / `LookPitchLimit` respecto de la dirección inicial. Bloquear el mirar mientras la zona no sea `Counter`. |
+| `Core/DCPlayerController.*` | Estado `E_CameraZone` y `OnCameraZoneChanged`. Acción *"Go to the back room"* y su botón. Reproducir `LS_ToBackRoom` adelante y en reversa con `ULevelSequencePlayer`, y abrir/cerrar `WBP_FilmCrafting` al terminar cada sentido. Abrir `WBP_Dialogue` solo al llegar el cliente y al volver con película en mano (reglas de la sección 9). Quitar los casos `Shelf` y `VHSPlayer` de la interacción. |
+| `Core/DCGameMode.*` | Enganchar `OnClientReachedCounter` con la apertura automática del diálogo. |
+| `Core/DCInteractable.*` | Quitar estanterías y reproductor como interactuables (queda el cliente, la caja y la computadora). |
+| `UI/DCCommonUI.*`, `UI/DCMenuWidgets.*`, `UI/DCHudWidgets.*` | Acción de input `GoToBackRoom` en `UDCUIInputData`, botón e hint en el HUD, tutorial nuevo (cartel *"Press SPACE…"*). Sin uso: `UDCShelfWidget` y sus opciones de teclas de movimiento en Opciones. |
+| `Data/PDA_GameConfig.h` | Quitar `WalkSpeed`. Agregar `LookYawLimit`, `LookPitchLimit` (valores nuevos) y la referencia a `LS_ToBackRoom`. |
+| Nivel `MAP_Rewind` / `L_VideoStore` | Posición fija del jugador en el mostrador, zona del depósito visible desde la cámara de la secuencia y el asset `LS_ToBackRoom` en `Cinematics/` (arte). Quitar o dejar decorativos los props interactuables del depósito. |
 
 **Cómo correr los tests** (motor en `C:\UnrealVersions\UE_5.8`): `UnrealEditor-Cmd.exe <uproject> /Game/DirectorsCut/Levels/L_VideoStore -game -nullrhi -unattended -nosplash -ExecCmds="Automation RunTests <grupo>; Quit"`, un grupo por proceso. Para compilar con UBT el editor tiene que estar cerrado (Live Coding lo bloquea).
 
@@ -571,6 +600,7 @@ Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente
 6. **Pedidos y clientes:** nivel, receta, pistas, pedidos scripteados, `DT_HintLines` migrada, crítica con feedback. Los 3 pedidos scripteados se pueden completar con el inventario inicial.
 7. **Proveedor y computadora:** `WBP_Supplier` por cintas sueltas, `AC_Unlocks`, `BP_Computer` y `WBP_Computer` con la tabla de 7.1. Los slots 4 y 5 y los niveles de estrellas modifican de verdad las reglas de armado y de generación de clientes.
 8. **Pulido y limpieza:** tutorial nuevo, `F1` con el objetivo, `PlayCue`, quitar la hotbar y los catálogos (solo si el equipo lo confirmó).
+9. **Cámara fija y secuencia al depósito (v2.1, código hecho el 14 nov):** lo de 12.1b. Pasos internos: (a) cámara sin movimiento y con rango limitado; (b) diálogo del pedido que se abre solo; (c) estado `E_CameraZone`, tecla y botón *"Back room"*; (d) `LS_ToBackRoom` hacia adelante abre el panel de armado y en reversa vuelve al mostrador (con un placeholder de secuencia si arte no entregó la real); (e) entrega automática al volver con película en mano. Probar en PIE con un cliente que llega, se acepta el pedido, se arma una película, se vuelve y se entrega.
 
 **Fuera de alcance (no implementar):**
 
@@ -601,8 +631,17 @@ Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente
 - [ ] Géneros premium con precio 300 y requisito de 6 géneros desbloqueados.
 - [ ] Precios, `StarPoints`, niveles de cliente, `SkillCap` 10 y umbrales de reacción: todo es inicial y se ajusta en playtest.
 - [ ] `MovieBudgetGoal`: subirlo o no, dada la nueva economía (7.1).
-- [ ] No hay botón "ir al depósito" al aceptar el pedido (el chat original lo mencionaba): se mantiene el recorrido libre en primera persona por la puerta.
 - [ ] La película descartada devuelve las cintas (4.4, regla 8).
+
+**Decisiones propuestas por Claude el 13 nov para la v2.1 (cámara fija), pendientes de confirmar:**
+
+- [ ] Tecla de ir al depósito = `Space`.
+- [ ] Rango de la cámara: yaw ±60°, pitch ±30°.
+- [ ] El diálogo no se abre si hay otra pantalla abierta (se abre al cerrarla) y se reabre solo al volver con película en mano.
+- [ ] Al combinar, el panel se cierra solo y la cámara vuelve al mostrador (no hay que apretar Back).
+- [ ] Duración de las secuencias de 1,5 a 2 s por sentido: cuenta contra la paciencia, que no se detiene.
+- [ ] Tutorial de tres carteles: cliente, aceptar pedido (ir al depósito), llegar al depósito. Sin cartel de "volver".
+- [ ] La secuencia se reproduce en reversa para volver (un solo `LS_ToBackRoom`); si arte prefiere un recorrido distinto de vuelta, serían dos assets.
 
 **Pendientes técnicos y de playtest (13 nov):**
 
@@ -623,3 +662,7 @@ Cada paso termina con algo compilando y probado en PIE. No empieces el siguiente
 - [x] ~~Cómo se puntúa.~~ Distancia total entre perfil y pedido, con umbrales (referencia Schedule I).
 - [x] ~~Director's Cut desde el minuto 0.~~ Disponible desde el segundo 0, con 3 slots.
 - [x] ~~¿Se quita la hotbar y la toma de cintas desde estanterías?~~ Sí, quitadas el 13 nov junto con los catálogos.
+- [x] ~~¿Botón de "ir al depósito" o recorrido libre?~~ Botón y tecla, con secuencia de cámara; el jugador no camina (v2.1, 13 nov, pedido del equipo).
+- [x] ~~¿Cuándo se puede ir al depósito?~~ Siempre, con o sin cliente (13 nov).
+- [x] ~~¿Cómo se entrega al volver?~~ El diálogo de entrega se abre solo (13 nov).
+- [x] ~~¿Qué hay en el depósito y cómo se vuelve?~~ Solo el panel de armado; Back reproduce la secuencia en reversa (13 nov).

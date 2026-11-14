@@ -1,4 +1,5 @@
-// First-person player: bodiless (camera only), walks with WASD; the controller drives look and movement input.
+// First-person camera fixed at the counter: bodiless and without movement (the controller limits the look range
+// and the back-room sequence moves it).
 #pragma once
 
 #include "CoreMinimal.h"

@@ -4,19 +4,12 @@
 
 FKey& UDCSettings::Key(EDCAction Action)
 {
-	switch (Action)
-	{
-	case EDCAction::MoveForward: return MoveForward;
-	case EDCAction::MoveBack: return MoveBack;
-	case EDCAction::MoveLeft: return MoveLeft;
-	case EDCAction::MoveRight: return MoveRight;
-	default: return Interact;
-	}
+	return Action == EDCAction::BackRoom ? BackRoom : Interact;
 }
 
 const TCHAR* UDCSettings::ActionLabel(EDCAction Action)
 {
-	static const TCHAR* Labels[] = {TEXT("Interact"), TEXT("Move forward"), TEXT("Move back"), TEXT("Move left"), TEXT("Move right")};
+	static const TCHAR* Labels[] = {TEXT("Interact"), TEXT("Go to the back room")};
 	return Labels[(int32)Action];
 }
 

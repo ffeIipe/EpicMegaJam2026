@@ -89,10 +89,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") float ReviewDelaySec = 15.f;
 
 	// --- Camera
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookPitchLimit = 80.f;
+	// The camera is fixed at the counter and looks within +-limit degrees of its starting direction
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookYawLimit = 60.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookPitchLimit = 30.f;
+	// Fraction of each limit (from its edge inwards) where the look eases to a stop instead of cutting. 0 = hard cut.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0", ClampMax = "1")) float LookSoftZone = 0.4f;
+	// LS_ToBackRoom (art): played forward to reach the back room and in reverse to return. Without it the camera glides
+	// to the actor tagged BackRoomCameraTag (or just waits) for BackRoomTransitionSec.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") TSoftObjectPtr<class ULevelSequence> BackRoomSequence;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float BackRoomTransitionSec = 1.75f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") FName BackRoomCameraTag = "BackRoomCamera";
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float MouseSensitivity = 1.f;
 	// --- Player
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player") float WalkSpeed = 300.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player") float InteractRange = 450.f;
 
 	// --- Clock (in-store fictional hours: day 10:00-22:00, night 22:00-04:00)

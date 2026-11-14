@@ -43,6 +43,20 @@ void UDCHUDWidget::NativeOnInitialized()
 	RentText = DCUI::Text(WidgetTree, V, TEXT(""));
 	HeldText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Accent::StaticClass());
 
+	// Back-room hint, bottom right. The mouse is captured in game mode, so it's a hint for the key rather than a clickable button.
+	UCommonBorder* HintBorder = nullptr;
+	UVerticalBox* HintBox = DCUI::Panel(WidgetTree, FAnchors(1.f, 1.f), FVector2D(1.f, 1.f), FVector2D(-24.f, -24.f), &HintBorder);
+	BackRoomHint = HintBorder;
+	UHorizontalBox* HintRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	HintBox->AddChild(HintRow);
+	UCommonBorder* HintCap = DCUI::Border(WidgetTree, HintRow, UDCBorder_KeyCap::StaticClass(), FMargin(8.f, 4.f));
+	BackRoomKeyText = DCUI::Text(WidgetTree, nullptr, TEXT("SPACE"), UDCText_Heading::StaticClass()); // set each tick from the rebindable key
+	HintCap->SetContent(BackRoomKeyText);
+	Cast<UHorizontalBoxSlot>(HintCap->Slot)->SetVerticalAlignment(VAlign_Center);
+	UCommonTextBlock* HintLabel = DCUI::Text(WidgetTree, HintRow, TEXT("Back room"));
+	Cast<UHorizontalBoxSlot>(HintLabel->Slot)->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
+	Cast<UHorizontalBoxSlot>(HintLabel->Slot)->SetVerticalAlignment(VAlign_Center);
+
 	// Crosshair with the interaction prompt ("[E] Talk to the customer") under it
 	UVerticalBox* Center = WidgetTree->ConstructWidget<UVerticalBox>();
 	UCanvasPanelSlot* CS = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Center);
@@ -106,6 +120,8 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	PromptText->SetText(PromptLabel);
 	PromptKeyText->SetText(UDCSettings::Get()->Interact.GetDisplayName(false).ToUpper());
 	Prompt->SetVisibility(PromptLabel.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	BackRoomKeyText->SetText(UDCSettings::Get()->BackRoom.GetDisplayName(false).ToUpper());
+	BackRoomHint->SetVisibility(PC && PC->CanGoToBackRoom() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
 // ---------------------------------------------------------------- Review toast
