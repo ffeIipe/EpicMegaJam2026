@@ -25,7 +25,6 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
-	void UpdateHotbar(const class ADCGameMode& GM);
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MoneyText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> GoalText;
 	UPROPERTY() TObjectPtr<UProgressBar> GoalBar;
@@ -35,11 +34,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
 	UPROPERTY() TObjectPtr<UWidget> Prompt;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptText;
-	// Bottom-center hotbar: the tapes the player carries (UAC_Inventory::Hotbar)
-	UPROPERTY() TArray<TObjectPtr<UBorder>> HotbarFrames;
-	UPROPERTY() TArray<TObjectPtr<UImage>> HotbarCovers;
-	UPROPERTY() TArray<TObjectPtr<UCommonTextBlock>> HotbarTexts;
-	TArray<FName> ShownHotbar;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptKeyText;
 	float DisplayedMoney = -1.f;
 };
 

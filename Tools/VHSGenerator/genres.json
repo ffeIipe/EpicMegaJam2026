@@ -1,0 +1,15 @@
+{
+  "config": { "TapeSkillMax": 3, "StarPoints": [3, 4, 5, 6, 7], "TapesPerStar": 10, "GeneratorBiasFloor": 0.25 },
+  "genres": [
+    { "Genre": "Horror",       "DisplayName": "Horror",              "Seed": 101, "SkillBias": [0, 3, 1, 1, 0] },
+    { "Genre": "Comedy",       "DisplayName": "Comedy",              "Seed": 102, "SkillBias": [3, 0, 1, 0, 1] },
+    { "Genre": "Action",       "DisplayName": "Action",              "Seed": 103, "SkillBias": [1, 1, 3, 0, 0] },
+    { "Genre": "Romance",      "DisplayName": "Romance",             "Seed": 104, "SkillBias": [1, 0, 0, 1, 3] },
+    { "Genre": "Drama",        "DisplayName": "Drama",               "Seed": 105, "SkillBias": [0, 0, 1, 3, 2] },
+    { "Genre": "SciFi",        "DisplayName": "Sci-Fi",              "Seed": 106, "SkillBias": [0, 1, 2, 2, 0] },
+    { "Genre": "Adventure",    "DisplayName": "Adventure",           "Seed": 107, "SkillBias": [1, 0, 3, 1, 1] },
+    { "Genre": "Thriller",     "DisplayName": "Thriller",            "Seed": 108, "SkillBias": [0, 2, 1, 2, 0] },
+    { "Genre": "Experimental", "DisplayName": "Experimental Cinema", "Seed": 109, "SkillBias": [1, 1, 1, 1, 1] },
+    { "Genre": "BMovie",       "DisplayName": "B-Movie",             "Seed": 110, "SkillBias": [2, 2, 2, 0, 0] }
+  ]
+}

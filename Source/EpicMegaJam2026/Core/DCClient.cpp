@@ -4,6 +4,9 @@
 #include "DrawDebugHelpers.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/Skeleton.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -106,6 +109,10 @@ void ADCClient::ApplyMesh(USkeletalMesh* InMesh)
 		return;
 	}
 	GetMesh()->SetSkeletalMesh(InMesh);
+	if (const TSubclassOf<UAnimInstance>* Anim = AnimBySkeleton.Find(InMesh->GetSkeleton()))
+	{
+		GetMesh()->SetAnimInstanceClass(*Anim);
+	}
 	if (UStaticMeshComponent* Body = FindComponentByClass<UStaticMeshComponent>())
 	{
 		Body->SetVisibility(false);
@@ -238,10 +245,10 @@ void ADCClient::Tick(float DeltaSeconds)
 #if !UE_BUILD_SHIPPING
 	if (bShowDebugAttributes)
 	{
-		FString Text;
-		for (const FGenrePreference& P : Runtime.Preferences)
+		FString Text = FString::Printf(TEXT("Tier %d\n"), Runtime.Tier);
+		for (int32 i = 0; i < DCNumSkills; ++i)
 		{
-			Text += FString::Printf(TEXT("%s %+d\n"),*StaticEnum<EGenre>()->GetNameStringByValue((int64)P.Genre), P.Weight);
+			Text += FString::Printf(TEXT("%s %d\n"), *StaticEnum<ESkill>()->GetNameStringByValue(i), Runtime.Target.Get((ESkill)i));
 		}
 		DrawDebugString(GetWorld(), FVector(0.f, 0.f, 140.f), Text, this, FColor::Yellow, 0.f);
 	}

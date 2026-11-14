@@ -12,23 +12,47 @@ class EPICMEGAJAM2026_API UBPFL_Scoring : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:
-	// 6.1: positive -> Weight x Profile[g]; negative -> Weight x Profile[g] if the film has that genre, else AvoidBonus.
-	UFUNCTION(BlueprintPure, Category = "Scoring")
-	static float AttributeScore(const FGenrePreference& Pref, const TMap<EGenre, float>& Profile, const UPDA_GameConfig* Config);
+	// ---- v2 (section 6)
 
-	// 6.2: Raw / NumAttributes, times RatingFactor only when Raw > 0.
+	// 4.4: Profile[s] = min(SkillCap, sum of the tapes' Skills[s]). Empty slots simply aren't in the array.
 	UFUNCTION(BlueprintPure, Category = "Scoring")
-	static float ComputeScore(const TArray<FGenrePreference>& Preferences, const FCreatedFilm& Film, const UPDA_GameConfig* Config);
+	static FSkillVector ComputeProfile(const TArray<FSkillVector>& TapeSkills, const UPDA_GameConfig* Config);
 
-	// 6.3
+	// 6.1: sum over skills of |Profile - Target|
 	UFUNCTION(BlueprintPure, Category = "Scoring")
-	static EReaction GetReaction(float Score, const UPDA_GameConfig* Config);
+	static int32 ComputeMiss(const FSkillVector& Profile, const FSkillVector& Target);
 
-	// Tip for Loved/Liked: round(Score x MoneyPerPoint x PayMultiplier). 0 for other reactions.
+	// 6.1: Miss / max(1, sum of Target)
 	UFUNCTION(BlueprintPure, Category = "Scoring")
-	static int32 ComputeTip(EReaction Reaction, float Score, float PayMultiplier, const UPDA_GameConfig* Config);
+	static float ComputeErrorRatio(const FSkillVector& Profile, const FSkillVector& Target);
 
-	// Fine for Hated: round(ComplaintFine x PayMultiplier). 0 for other reactions.
+	// 6.1: clamp(1 - ErrorRatio, 0, 1)
+	UFUNCTION(BlueprintPure, Category = "Scoring")
+	static float ComputeAccuracy(float ErrorRatio);
+
+	// 6.2: Loved / Liked / Neutral / Hated from the *MaxError thresholds
+	UFUNCTION(BlueprintPure, Category = "Scoring")
+	static EReaction GetReaction(float ErrorRatio, const UPDA_GameConfig* Config);
+
+	// 6.2: price paid on delivery = BaseRentalPrice x level multiplier
+	UFUNCTION(BlueprintPure, Category = "Scoring")
+	static int32 ComputeRentalPrice(float PayMultiplier, const UPDA_GameConfig* Config);
+
+	// 6.2: Loved/Liked tip = round(Accuracy x TipAtPerfect x level multiplier). 0 for other reactions.
+	UFUNCTION(BlueprintPure, Category = "Scoring")
+	static int32 ComputeTip(EReaction Reaction, float Accuracy, float PayMultiplier, const UPDA_GameConfig* Config);
+
+	// 6.2: Hated fine = round(ComplaintFine x level multiplier). 0 for other reactions.
 	UFUNCTION(BlueprintPure, Category = "Scoring")
 	static int32 ComputeFine(EReaction Reaction, float PayMultiplier, const UPDA_GameConfig* Config);
+
+	// 6.3: the skill with the largest |Profile - Target| (ties at random) and which way it missed.
+	// False when the film is exact (nothing to give feedback on).
+	UFUNCTION(BlueprintCallable, Category = "Scoring")
+	static bool GetFeedbackSkill(const FSkillVector& Profile, const FSkillVector& Target, ESkill& OutSkill, EFeedbackDirection& OutDirection);
+
+	// 6.3: a random DT_FeedbackLines row for that skill and direction
+	UFUNCTION(BlueprintCallable, Category = "Scoring")
+	static FText PickFeedbackLine(const UDataTable* FeedbackTable, ESkill Skill, EFeedbackDirection Direction);
+
 };

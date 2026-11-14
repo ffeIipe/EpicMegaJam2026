@@ -18,6 +18,7 @@ class UVerticalBox;
 class UDataTable;
 class UCommonActivatableWidgetStack;
 class UProgressBar;
+struct FSkillVector;
 
 // Verde Lumon, Azul corporativo, Verde lima oliva, Gris verdoso, Beige institucional, plus dark panel tones
 namespace DCPalette
@@ -153,6 +154,10 @@ namespace DCUI
 	// Title bar of a screen (blue plate, display font), with an optional subtitle under it
 	EPICMEGAJAM2026_API void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle = FString());
 	EPICMEGAJAM2026_API FString Stars(int32 Rating);
+	// The 5 skills of a tape with their numbers (F S B T R, placeholders until art has icons); skills at 0 are dimmed (section 4.1)
+	EPICMEGAJAM2026_API void SkillStrip(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills);
+	// One "Funny 3" line per skill; with a cap, "Funny 3/10"
+	EPICMEGAJAM2026_API FString SkillLines(const FSkillVector& Skills, int32 Cap = 0);
 	EPICMEGAJAM2026_API FSlateBrush Box(const FLinearColor& Fill, const FLinearColor& Outline, float OutlineWidth = 2.f, float Radius = 4.f);
 	// Patience/goal bar in the palette
 	EPICMEGAJAM2026_API UProgressBar* Bar(UWidgetTree* Tree, UPanelWidget* Parent, float Width);

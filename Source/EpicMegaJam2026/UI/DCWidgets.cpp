@@ -72,6 +72,7 @@ namespace
 		Parent->AddChild(Box);
 		return Img;
 	}
+
 }
 
 // ---------------------------------------------------------------- Inventory widget
@@ -83,11 +84,12 @@ void UDCInventoryWidget::NativeOnInitialized()
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), true, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, 1)));
 }
 
-void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInGrid)
+void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInGrid, UAC_FilmCrafting* InCrafting)
 {
 	Inventory = InInventory;
 	Config = InConfig;
 	bGrid = bInGrid;
+	Crafting = InCrafting;
 
 	UVerticalBox* Root = WidgetTree->ConstructWidget<UVerticalBox>();
 	WidgetTree->RootWidget = Root;
@@ -106,7 +108,10 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 		for (const TPair<FName, uint8*>& Pair : Config->GenreTable->GetRowMap())
 		{
 			const FGenreData* Row = reinterpret_cast<const FGenreData*>(Pair.Value);
-			AddTab(Row->DisplayName.ToString(), GenreName(Row->Genre));
+			if (Row->Genre != EGenre::Paranormal) // DEPRECATED v1 genre: it has no tapes
+			{
+				AddTab(Row->DisplayName.ToString(), GenreName(Row->Genre));
+			}
 		}
 	}
 
@@ -136,7 +141,7 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 		return;
 	}
 
-	// Detail panel: title, cover, rating, genres, synopsis of the selected row
+	// Detail panel: title, cover, rating, genre, skills, synopsis of the selected row
 	UCommonBorder* DetailPanel = DCUI::Border(WidgetTree, Body, UDCBorder_Inset::StaticClass(), FMargin(16.f));
 	Cast<UHorizontalBoxSlot>(DetailPanel->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 	USizeBox* DetailSize = WidgetTree->ConstructWidget<USizeBox>();
@@ -158,6 +163,8 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	DCUI::Text(WidgetTree, Facts, TEXT("Genre:"))->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
 	DetailGenre = DCUI::Text(WidgetTree, Facts, TEXT(""), UDCText_Accent::StaticClass());
 	DetailGenre->SetWrapTextAt(250.f);
+	DCUI::Text(WidgetTree, Facts, TEXT("Skills:"))->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
+	DetailSkills = DCUI::Text(WidgetTree, Facts, TEXT(""), UDCText_Accent::StaticClass());
 	DetailSynopsis = DCUI::Text(WidgetTree, D, TEXT(""));
 	DetailSynopsis->SetWrapTextAt(428.f);
 	Refresh();
@@ -201,16 +208,18 @@ void UDCInventoryWidget::Refresh()
 	}
 	List->ClearChildren();
 
-	TArray<FName> Rows = SelectedTab == AllTab ? Inventory->OwnedVHS
+	// Copies on offer: in the VHS player the ones not yet in a slot, on a shelf the whole stock
+	auto Copies = [this](const FName& Row) { return Crafting ? Crafting->GetAvailableCount(Row) : Inventory->GetCount(Row); };
+	TArray<FName> Rows = SelectedTab == AllTab ? Inventory->GetOwnedVHS()
 		: Inventory->GetOwnedVHSByGenre((EGenre)StaticEnum<EGenre>()->GetValueByName(SelectedTab));
-	Rows.RemoveAll([this](const FName& Row) { return Inventory->IsCarried(Row) != bGrid; }); // grid (VHS player): carried tapes only; shelf: the ones left on it
+	Rows.RemoveAll([&Copies](const FName& Row) { return Copies(Row) <= 0; });
 	if (!Rows.Contains(SelectedTape))
 	{
 		SelectedTape = Rows.IsEmpty() ? NAME_None : Rows[0];
 	}
 	if (Rows.IsEmpty())
 	{
-		DCUI::Text(WidgetTree, List, bGrid ? TEXT("Take tapes from the shelves first.") : TEXT("No tapes left on this shelf."));
+		DCUI::Text(WidgetTree, List, bGrid ? TEXT("No tapes left to combine.") : TEXT("No tapes on this shelf."));
 	}
 
 	int32 Index = 0;
@@ -226,25 +235,31 @@ void UDCInventoryWidget::Refresh()
 		Btn->Label->RemoveFromParent();
 		if (bGrid)
 		{
-			// Tile: cover over the title
+			// Tile: cover over the title, the skills and the copies
 			UImage* Cover = AddCover(WidgetTree, Btn->Content, TileCover);
 			SetCover(Cover, &Tape, Config);
 			Cast<UVerticalBoxSlot>(Cover->GetParent()->Slot)->SetHorizontalAlignment(HAlign_Center);
 			Btn->Content->AddChildToVerticalBox(Btn->Label)->SetHorizontalAlignment(HAlign_Center);
 			Btn->Label->SetWrapTextAt(TileCover.X + 16.f);
 			Btn->Label->SetJustification(ETextJustify::Center);
+			DCUI::SkillStrip(WidgetTree, Btn->Content, Tape.Skills);
+			DCUI::Text(WidgetTree, Btn->Content, FString::Printf(TEXT("x%d"), Copies(Row)), UDCText_Accent::StaticClass());
 			Cast<UUniformGridPanel>(List)->AddChildToUniformGrid(Btn, Index / GridColumns, Index % GridColumns);
 		}
 		else
 		{
-			// Row: thumbnail, title, stars
+			// Row: thumbnail, title with the skills under it, copies, stars
 			UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
 			Btn->Content->AddChild(H);
 			SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), &Tape, Config);
-			UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Btn->Label);
+			UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
+			Text->AddChildToVerticalBox(Btn->Label);
+			DCUI::SkillStrip(WidgetTree, Text, Tape.Skills);
+			UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
 			TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			TitleSlot->SetVerticalAlignment(VAlign_Center);
 			TitleSlot->SetPadding(FMargin(12.f, 0.f));
+			H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("x%d  "), Copies(Row)), UDCText_Accent::StaticClass()))->SetVerticalAlignment(VAlign_Center);
 			H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Tape.Rating), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
 			Btn->SetIsSelectable(true);
 			Btn->SetIsSelected(Row == SelectedTape, false);
@@ -287,15 +302,9 @@ void UDCInventoryWidget::ShowDetail(FName Row)
 	}
 	DetailTitle->SetText(Tape.Title);
 	DetailStars->SetText(FText::FromString(DCUI::Stars(Tape.Rating)));
-	TArray<FString> Names;
-	for (const FGenreValue& Value : Tape.GenreValues)
-	{
-		if (const FGenreData* Genre = FindGenre(Config, Value.Genre))
-		{
-			Names.Add(Genre->DisplayName.ToString());
-		}
-	}
-	DetailGenre->SetText(FText::FromString(FString::Join(Names, TEXT(" / "))));
+	const FGenreData* Genre = FindGenre(Config, Tape.PrimaryGenre);
+	DetailGenre->SetText(Genre ? Genre->DisplayName : FText::GetEmpty());
+	DetailSkills->SetText(FText::FromString(DCUI::SkillLines(Tape.Skills)));
 	DetailSynopsis->SetText(Tape.Synopsis);
 	SetCover(DetailCover, &Tape, Config);
 }
@@ -311,50 +320,56 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	Config = GM->Config;
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 0.5f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	DCUI::Header(WidgetTree, V, TEXT("COMBINE VHS"), TEXT("Pick 3 tapes to combine"));
+	DCUI::Header(WidgetTree, V, TEXT("COMBINE VHS"), TEXT("Mix tapes: their skills add up"));
 	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
 	V->AddChild(Body);
 
-	// Left: the owned tapes as cover tiles; a click fills the next empty slot
+	// Left: the tapes with copies left as cover tiles; a click fills the next empty slot
 	UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
 	DCUI::Border(WidgetTree, Body, UDCBorder_Panel::StaticClass(), FMargin(12.f))->SetContent(Left);
 	DCUI::Text(WidgetTree, Left, TEXT("VHS INVENTORY"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 10.f));
 	Picker = WidgetTree->ConstructWidget<UDCInventoryWidget>();
 	Left->AddChild(Picker);
-	Picker->Setup(Inventory, Config, true);
+	Picker->Setup(Inventory, Config, true, Crafting);
 	Picker->OnVHSPicked.AddDynamic(this, &UDCFilmCraftingWidget::OnPicked);
 	Inventory->OnInventoryChanged.AddDynamic(Picker, &UDCInventoryWidget::Refresh);
 	Crafting->OnFilmStateChanged.AddDynamic(this, &UDCFilmCraftingWidget::OnFilmStateChanged);
 
-	// Right: the three slots, the film title and the combine button
+	// Right: the slots (MaxSlots built, the locked ones collapsed), the live skill sum, the film title and the combine button
 	UVerticalBox* Right = WidgetTree->ConstructWidget<UVerticalBox>();
 	UCommonBorder* RightPanel = DCUI::Border(WidgetTree, Body, UDCBorder_Panel::StaticClass(), FMargin(16.f));
 	RightPanel->SetContent(Right);
 	Cast<UHorizontalBoxSlot>(RightPanel->Slot)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 	SlotsHeader = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Heading::StaticClass());
 	SlotsHeader->SetMargin(FMargin(0.f, 0.f, 0.f, 12.f));
-	UHorizontalBox* Slots = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UUniformGridPanel* Slots = WidgetTree->ConstructWidget<UUniformGridPanel>();
+	Slots->SetSlotPadding(FMargin(0.f, 0.f, 12.f, 8.f));
 	Right->AddChild(Slots);
-	for (EFilmSlot S : {EFilmSlot::Intro, EFilmSlot::Middle, EFilmSlot::Ending})
+	constexpr int32 SlotColumnsPerRow = 3;
+	for (int32 i = 0; i < FMath::Max(Config->MaxSlots, 1); ++i)
 	{
-		const FName SlotName(*StaticEnum<EFilmSlot>()->GetNameStringByValue((int64)S));
+		const FName SlotName(*FString::FromInt(i));
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-		Slots->AddChildToHorizontalBox(Column)->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+		Slots->AddChildToUniformGrid(Column, i / SlotColumnsPerRow, i % SlotColumnsPerRow);
+		SlotColumns.Add(Column);
 		UOverlay* CoverStack = WidgetTree->ConstructWidget<UOverlay>();
 		Column->AddChild(CoverStack);
-		SlotCovers.Add(S, AddCover(WidgetTree, CoverStack, TileCover));
-		UDCButton* Clear = DCUI::Button(WidgetTree, CoverStack, TEXT("×"), SlotName, UDCButton_Tab::StaticClass());
+		SlotCovers.Add(AddCover(WidgetTree, CoverStack, TileCover));
+		UDCButton* Clear = DCUI::Button(WidgetTree, CoverStack, TEXT("x"), SlotName, UDCButton_Tab::StaticClass());
 		UOverlaySlot* ClearSlot = Cast<UOverlaySlot>(Clear->Slot);
 		ClearSlot->SetHorizontalAlignment(HAlign_Right);
 		ClearSlot->SetVerticalAlignment(VAlign_Top);
 		ClearSlot->SetPadding(FMargin(4.f));
 		Clear->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnClearClicked);
-		SlotClears.Add(S, Clear);
-		DCUI::Text(WidgetTree, Column, SlotName.ToString().ToUpper(), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 8.f, 0.f, 2.f));
+		SlotClears.Add(Clear);
+		DCUI::Text(WidgetTree, Column, FString::Printf(TEXT("SLOT %d"), i + 1), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 8.f, 0.f, 2.f));
 		UCommonTextBlock* Title = DCUI::Text(WidgetTree, Column, TEXT(""));
 		Title->SetWrapTextAt(TileCover.X);
-		SlotTexts.Add(S, Title);
+		SlotTexts.Add(Title);
 	}
+
+	DCUI::Text(WidgetTree, Right, TEXT("FILM PROFILE"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 8.f, 0.f, 4.f));
+	ProfileText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
 
 	TitleBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 	TitleBox->SetHintText(FText::FromString(TEXT("Film title")));
@@ -390,19 +405,21 @@ void UDCFilmCraftingWidget::Refresh()
 	{
 		return;
 	}
-	int32 Filled = 0;
-	for (const TPair<EFilmSlot, TObjectPtr<UCommonTextBlock>>& Pair : SlotTexts)
+	Picker->Refresh(); // copies already in a slot leave the list
+	for (int32 i = 0; i < SlotColumns.Num(); ++i)
 	{
-		const FName* Row = Crafting->Slots.Find(Pair.Key);
+		SlotColumns[i]->SetVisibility(i < Crafting->UnlockedSlots ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		const FName Row = Crafting->SlotRows.IsValidIndex(i) ? Crafting->SlotRows[i] : NAME_None;
 		FVHSData Tape;
-		const bool bHas = Row && Inventory->GetVHSData(*Row, Tape);
-		Filled += bHas ? 1 : 0;
-		Pair.Value->SetText(bHas ? Tape.Title : FText::FromString(TEXT("(empty)")));
-		SetCover(SlotCovers[Pair.Key], bHas ? &Tape : nullptr, Config);
-		SlotClears[Pair.Key]->SetVisibility(bHas ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		const bool bHas = !Row.IsNone() && Inventory->GetVHSData(Row, Tape);
+		SlotTexts[i]->SetText(bHas ? Tape.Title : FText::FromString(TEXT("(empty)")));
+		SetCover(SlotCovers[i], bHas ? &Tape : nullptr, Config);
+		SlotClears[i]->SetVisibility(bHas ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 	}
-	SlotsHeader->SetText(FText::FromString(FString::Printf(TEXT("SELECTED VHS (%d/3)"), Filled)));
-	TitleBox->SetIsEnabled(Crafting->AreSlotsFull()); // title only editable with all 3 slots filled
+	const int32 Filled = Crafting->GetFilledSlots();
+	SlotsHeader->SetText(FText::FromString(FString::Printf(TEXT("SELECTED VHS (%d/%d)"), Filled, Crafting->UnlockedSlots)));
+	ProfileText->SetText(FText::FromString(DCUI::SkillLines(Crafting->GetProfile(), Config->SkillCap)));
+	TitleBox->SetIsEnabled(Filled >= 1); // title only editable once a tape is in
 	ConfirmButton->SetIsEnabled(Crafting->CanConfirm());
 	DiscardButton->SetIsEnabled(Crafting->HeldFilms.Num() > 0);
 	HeldText->SetText(Crafting->HeldFilms.Num() > 0
@@ -412,23 +429,21 @@ void UDCFilmCraftingWidget::Refresh()
 
 void UDCFilmCraftingWidget::OnPicked(FName VHSRow)
 {
-	for (EFilmSlot S : {EFilmSlot::Intro, EFilmSlot::Middle, EFilmSlot::Ending})
+	for (int32 i = 0; i < Crafting->UnlockedSlots; ++i)
 	{
-		const FName* Row = Crafting->Slots.Find(S);
-		if (Row && !Row->IsNone())
+		if (Crafting->SlotRows[i].IsNone())
 		{
-			continue;
+			const bool bOk = Crafting->SetSlot(i, VHSRow);
+			StatusText->SetText(bOk ? FText::GetEmpty() : FText::FromString(TEXT("No copies of that tape left")));
+			return;
 		}
-		const bool bOk = Crafting->SetSlot(S, VHSRow);
-		StatusText->SetText(bOk ? FText::GetEmpty() : FText::FromString(TEXT("That tape is already in another slot")));
-		return;
 	}
-	StatusText->SetText(FText::FromString(TEXT("All 3 slots are full: remove a tape first")));
+	StatusText->SetText(FText::FromString(TEXT("All slots are full: remove a tape first")));
 }
 
 void UDCFilmCraftingWidget::OnClearClicked(FName SlotName)
 {
-	Crafting->ClearSlot((EFilmSlot)StaticEnum<EFilmSlot>()->GetValueByName(SlotName));
+	Crafting->ClearSlot(FCString::Atoi(*SlotName.ToString()));
 }
 
 void UDCFilmCraftingWidget::OnConfirm(FName Unused)
@@ -492,6 +507,7 @@ void UDCOrderPanelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		return;
 	}
 	PanelRoot->SetVisibility(ESlateVisibility::HitTestInvisible);
-	OrderText->SetText(Front->Runtime.OrderText);
+	const FClientRuntime& Rt = Front->Runtime;
+	OrderText->SetText(Rt.DisplayName.IsEmpty() ? Rt.OrderText : FText::Format(INVTEXT("{0}: {1}"), Rt.DisplayName, Rt.OrderText));
 	PatienceBar->SetPercent(Front->PatienceMax > 0.f ? Front->Runtime.PatienceLeft / Front->PatienceMax : 0.f);
 }

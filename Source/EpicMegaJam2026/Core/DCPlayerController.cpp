@@ -2,6 +2,7 @@
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
 #include "Core/DCInteractable.h"
+#include "Core/DCSettings.h"
 #include "UI/DCWidgets.h"
 #include "UI/DCHudWidgets.h"
 #include "UI/DCMenuWidgets.h"
@@ -44,6 +45,7 @@ void ADCPlayerController::Cue(const TCHAR* Name) const
 void ADCPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+	UDCSettings::Get()->Apply(); // saved volume
 	LookRot = GetPawn() ? GetPawn()->GetActorRotation() : FRotator::ZeroRotator;
 	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || !GM->Config)
@@ -64,6 +66,7 @@ void ADCPlayerController::BeginPlay()
 	GM->ClientDirector->OnClientReachedCounter.AddDynamic(this, &ADCPlayerController::HandleClientReached);
 	GM->ClientDirector->OnClientLeft.AddDynamic(this, &ADCPlayerController::HandleClientLeft);
 	GM->FilmCrafting->OnFilmCreated.AddDynamic(this, &ADCPlayerController::HandleFilmCreated);
+	GM->Unlocks->OnUnlockPurchased.AddDynamic(this, &ADCPlayerController::HandleUnlockPurchased);
 	GM->Economy->OnGameOver.AddDynamic(this, &ADCPlayerController::HandleGameOver);
 	GM->Economy->OnVictory.AddDynamic(this, &ADCPlayerController::HandleVictory);
 	GM->Economy->OnRentCharged.AddDynamic(this, &ADCPlayerController::HandleRentCharged);
@@ -87,12 +90,7 @@ void ADCPlayerController::BeginPlay()
 void ADCPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-	InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ADCPlayerController::OnClick);
-	for (const FKey& Key : {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine})
-	{
-		InputComponent->BindKey(Key, IE_Pressed, this, &ADCPlayerController::OnHotbarKey);
-	}
-	InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &ADCPlayerController::ReturnSelectedTape);
+	// Interact and movement keys are rebindable (UDCSettings): PlayerTick polls them
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADCPlayerController::TogglePause).bExecuteWhenPaused = true;
 #if !UE_BUILD_SHIPPING
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ADCPlayerController::ToggleDebugAttributes);
@@ -150,9 +148,15 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 		return;
 	}
 
+	UDCSettings* Settings = UDCSettings::Get();
+	if (WasInputKeyJustPressed(Settings->Interact))
+	{
+		OnInteract();
+	}
+
 	float DX = 0.f, DY = 0.f;
 	GetInputMouseDelta(DX, DY);
-	const float Sens = GM->Config->MouseSensitivity;
+	const float Sens = GM->Config->MouseSensitivity * Settings->MouseSensitivityScale;
 	LookRot.Yaw = FRotator::NormalizeAxis(LookRot.Yaw + DX * Sens);
 	LookRot.Pitch = FMath::Clamp(LookRot.Pitch + DY * Sens, -GM->Config->LookPitchLimit, GM->Config->LookPitchLimit);
 	FRotator Rot = LookRot;
@@ -165,15 +169,15 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 	SetControlRotation(Rot);
 
 	const FRotationMatrix YawMatrix(FRotator(0.f, LookRot.Yaw, 0.f));
-	const FVector Move = YawMatrix.GetScaledAxis(EAxis::X) * ((IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (IsInputKeyDown(EKeys::S) ? 1.f : 0.f))
-		+ YawMatrix.GetScaledAxis(EAxis::Y) * ((IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (IsInputKeyDown(EKeys::A) ? 1.f : 0.f));
+	const FVector Move = YawMatrix.GetScaledAxis(EAxis::X) * ((IsInputKeyDown(Settings->MoveForward) ? 1.f : 0.f) - (IsInputKeyDown(Settings->MoveBack) ? 1.f : 0.f))
+		+ YawMatrix.GetScaledAxis(EAxis::Y) * ((IsInputKeyDown(Settings->MoveRight) ? 1.f : 0.f) - (IsInputKeyDown(Settings->MoveLeft) ? 1.f : 0.f));
 	if (!Move.IsNearlyZero())
 	{
 		GetPawn()->AddMovementInput(Move.GetSafeNormal());
 	}
 }
 
-// ---------------------------------------------------------------- Click interaction
+// ---------------------------------------------------------------- Interaction (key from UDCSettings, E by default)
 
 void ADCPlayerController::TraceTarget(ADCClient*& OutClient, const ADCInteractable*& OutProp) const
 {
@@ -224,7 +228,7 @@ FText ADCPlayerController::GetInteractPrompt() const
 	return Prop ? Prop->GetLabel() : FText::GetEmpty();
 }
 
-void ADCPlayerController::OnClick()
+void ADCPlayerController::OnInteract()
 {
 	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || IsBlockedByUI())
@@ -263,30 +267,9 @@ void ADCPlayerController::OnClick()
 	case EInteractType::VHSPlayer:
 		PushScreen<UDCFilmCraftingWidget>(RootLayout, FilmCraftingWidgetClass);
 		break;
-	}
-}
-
-void ADCPlayerController::OnHotbarKey(FKey Key)
-{
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (!GM || IsBlockedByUI())
-	{
-		return;
-	}
-	static const TArray<FKey> Keys = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
-	const int32 Index = Keys.IndexOfByKey(Key);
-	if (GM->Inventory->Hotbar.IsValidIndex(Index))
-	{
-		GM->Inventory->SelectedHotbar = Index;
-	}
-}
-
-void ADCPlayerController::ReturnSelectedTape()
-{
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (GM && !IsBlockedByUI() && GM->Inventory->Hotbar.IsValidIndex(GM->Inventory->SelectedHotbar))
-	{
-		GM->Inventory->ReturnTape(GM->Inventory->Hotbar[GM->Inventory->SelectedHotbar]);
+	case EInteractType::Computer:
+		PushScreen<UDCComputerWidget>(RootLayout, ComputerWidgetClass);
+		break;
 	}
 }
 
@@ -342,6 +325,11 @@ void ADCPlayerController::HandlePhaseChanged(EPhase Phase, int32 DayIndex)
 	Cue(Phase == EPhase::Day ? TEXT("DayStart") : TEXT("NightStart"));
 }
 
+void ADCPlayerController::HandleUnlockPurchased(FName UnlockId)
+{
+	Cue(TEXT("UnlockPurchased"));
+}
+
 void ADCPlayerController::HandleFilmCreated(const FCreatedFilm& Film)
 {
 	Cue(TEXT("FilmCreated"));
@@ -373,7 +361,7 @@ void ADCPlayerController::HandleZoneOverlap(AActor* Zone, AActor* Other)
 	// Only once a customer has asked for something, so the hint lands when it's useful
 	if (Other == GetPawn() && bTutorialClientShown)
 	{
-		ShowTutorial(TEXT("Pick 3 tapes: Intro, Middle, Ending"), bTutorialBackRoomShown);
+		ShowTutorial(TEXT("Pick tapes and combine them"), bTutorialBackRoomShown);
 	}
 }
 
@@ -445,7 +433,7 @@ void ADCPlayerController::DebugSpawnTutorialClient()
 {
 	if (ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
 	{
-		GM->ClientDirector->SpawnClient(GM->ClientDirector->TutorialArchetypeRow, EClientCategory::Casual);
+		GM->ClientDirector->SpawnClient(GM->ClientDirector->TutorialArchetypeRow);
 	}
 }
 

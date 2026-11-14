@@ -3,6 +3,7 @@
 #include "Engine/TargetPoint.h"
 #include "Core/DCClient.h"
 #include "Core/BPFL_Scoring.h"
+#include "Data/DCCustomers.h"
 #include "Kismet/GameplayStatics.h"
 
 UAC_ClientDirector::UAC_ClientDirector()
@@ -12,6 +13,36 @@ UAC_ClientDirector::UAC_ClientDirector()
 }
 
 static ADCGameMode* GetGM(const UActorComponent* C) { return Cast<ADCGameMode>(C->GetOwner()); }
+
+/// Weighted pick of a persona (DT_Customers, section 5.6) valid for this phase and client level. Null when none fits.
+static const FCustomerData* PickCustomer(const UDataTable* Table, EPhase Phase, int32 Tier)
+{
+	if (!Table)
+	{
+		return nullptr;
+	}
+	TArray<const FCustomerData*> Pool;
+	float Sum = 0.f;
+	for (const TPair<FName, uint8*>& P : Table->GetRowMap())
+	{
+		const FCustomerData* C = reinterpret_cast<const FCustomerData*>(P.Value);
+		const bool bPhaseOk = C->SpawnPhase == ESpawnPhase::Any || (C->SpawnPhase == ESpawnPhase::Day) == (Phase == EPhase::Day);
+		if (bPhaseOk && Tier >= C->TierMin && Tier <= C->TierMax && C->SpawnWeight > 0.f)
+		{
+			Pool.Add(C);
+			Sum += C->SpawnWeight;
+		}
+	}
+	float Roll = FMath::FRandRange(0.f, Sum);
+	for (const FCustomerData* C : Pool)
+	{
+		if ((Roll -= C->SpawnWeight) <= 0.f)
+		{
+			return C;
+		}
+	}
+	return Pool.IsEmpty() ? nullptr : Pool.Last();
+}
 
 ADCClientQueue* UAC_ClientDirector::FindQueue() const
 {
@@ -44,21 +75,21 @@ float UAC_ClientDirector::ComputePatienceSec() const
 	return FMath::Min(Cfg->ClientPatienceBaseSec + Levels * Cfg->CriterioPatienceBonusSec, Cfg->ClientPatienceMaxSec);
 }
 
-float UAC_ClientDirector::CategoryMultiplier(EClientCategory Category) const
+const FClientTierData* UAC_ClientDirector::FindTier(int32 Tier) const
 {
-	const UDataTable* T = GetGM(this)->Config->CategoryTable;
+	const UDataTable* T = GetGM(this)->Config->ClientTierTable;
 	if (T)
 	{
 		for (const TPair<FName, uint8*>& P : T->GetRowMap())
 		{
-			const FClientCategoryData* Row = reinterpret_cast<const FClientCategoryData*>(P.Value);
-			if (Row->Category == Category)
+			const FClientTierData* Row = reinterpret_cast<const FClientTierData*>(P.Value);
+			if (Row->Tier == Tier)
 			{
-				return Row->PayMultiplier;
+				return Row;
 			}
 		}
 	}
-	return 1.f;
+	return nullptr;
 }
 
 FText UAC_ClientDirector::PickLine(const UDataTable* Table, ESpawnPhase Phase) const
@@ -79,20 +110,49 @@ FText UAC_ClientDirector::PickLine(const UDataTable* Table, ESpawnPhase Phase) c
 	return Candidates.Num() ? Candidates[FMath::RandRange(0, Candidates.Num() - 1)]->Text : FText::FromString(TEXT("TODO(DESIGN): line"));
 }
 
-FText UAC_ClientDirector::BuildOrderText(const TArray<FGenrePreference>& Prefs, ESpawnPhase Phase)
+// 5.4: High skills first (largest first), then Some (largest first), then None at random; the level's cap decides how many
+TArray<FHintedSkill> UAC_ClientDirector::BuildHints(const FSkillVector& Target, int32 MaxHinted) const
+{
+	const int32 HighMin = GetGM(this)->Config->HintHighMin;
+	struct FEntry { FHintedSkill Hint; int32 Value; float Tie; };
+	TArray<FEntry> Entries;
+	for (int32 i = 0; i < DCNumSkills; ++i)
+	{
+		const int32 Value = Target.Get((ESkill)i);
+		FEntry& E = Entries.AddDefaulted_GetRef();
+		E.Hint.Skill = (ESkill)i;
+		E.Hint.Level = Value >= HighMin ? EHintLevel::High : Value >= 1 ? EHintLevel::Some : EHintLevel::None;
+		E.Value = Value;
+		E.Tie = FMath::FRand();
+	}
+	Entries.Sort([](const FEntry& A, const FEntry& B)
+	{
+		if (A.Hint.Level != B.Hint.Level) return (uint8)A.Hint.Level > (uint8)B.Hint.Level;
+		if (A.Hint.Level != EHintLevel::None && A.Value != B.Value) return A.Value > B.Value;
+		return A.Tie < B.Tie;
+	});
+	TArray<FHintedSkill> Hints;
+	for (int32 i = 0; i < FMath::Min(MaxHinted, Entries.Num()); ++i)
+	{
+		Hints.Add(Entries[i].Hint);
+	}
+	return Hints;
+}
+
+// Greeting plus one line per hinted skill (never naming the skill), no line repeated within the day
+FText UAC_ClientDirector::BuildOrderText(const TArray<FHintedSkill>& Hints, ESpawnPhase Phase)
 {
 	const UPDA_GameConfig* Cfg = GetGM(this)->Config;
 	FString Out = PickLine(Cfg->GreetingTable, Phase == ESpawnPhase::Night ? ESpawnPhase::Night : ESpawnPhase::Day).ToString();
-	for (const FGenrePreference& Pref : Prefs)
+	for (const FHintedSkill& Hint : Hints)
 	{
-		const EPolarity Pol = Pref.Weight > 0 ? EPolarity::Likes : EPolarity::Dislikes;
 		TArray<FName> Fresh, All;
 		if (Cfg->HintLineTable)
 		{
 			for (const TPair<FName, uint8*>& P : Cfg->HintLineTable->GetRowMap())
 			{
 				const FHintLineData* Row = reinterpret_cast<const FHintLineData*>(P.Value);
-				if (Row->Genre == Pref.Genre && Row->Polarity == Pol)
+				if (!Row->bUnused && Row->Skill == Hint.Skill && Row->Level == Hint.Level)
 				{
 					All.Add(P.Key);
 					if (!UsedHintRows.Contains(P.Key))
@@ -105,7 +165,7 @@ FText UAC_ClientDirector::BuildOrderText(const TArray<FGenrePreference>& Prefs, 
 		const TArray<FName>& Pool = Fresh.Num() ? Fresh : All; // reuse only when every line was used today
 		if (Pool.Num() == 0)
 		{
-			Out += TEXT(" TODO(DESIGN): hint line"); // no line loaded for this genre/polarity
+			Out += TEXT(" TODO(DESIGN): hint line"); // no line written for this skill and level yet
 			continue;
 		}
 		const FName Pick = Pool[FMath::RandRange(0, Pool.Num() - 1)];
@@ -116,7 +176,118 @@ FText UAC_ClientDirector::BuildOrderText(const TArray<FGenrePreference>& Prefs, 
 	return FText::FromString(Out);
 }
 
-ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow, EClientCategory Category)
+// 5.2 steps 3 to 5 (or the scripted row): client level, persona, a recipe of real tapes and the Target it adds up to
+void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const FScriptedOrderData* Scripted, const FCustomerData*& OutPersona, FClientRuntime& Rt)
+{
+	ADCGameMode* GM = GetGM(this);
+	const UPDA_GameConfig* Cfg = GM->Config;
+
+	// Level: scripted clients are level 1, the others are drawn by SpawnWeight among the levels the star license allows
+	int32 Tier = 1;
+	if (!Scripted && Cfg->ClientTierTable)
+	{
+		float Sum = 0.f;
+		for (const TPair<FName, uint8*>& P : Cfg->ClientTierTable->GetRowMap())
+		{
+			const FClientTierData* T = reinterpret_cast<const FClientTierData*>(P.Value);
+			Sum += T->Tier <= GM->Unlocks->UnlockedStarTier ? T->SpawnWeight : 0.f;
+		}
+		float Roll = FMath::FRandRange(0.f, Sum);
+		for (const TPair<FName, uint8*>& P : Cfg->ClientTierTable->GetRowMap())
+		{
+			const FClientTierData* T = reinterpret_cast<const FClientTierData*>(P.Value);
+			if (T->Tier <= GM->Unlocks->UnlockedStarTier && T->SpawnWeight > 0.f && (Roll -= T->SpawnWeight) <= 0.f)
+			{
+				Tier = T->Tier;
+				break;
+			}
+		}
+	}
+	const FClientTierData* TierRow = FindTier(Tier);
+	Rt.Tier = Tier;
+	OutPersona = PickCustomer(Cfg->CustomerTable, SchedulePhase, Tier);
+	Rt.TipMult = OutPersona ? OutPersona->TipMult : 1.f;
+
+	if (Scripted)
+	{
+		Rt.Target = Scripted->Target;
+		Rt.HintedSkills = Scripted->HintedSkills;
+	}
+	else
+	{
+		const int32 StarMin = TierRow ? TierRow->RecipeStarMin : 1;
+		const int32 StarMax = FMath::Min(TierRow ? TierRow->RecipeStarMax : 1, GM->Unlocks->UnlockedStarTier);
+		const int32 MinTapes = TierRow ? TierRow->RecipeTapesMin : 1;
+		const int32 MaxTapes = TierRow ? TierRow->RecipeTapesMax : 2;
+		const int32 Tapes = FMath::Clamp(FMath::RandRange(MinTapes, MaxTapes), 1, GM->FilmCrafting->UnlockedSlots); // never more than the slots
+
+		// The archetype's genres, or every unlocked genre when that leaves none
+		TSet<EGenre> Genres;
+		for (EGenre G : Arch.AllowedGenres)
+		{
+			if (GM->Unlocks->IsGenreUnlocked(G)) Genres.Add(G);
+		}
+		if (Genres.IsEmpty())
+		{
+			Genres = GM->Unlocks->UnlockedGenres;
+		}
+
+		struct FCandidate { FSkillVector Skills; float Weight; };
+		TArray<FCandidate> Candidates;
+		if (Cfg->VHSTable)
+		{
+			for (const TPair<FName, uint8*>& P : Cfg->VHSTable->GetRowMap())
+			{
+				const FVHSData* Tape = reinterpret_cast<const FVHSData*>(P.Value);
+				int32 Points = 0;
+				float Taste = 0.f;
+				for (int32 i = 0; i < DCNumSkills; ++i)
+				{
+					Points += Tape->Skills.Get((ESkill)i);
+					Taste += OutPersona ? OutPersona->TasteBias.Get((ESkill)i) * Tape->Skills.Get((ESkill)i) : 0.f;
+				}
+				if (Points > 0 && Tape->Rating >= StarMin && Tape->Rating <= StarMax && Genres.Contains(Tape->PrimaryGenre)) // Points > 0 skips the v1 rows
+				{
+					Candidates.Add({ Tape->Skills, Cfg->GeneratorBiasFloor + Taste });
+				}
+			}
+		}
+		if (Candidates.IsEmpty())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("GenerateOrder: no tapes for tier %d, the order has no target"), Tier);
+		}
+		TArray<FSkillVector> Recipe;
+		TArray<bool> Used;
+		Used.Init(false, Candidates.Num());
+		for (int32 k = 0; k < Tapes && !Candidates.IsEmpty(); ++k)
+		{
+			float Sum = 0.f;
+			for (int32 i = 0; i < Candidates.Num(); ++i) Sum += Used[i] ? 0.f : Candidates[i].Weight;
+			if (Sum <= 0.f) // every distinct tape is in the recipe already: repeats are allowed when the group is small
+			{
+				Used.Init(false, Candidates.Num());
+				for (int32 i = 0; i < Candidates.Num(); ++i) Sum += Candidates[i].Weight;
+			}
+			float Roll = FMath::FRandRange(0.f, Sum);
+			int32 Pick = Candidates.Num() - 1;
+			for (int32 i = 0; i < Candidates.Num(); ++i)
+			{
+				if (!Used[i] && (Roll -= Candidates[i].Weight) <= 0.f)
+				{
+					Pick = i;
+					break;
+				}
+			}
+			Used[Pick] = true;
+			Recipe.Add(Candidates[Pick].Skills);
+		}
+		Rt.Target = UBPFL_Scoring::ComputeProfile(Recipe, Cfg);
+		Rt.HintedSkills = BuildHints(Rt.Target, TierRow ? TierRow->MaxHintedSkills : 2);
+	}
+	Rt.OrderText = BuildOrderText(Rt.HintedSkills, Arch.SpawnPhase);
+}
+
+ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow)
 {
 	ADCGameMode* GM = GetGM(this);
 	const UPDA_GameConfig* Cfg = GM->Config;
@@ -124,7 +295,7 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow, EClientCategory C
 	TArray<AActor*> Doors;
 	UGameplayStatics::GetAllActorsWithTag(this, "Client_Door", Doors);
 	AActor* Door = Doors.Num() ? Doors[0] : nullptr;
-	if (!Queue || !Door || !Cfg->ArchetypeTable || !Cfg->CategoryTable || ActiveClientCount() >= Queue->MaxSize())
+	if (!Queue || !Door || !Cfg->ArchetypeTable || ActiveClientCount() >= Queue->MaxSize())
 	{
 		return nullptr; // full store (5.5) or level not set up
 	}
@@ -142,6 +313,20 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow, EClientCategory C
 		Browse = Free[FMath::RandRange(0, Free.Num() - 1)];
 	}
 
+	// The first clients of a run come from DT_ScriptedOrders, in order; the row also fixes the archetype (5.2 step 2)
+	const FScriptedOrderData* Scripted = nullptr;
+	if (Cfg->ScriptedOrderTable)
+	{
+		for (const TPair<FName, uint8*>& P : Cfg->ScriptedOrderTable->GetRowMap())
+		{
+			const FScriptedOrderData* Row = reinterpret_cast<const FScriptedOrderData*>(P.Value);
+			if (Row->Index == ScriptedUsed + 1)
+			{
+				Scripted = Row;
+				if (!Row->ArchetypeRow.IsNone()) ArchetypeRow = Row->ArchetypeRow;
+			}
+		}
+	}
 	const FClientArchetypeData* Arch = Cfg->ArchetypeTable->FindRow<FClientArchetypeData>(ArchetypeRow, TEXT("SpawnClient"));
 	if (!Arch)
 	{
@@ -151,41 +336,8 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow, EClientCategory C
 
 	FClientRuntime Rt;
 	Rt.ArchetypeRow = ArchetypeRow;
-	if (ArchetypeRow == TutorialArchetypeRow)
-	{
-		bTutorialSpawned = true;
-	}
-	Rt.Category = Category;
-	if (Arch->FixedPreferences.Num() > 0)
-	{
-		Rt.Preferences = Arch->FixedPreferences;
-	}
-	else
-	{
-		const FClientCategoryData* Cat = nullptr;
-		for (const TPair<FName, uint8*>& P : Cfg->CategoryTable->GetRowMap())
-		{
-			const FClientCategoryData* Row = reinterpret_cast<const FClientCategoryData*>(P.Value);
-			if (Row->Category == Category) Cat = Row;
-		}
-		if (!Cat) return nullptr;
-		TArray<EGenre> Genres = Arch->AllowedGenres;
-		if (Genres.IsEmpty())
-		{
-			for (int32 i = 0; i <= (int32)EGenre::Paranormal; ++i) Genres.Add((EGenre)i);
-		}
-		for (int32 n = 0; n < Cat->NumAttributes && Genres.Num() > 0; ++n) // distinct genres: never two attributes on one genre
-		{
-			const int32 Idx = FMath::RandRange(0, Genres.Num() - 1);
-			FGenrePreference Pref;
-			Pref.Genre = Genres[Idx];
-			Genres.RemoveAtSwap(Idx);
-			const int32 W = FMath::RandRange(Cat->WeightMin, Cat->WeightMax);
-			Pref.Weight = FMath::FRand() < Cat->PositiveChance ? W : -W;
-			Rt.Preferences.Add(Pref);
-		}
-	}
-	Rt.OrderText = BuildOrderText(Rt.Preferences, Arch->SpawnPhase);
+	const FCustomerData* Persona = nullptr;
+	GenerateOrder(*Arch, Scripted, Persona, Rt);
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -195,9 +347,18 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow, EClientCategory C
 	{
 		return nullptr;
 	}
+	ScriptedUsed += Scripted ? 1 : 0;
 	const float Browsing = FMath::RandRange(Cfg->BrowseTimeMinSec, Cfg->BrowseTimeMaxSec);
-	Client->ApplyMesh(Arch->Mesh.LoadSynchronous());
-	Client->Init(Rt, this, Queue, Browse, Door->GetActorLocation(), ComputePatienceSec(), Browsing);
+	// Persona (section 5.6) overrides the archetype's mesh; no persona or no mesh keeps the archetype's
+	USkeletalMesh* Mesh = Persona ? Persona->Mesh.LoadSynchronous() : nullptr;
+	float Patience = ComputePatienceSec();
+	if (Persona)
+	{
+		Rt.DisplayName = Persona->DisplayName;
+		Patience = FMath::Min(Patience * Persona->PatienceMult, Cfg->ClientPatienceMaxSec);
+	}
+	Client->ApplyMesh(Mesh ? Mesh : Arch->Mesh.LoadSynchronous());
+	Client->Init(Rt, this, Queue, Browse, Door->GetActorLocation(), Patience, Browsing);
 	Clients.Add(Client);
 	return Client;
 }
@@ -248,14 +409,16 @@ bool UAC_ClientDirector::DeliverFilm(ADCClient* Client)
 		return false;
 	}
 	const FCreatedFilm Film = GM->FilmCrafting->HeldFilms[0];
-	GM->FilmCrafting->DiscardHeldFilm();
+	GM->FilmCrafting->ConsumeHeldFilm(); // delivered: the tapes stay spent
 
-	const float Mult = CategoryMultiplier(Client->Runtime.Category);
+	const FClientTierData* TierRow = FindTier(Client->Runtime.Tier);
+	const float Mult = TierRow ? TierRow->PayMultiplier : 1.f;
 	FReview R;
 	R.FilmTitle = Film.Title;
-	R.Score = UBPFL_Scoring::ComputeScore(Client->Runtime.Preferences, Film, Cfg);
-	R.Reaction = UBPFL_Scoring::GetReaction(R.Score, Cfg);
-	R.MoneyDelta = UBPFL_Scoring::ComputeTip(R.Reaction, R.Score, Mult, Cfg) - UBPFL_Scoring::ComputeFine(R.Reaction, Mult, Cfg);
+	R.ErrorRatio = UBPFL_Scoring::ComputeErrorRatio(Film.SkillProfile, Client->Runtime.Target);
+	R.Accuracy = UBPFL_Scoring::ComputeAccuracy(R.ErrorRatio);
+	R.Reaction = UBPFL_Scoring::GetReaction(R.ErrorRatio, Cfg);
+	R.MoneyDelta = UBPFL_Scoring::ComputeTip(R.Reaction, R.Accuracy, Mult * Client->Runtime.TipMult, Cfg) - UBPFL_Scoring::ComputeFine(R.Reaction, Mult, Cfg);
 
 	TArray<const FReviewLineData*> Lines;
 	if (Cfg->ReviewLineTable)
@@ -268,8 +431,14 @@ bool UAC_ClientDirector::DeliverFilm(ADCClient* Client)
 	}
 	// TODO(DESIGN): review lines pending from the team
 	R.Line = Lines.Num() ? Lines[FMath::RandRange(0, Lines.Num() - 1)]->Text : FText::FromString(TEXT("TODO(DESIGN): review line"));
+	ESkill FeedbackSkill;
+	EFeedbackDirection FeedbackDirection;
+	if (R.Reaction != EReaction::Loved && UBPFL_Scoring::GetFeedbackSkill(Film.SkillProfile, Client->Runtime.Target, FeedbackSkill, FeedbackDirection))
+	{
+		R.FeedbackLine = UBPFL_Scoring::PickFeedbackLine(Cfg->FeedbackLineTable, FeedbackSkill, FeedbackDirection); // shown only in the review (6.3)
+	}
 
-	GM->Economy->AddMoney(Cfg->BaseRentalPrice);
+	GM->Economy->AddMoney(UBPFL_Scoring::ComputeRentalPrice(Mult, Cfg));
 	++Stats.ClientsServed;
 	switch (R.Reaction)
 	{
@@ -363,24 +532,7 @@ bool UAC_ClientDirector::TrySpawnScheduled()
 	{
 		return true; // nothing configured: drop the slot instead of retrying forever
 	}
-	// First client of the game: always the tutorial one
-	if (!bTutorialSpawned)
-	{
-		return SpawnClient(TutorialArchetypeRow, EClientCategory::Casual) != nullptr;
-	}
-	// Category from this day's weights
-	const FDayData* Day = FindDayRow(Cfg->DayTable, ScheduleDay);
-	EClientCategory Category = EClientCategory::Casual;
-	if (Day)
-	{
-		const float Total = Day->CasualWeight + Day->EnthusiastWeight + Day->CinephileWeight;
-		float Roll = FMath::FRandRange(0.f, FMath::Max(Total, KINDA_SMALL_NUMBER));
-		if ((Roll -= Day->CasualWeight) >= 0.f)
-		{
-			Category = (Roll -= Day->EnthusiastWeight) >= 0.f ? EClientCategory::Cinephile : EClientCategory::Enthusiast;
-		}
-	}
-	// Archetype by SpawnWeight among the ones valid for this phase
+	// Archetype by SpawnWeight (a scripted order overrides it inside SpawnClient) among the ones valid for this phase
 	TArray<TPair<FName, float>> Pool;
 	float Sum = 0.f;
 	for (const TPair<FName, uint8*>& P : Cfg->ArchetypeTable->GetRowMap())
@@ -408,7 +560,7 @@ bool UAC_ClientDirector::TrySpawnScheduled()
 			break;
 		}
 	}
-	return SpawnClient(Chosen, Category) != nullptr;
+	return SpawnClient(Chosen) != nullptr;
 }
 
 void UAC_ClientDirector::CloseStore()

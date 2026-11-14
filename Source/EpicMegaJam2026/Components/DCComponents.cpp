@@ -1,5 +1,6 @@
 #include "Components/DCComponents.h"
 #include "Core/DCGameMode.h"
+#include "Core/BPFL_Scoring.h"
 
 static const UPDA_GameConfig* GetConfig(const UActorComponent* C)
 {
@@ -84,68 +85,125 @@ bool UAC_Economy::ChargeRent(int32 DayIndex)
 	return true;
 }
 
+// ---------------------------------------------------------------- Unlocks
+
+void UAC_Unlocks::BeginPlay()
+{
+	Super::BeginPlay();
+	const UPDA_GameConfig* Cfg = GetConfig(this);
+	if (!Cfg)
+	{
+		return;
+	}
+	UnlockedStarTier = Cfg->StartUnlockedStarTier;
+	if (Cfg->GenreTable)
+	{
+		for (const TPair<FName, uint8*>& Pair : Cfg->GenreTable->GetRowMap())
+		{
+			const FGenreData* Row = reinterpret_cast<const FGenreData*>(Pair.Value);
+			if (Row->bUnlockedAtStart)
+			{
+				UnlockedGenres.Add(Row->Genre);
+			}
+		}
+	}
+}
+
+const FUnlockData* UAC_Unlocks::FindUnlock(FName UnlockId) const
+{
+	const UPDA_GameConfig* Cfg = GetConfig(this);
+	return Cfg && Cfg->UnlockTable ? Cfg->UnlockTable->FindRow<FUnlockData>(UnlockId, TEXT("FindUnlock"), false) : nullptr;
+}
+
+int32 UAC_Unlocks::GetGenreCount() const
+{
+	return UnlockedGenres.Num() - (UnlockedGenres.Contains(EGenre::Paranormal) ? 1 : 0);
+}
+
+bool UAC_Unlocks::CanBuyUnlock(FName UnlockId) const
+{
+	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
+	const FUnlockData* Row = FindUnlock(UnlockId);
+	if (!GM || !Row || OwnedUnlocks.Contains(UnlockId) || GM->Economy->Money < Row->Price)
+	{
+		return false;
+	}
+	for (const FName& Required : Row->RequiresUnlocks)
+	{
+		if (!OwnedUnlocks.Contains(Required))
+		{
+			return false;
+		}
+	}
+	return GetGenreCount() >= Row->MinGenresOwned;
+}
+
+bool UAC_Unlocks::BuyUnlock(FName UnlockId)
+{
+	ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
+	const FUnlockData* Row = FindUnlock(UnlockId);
+	if (!CanBuyUnlock(UnlockId) || !GM->Economy->SpendMoney(Row->Price))
+	{
+		return false;
+	}
+	OwnedUnlocks.Add(UnlockId);
+	switch (Row->Type)
+	{
+	case EUnlockType::Genre: UnlockedGenres.Add(Row->Genre); break;
+	case EUnlockType::Slot: GM->FilmCrafting->SetUnlockedSlots(GM->FilmCrafting->UnlockedSlots + 1); break;
+	case EUnlockType::StarTier: UnlockedStarTier = FMath::Min(UnlockedStarTier + 1, 5); break;
+	}
+	OnUnlockPurchased.Broadcast(UnlockId);
+	return true;
+}
+
 // ---------------------------------------------------------------- Inventory
 
 void UAC_Inventory::BeginPlay()
 {
 	Super::BeginPlay();
 	const UPDA_GameConfig* Cfg = GetConfig(this);
-	Hotbar.Init(NAME_None, Cfg ? FMath::Max(Cfg->HotbarSize, 1) : 3);
-	if (!Cfg || !Cfg->CatalogTable)
+	if (!Cfg)
 	{
 		return;
 	}
-	for (const TPair<FName, uint8*>& Pair : Cfg->CatalogTable->GetRowMap())
+	for (const TPair<FName, int32>& Pair : Cfg->StartingTapes)
 	{
-		const FCatalogData* Row = reinterpret_cast<const FCatalogData*>(Pair.Value);
-		if (Row->bOwnedAtStart)
-		{
-			AddCatalog(Pair.Key);
-		}
+		AddTape(Pair.Key, Pair.Value);
 	}
 }
 
-void UAC_Inventory::AddCatalog(FName CatalogRow)
+void UAC_Inventory::AddTape(FName Row, int32 Count)
 {
-	const UPDA_GameConfig* Cfg = GetConfig(this);
-	const FCatalogData* Row = Cfg && Cfg->CatalogTable ? Cfg->CatalogTable->FindRow<FCatalogData>(CatalogRow, TEXT("AddCatalog")) : nullptr;
-	if (!Row || OwnedCatalogs.Contains(CatalogRow))
+	if (Row.IsNone() || Count <= 0)
 	{
 		return;
 	}
-	OwnedCatalogs.Add(CatalogRow);
-	for (const FName& Tape : Row->VHSRows)
-	{
-		OwnedVHS.AddUnique(Tape);
-	}
+	Stock.FindOrAdd(Row) += Count;
 	OnInventoryChanged.Broadcast();
 }
 
-bool UAC_Inventory::TakeTape(FName Row)
+bool UAC_Inventory::ConsumeTape(FName Row, int32 Count)
 {
-	const int32 Free = Hotbar.IndexOfByKey(NAME_None);
-	if (Row.IsNone() || !HasVHS(Row) || IsCarried(Row) || Free == INDEX_NONE)
+	int32* Have = Stock.Find(Row);
+	if (Count <= 0 || !Have || *Have < Count)
 	{
 		return false;
 	}
-	Hotbar[Free] = Row;
+	if ((*Have -= Count) == 0)
+	{
+		Stock.Remove(Row);
+	}
 	OnInventoryChanged.Broadcast();
 	return true;
 }
 
-void UAC_Inventory::ReturnTape(FName Row)
+TArray<FName> UAC_Inventory::GetOwnedVHS() const
 {
-	const int32 Index = Row.IsNone() ? INDEX_NONE : Hotbar.IndexOfByKey(Row);
-	if (Index == INDEX_NONE)
-	{
-		return;
-	}
-	Hotbar[Index] = NAME_None;
-	if (const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner()))
-	{
-		GM->FilmCrafting->ClearTape(Row);
-	}
-	OnInventoryChanged.Broadcast();
+	TArray<FName> Rows;
+	Stock.GetKeys(Rows);
+	Rows.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
+	return Rows;
 }
 
 bool UAC_Inventory::GetVHSData(FName Row, FVHSData& Out) const
@@ -163,7 +221,7 @@ TArray<FName> UAC_Inventory::GetOwnedVHSByGenre(EGenre Genre) const
 {
 	TArray<FName> Result;
 	FVHSData Data;
-	for (const FName& Row : OwnedVHS)
+	for (const FName& Row : GetOwnedVHS())
 	{
 		if (GetVHSData(Row, Data) && Data.PrimaryGenre == Genre)
 		{
@@ -175,59 +233,89 @@ TArray<FName> UAC_Inventory::GetOwnedVHSByGenre(EGenre Genre) const
 
 // ---------------------------------------------------------------- Film crafting
 
-bool UAC_FilmCrafting::SetSlot(EFilmSlot Slot, FName VHSRow)
+void UAC_FilmCrafting::BeginPlay()
+{
+	Super::BeginPlay();
+	const UPDA_GameConfig* Cfg = GetConfig(this);
+	SetUnlockedSlots(Cfg ? Cfg->StartUnlockedSlots : UnlockedSlots);
+}
+
+void UAC_FilmCrafting::SetUnlockedSlots(int32 Count)
+{
+	const UPDA_GameConfig* Cfg = GetConfig(this);
+	UnlockedSlots = FMath::Clamp(Count, 1, Cfg ? FMath::Max(Cfg->MaxSlots, 1) : 5);
+	SlotRows.SetNum(UnlockedSlots);
+	OnFilmStateChanged.Broadcast();
+}
+
+int32 UAC_FilmCrafting::GetAvailableCount(FName VHSRow) const
 {
 	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
-	if (!GM || !GM->Inventory->HasVHS(VHSRow))
+	int32 Used = 0;
+	for (const FName& Row : SlotRows)
+	{
+		Used += Row == VHSRow ? 1 : 0;
+	}
+	return GM ? GM->Inventory->GetCount(VHSRow) - Used : 0;
+}
+
+bool UAC_FilmCrafting::SetSlot(int32 Index, FName VHSRow)
+{
+	if (!SlotRows.IsValidIndex(Index) || VHSRow.IsNone())
 	{
 		return false;
 	}
-	for (const TPair<EFilmSlot, FName>& Pair : Slots)
+	// A tape already in this slot goes back to the pool before the new one is counted
+	const FName Previous = SlotRows[Index];
+	SlotRows[Index] = NAME_None;
+	if (GetAvailableCount(VHSRow) < 1)
 	{
-		if (Pair.Key != Slot && Pair.Value == VHSRow)
-		{
-			return false; // same tape can't fill two slots
-		}
+		SlotRows[Index] = Previous;
+		return false;
 	}
-	Slots.Add(Slot, VHSRow);
+	SlotRows[Index] = VHSRow;
 	OnFilmStateChanged.Broadcast();
 	return true;
 }
 
-void UAC_FilmCrafting::ClearSlot(EFilmSlot Slot)
+void UAC_FilmCrafting::ClearSlot(int32 Index)
 {
-	if (Slots.Remove(Slot) > 0)
+	if (SlotRows.IsValidIndex(Index) && !SlotRows[Index].IsNone())
 	{
+		SlotRows[Index] = NAME_None;
 		OnFilmStateChanged.Broadcast();
 	}
 }
 
-void UAC_FilmCrafting::ClearTape(FName VHSRow)
+int32 UAC_FilmCrafting::GetFilledSlots() const
 {
-	bool bRemoved = false;
-	for (auto It = Slots.CreateIterator(); It; ++It)
+	int32 Filled = 0;
+	for (const FName& Row : SlotRows)
 	{
-		if (It.Value() == VHSRow)
+		Filled += Row.IsNone() ? 0 : 1;
+	}
+	return Filled;
+}
+
+FSkillVector UAC_FilmCrafting::GetProfile() const
+{
+	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
+	TArray<FSkillVector> Skills;
+	FVHSData Tape;
+	for (const FName& Row : SlotRows)
+	{
+		if (!Row.IsNone() && GM->Inventory->GetVHSData(Row, Tape))
 		{
-			It.RemoveCurrent();
-			bRemoved = true;
+			Skills.Add(Tape.Skills);
 		}
 	}
-	if (bRemoved)
-	{
-		OnFilmStateChanged.Broadcast();
-	}
-}
-
-bool UAC_FilmCrafting::AreSlotsFull() const
-{
-	return Slots.Contains(EFilmSlot::Intro) && Slots.Contains(EFilmSlot::Middle) && Slots.Contains(EFilmSlot::Ending);
+	return UBPFL_Scoring::ComputeProfile(Skills, GM->Config);
 }
 
 bool UAC_FilmCrafting::CanConfirm() const
 {
 	const UPDA_GameConfig* Cfg = GetConfig(this);
-	return Cfg && AreSlotsFull() && HeldFilms.Num() < Cfg->MaxHeldFilms;
+	return Cfg && GetFilledSlots() >= 1 && HeldFilms.Num() < Cfg->MaxHeldFilms;
 }
 
 bool UAC_FilmCrafting::ConfirmFilm(FText Title)
@@ -238,45 +326,47 @@ bool UAC_FilmCrafting::ConfirmFilm(FText Title)
 	{
 		return false;
 	}
+	for (const FName& Row : SlotRows)
+	{
+		if (!Row.IsNone() && GetAvailableCount(Row) < 0) // stock dropped under what the slots hold
+		{
+			return false;
+		}
+	}
 
 	FCreatedFilm Film;
 	FString TitleStr = Title.ToString().TrimStartAndEnd().Left(Cfg->MaxFilmTitleLength);
 	Film.Title = TitleStr.IsEmpty() ? FText::FromString(FString::Printf(TEXT("Untitled Cut #%d"), FilmsCreated + 1)) : FText::FromString(TitleStr);
-	Film.IntroRow = Slots[EFilmSlot::Intro];
-	Film.MiddleRow = Slots[EFilmSlot::Middle];
-	Film.EndingRow = Slots[EFilmSlot::Ending];
-
-	float RatingSum = 0.f;
-	for (const TPair<EFilmSlot, FName>& Pair : Slots)
+	Film.SlotRows = SlotRows;
+	Film.SkillProfile = GetProfile();
+	for (const FName& Row : SlotRows)
 	{
-		FVHSData Tape;
-		if (!GM->Inventory->GetVHSData(Pair.Value, Tape))
-		{
-			return false;
-		}
-		const float* Mult = Cfg->SlotMultipliers.Find(Pair.Key);
-		for (const FGenreValue& GV : Tape.GenreValues)
-		{
-			Film.GenreProfile.FindOrAdd(GV.Genre) += GV.Value * (Mult ? *Mult : 1.f);
-		}
-		RatingSum += Tape.Rating;
+		GM->Inventory->ConsumeTape(Row); // one copy per filled slot; NAME_None is ignored
 	}
-	Film.AverageRating = RatingSum / 3.f;
 
 	++FilmsCreated;
 	HeldFilms.Add(Film);
-	Slots.Empty();
-	// The tapes aren't consumed: they go back on the shelves, freeing the hotbar
-	for (const FName& Row : {Film.IntroRow, Film.MiddleRow, Film.EndingRow})
-	{
-		GM->Inventory->ReturnTape(Row);
-	}
+	SlotRows.Init(NAME_None, UnlockedSlots);
 	OnFilmCreated.Broadcast(Film);
 	OnFilmStateChanged.Broadcast();
 	return true;
 }
 
 void UAC_FilmCrafting::DiscardHeldFilm()
+{
+	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
+	if (HeldFilms.Num() > 0 && GM)
+	{
+		for (const FName& Row : HeldFilms[0].SlotRows)
+		{
+			GM->Inventory->AddTape(Row); // free, and reveals nothing about the order (4.4 rule 8)
+		}
+		HeldFilms.RemoveAt(0);
+		OnFilmStateChanged.Broadcast();
+	}
+}
+
+void UAC_FilmCrafting::ConsumeHeldFilm()
 {
 	if (HeldFilms.Num() > 0)
 	{
@@ -287,27 +377,43 @@ void UAC_FilmCrafting::DiscardHeldFilm()
 
 // ---------------------------------------------------------------- Supplier
 
-bool UAC_Inventory::CanBuyCatalog(FName CatalogRow) const
+int32 UAC_Inventory::GetTapePrice(FName Row) const
 {
 	const UPDA_GameConfig* Cfg = GetConfig(this);
-	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
-	const FCatalogData* Row = Cfg && Cfg->CatalogTable ? Cfg->CatalogTable->FindRow<FCatalogData>(CatalogRow, TEXT("CanBuyCatalog")) : nullptr;
-	return Row && GM && !OwnedCatalogs.Contains(CatalogRow)
-		&& GM->DayNightCycle->DayIndex >= Row->UnlockDay && GM->Economy->Money >= Row->Price;
+	FVHSData Tape;
+	if (!Cfg || !GetVHSData(Row, Tape) || !Cfg->TapePriceByStar.IsValidIndex(Tape.Rating - 1))
+	{
+		return 0;
+	}
+	return Cfg->TapePriceByStar[Tape.Rating - 1];
 }
 
-bool UAC_Inventory::BuyCatalog(FName CatalogRow)
+bool UAC_Inventory::IsTapeForSale(FName Row) const
 {
-	if (!CanBuyCatalog(CatalogRow))
-	{
-		return false;
-	}
 	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
-	const FCatalogData* Row = GetConfig(this)->CatalogTable->FindRow<FCatalogData>(CatalogRow, TEXT("BuyCatalog"));
-	if (!GM->Economy->SpendMoney(Row->Price))
+	FVHSData Tape;
+	if (!GM || !GetVHSData(Row, Tape))
 	{
 		return false;
 	}
-	AddCatalog(CatalogRow); // new tapes appear instantly; floor boxes are cosmetic (TODO(art))
+	const int32 Points = Tape.Skills.Funny + Tape.Skills.Scary + Tape.Skills.Brave + Tape.Skills.Thoughtful + Tape.Skills.Romantic;
+	return Points > 0 // the v1 rows have no skills and are never sold
+		&& GM->Unlocks->IsGenreUnlocked(Tape.PrimaryGenre) && Tape.Rating <= GM->Unlocks->UnlockedStarTier;
+}
+
+bool UAC_Inventory::CanBuyTape(FName Row, int32 Count) const
+{
+	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
+	return GM && Count > 0 && IsTapeForSale(Row) && GM->Economy->Money >= GetTapePrice(Row) * Count;
+}
+
+bool UAC_Inventory::BuyTape(FName Row, int32 Count)
+{
+	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
+	if (!CanBuyTape(Row, Count) || !GM->Economy->SpendMoney(GetTapePrice(Row) * Count))
+	{
+		return false;
+	}
+	AddTape(Row, Count); // new tapes appear instantly; floor boxes are cosmetic (TODO(art))
 	return true;
 }

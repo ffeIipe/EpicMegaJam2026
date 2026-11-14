@@ -59,6 +59,9 @@ public:
 	void Init(const FClientRuntime& InRuntime, UAC_ClientDirector* InDirector, ADCClientQueue* InQueue, ADCBrowsePoint* InBrowse,
 		FVector InExit, float InPatienceSec, float BrowseTimeSec);
 
+	// ABP to use per skeleton (the NPC meshes share one male and one female skeleton); set in BP_Client.
+	UPROPERTY(EditDefaultsOnly, Category = "Animation") TMap<TObjectPtr<class USkeleton>, TSubclassOf<class UAnimInstance>> AnimBySkeleton;
+
 	// Swaps the placeholder cube for the archetype's skeletal mesh (DT_ClientArchetypes.Mesh); null keeps the cube.
 	void ApplyMesh(class USkeletalMesh* InMesh);
 

@@ -15,6 +15,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
+#include "Data/DCTypes.h"
 
 using DCUI::Box;
 
@@ -360,5 +361,30 @@ namespace DCUI
 	{
 		const int32 R = FMath::Clamp(Rating, 0, 5);
 		return FString::ChrN(R, TEXT('★')) + FString::ChrN(5 - R, TEXT('☆'));
+	}
+
+	void SkillStrip(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills)
+	{
+		static const TCHAR* Letters = TEXT("FSBTR");
+		UHorizontalBox* Strip = Tree->ConstructWidget<UHorizontalBox>();
+		Parent->AddChild(Strip);
+		for (int32 i = 0; i < DCNumSkills; ++i)
+		{
+			const int32 Value = Skills.Get((ESkill)i);
+			UCommonTextBlock* Label = Text(Tree, Strip, FString::Printf(TEXT("%c%d"), Letters[i], Value));
+			Label->SetRenderOpacity(Value > 0 ? 1.f : 0.3f);
+			Cast<UHorizontalBoxSlot>(Label->Slot)->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
+		}
+	}
+
+	FString SkillLines(const FSkillVector& Skills, int32 Cap)
+	{
+		FString Out;
+		for (int32 i = 0; i < DCNumSkills; ++i)
+		{
+			const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
+			Out += Cap > 0 ? FString::Printf(TEXT("%s %d/%d\n"), *Name, Skills.Get((ESkill)i), Cap) : FString::Printf(TEXT("%s %d\n"), *Name, Skills.Get((ESkill)i));
+		}
+		return Out.TrimEnd();
 	}
 }
