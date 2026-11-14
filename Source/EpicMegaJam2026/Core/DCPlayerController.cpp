@@ -257,12 +257,14 @@ ULevelSequencePlayer* ADCPlayerController::GetSequencePlayer()
 {
 	if (!SequencePlayer)
 	{
-		ULevelSequence* Sequence = GetWorld()->GetAuthGameMode<ADCGameMode>()->Config->BackRoomSequence.LoadSynchronous();
+		const UPDA_GameConfig* Cfg = GetWorld()->GetAuthGameMode<ADCGameMode>()->Config;
+		ULevelSequence* Sequence = Cfg->BackRoomSequence.LoadSynchronous();
 		if (!Sequence)
 		{
-			return nullptr; // art hasn't delivered LS_ToBackRoom: BeginTransition glides the camera instead
+			return nullptr; // no sequence assigned: BeginTransition glides the camera instead
 		}
 		FMovieSceneSequencePlaybackSettings Settings;
+		Settings.PlayRate = Cfg->BackRoomPlayRate;
 		Settings.bPauseAtEnd = true; // hold the last frame while the crafting panel is up; reverse then starts from it
 		ALevelSequenceActor* Actor = nullptr;
 		SequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(this, Sequence, Settings, Actor);
@@ -338,6 +340,10 @@ void ADCPlayerController::FinishTransition()
 	}
 	else if (CameraZone == ECameraZone::ToCounter)
 	{
+		if (SequencePlayer)
+		{
+			SequencePlayer->Stop(); // bPauseAtEnd keeps the sequence's camera cut alive; stopping gives the view back to the pawn
+		}
 		SetControlRotation(LookRot); // aim where the player was looking before leaving
 		SetCameraZone(ECameraZone::Counter);
 		bDialogueDue = true;

@@ -44,15 +44,15 @@ static const FCustomerData* PickCustomer(const UDataTable* Table, EPhase Phase, 
 	return Pool.IsEmpty() ? nullptr : Pool.Last();
 }
 
-ADCClientQueue* UAC_ClientDirector::FindQueue() const
+ADCCounterPoint* UAC_ClientDirector::FindCounter() const
 {
-	return Cast<ADCClientQueue>(UGameplayStatics::GetActorOfClass(this, ADCClientQueue::StaticClass()));
+	return Cast<ADCCounterPoint>(UGameplayStatics::GetActorOfClass(this, ADCCounterPoint::StaticClass()));
 }
 
 ADCClient* UAC_ClientDirector::GetFrontClient() const
 {
-	const ADCClientQueue* Q = FindQueue();
-	return Q ? Q->GetFront() : nullptr;
+	const ADCCounterPoint* C = FindCounter();
+	return C ? C->GetClient() : nullptr;
 }
 
 int32 UAC_ClientDirector::ActiveClientCount() const
@@ -282,7 +282,23 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 			Recipe.Add(Candidates[Pick].Skills);
 		}
 		Rt.Target = UBPFL_Scoring::ComputeProfile(Recipe, Cfg);
-		Rt.HintedSkills = BuildHints(Rt.Target, TierRow ? TierRow->MaxHintedSkills : 2);
+		int32 MaxHinted = TierRow ? TierRow->MaxHintedSkills : 2;
+		if (Tier <= Cfg->FullHintMaxTier) // low levels never hide a skill they want
+		{
+			int32 Wanted = 0;
+			for (int32 i = 0; i < DCNumSkills; ++i) Wanted += Rt.Target.Get((ESkill)i) > 0 ? 1 : 0;
+			MaxHinted = FMath::Max(MaxHinted, Wanted);
+		}
+		Rt.HintedSkills = BuildHints(Rt.Target, MaxHinted);
+	}
+	Rt.bFullyHinted = true;
+	for (int32 i = 0; i < DCNumSkills; ++i)
+	{
+		const ESkill S = (ESkill)i;
+		if (Rt.Target.Get(S) > 0 && !Rt.HintedSkills.ContainsByPredicate([S](const FHintedSkill& H) { return H.Skill == S; }))
+		{
+			Rt.bFullyHinted = false;
+		}
 	}
 	Rt.OrderText = BuildOrderText(Rt.HintedSkills, Arch.SpawnPhase);
 }
@@ -291,11 +307,11 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow)
 {
 	ADCGameMode* GM = GetGM(this);
 	const UPDA_GameConfig* Cfg = GM->Config;
-	ADCClientQueue* Queue = FindQueue();
+	ADCCounterPoint* Counter = FindCounter();
 	TArray<AActor*> Doors;
 	UGameplayStatics::GetAllActorsWithTag(this, "Client_Door", Doors);
 	AActor* Door = Doors.Num() ? Doors[0] : nullptr;
-	if (!Queue || !Door || !Cfg->ArchetypeTable || ActiveClientCount() >= Queue->MaxSize())
+	if (!Counter || !Door || !Cfg->ArchetypeTable || ActiveClientCount() >= Cfg->MaxQueueSize)
 	{
 		return nullptr; // full store (5.5) or level not set up
 	}
@@ -358,7 +374,7 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow)
 		Patience = FMath::Min(Patience * Persona->PatienceMult, Cfg->ClientPatienceMaxSec);
 	}
 	Client->ApplyMesh(Mesh ? Mesh : Arch->Mesh.LoadSynchronous());
-	Client->Init(Rt, this, Queue, Browse, Door->GetActorLocation(), Patience, Browsing);
+	Client->Init(Rt, this, Counter, Browse, Door->GetActorLocation(), Patience, Browsing);
 	Clients.Add(Client);
 	return Client;
 }
@@ -415,7 +431,7 @@ bool UAC_ClientDirector::DeliverFilm(ADCClient* Client)
 	const float Mult = TierRow ? TierRow->PayMultiplier : 1.f;
 	FReview R;
 	R.FilmTitle = Film.Title;
-	R.ErrorRatio = UBPFL_Scoring::ComputeErrorRatio(Film.SkillProfile, Client->Runtime.Target);
+	R.ErrorRatio = UBPFL_Scoring::ComputeErrorRatio(Film.SkillProfile, Client->Runtime.Target, Cfg);
 	R.Accuracy = UBPFL_Scoring::ComputeAccuracy(R.ErrorRatio);
 	R.Reaction = UBPFL_Scoring::GetReaction(R.ErrorRatio, Cfg);
 	R.MoneyDelta = UBPFL_Scoring::ComputeTip(R.Reaction, R.Accuracy, Mult * Client->Runtime.TipMult, Cfg) - UBPFL_Scoring::ComputeFine(R.Reaction, Mult, Cfg);
@@ -485,6 +501,7 @@ void UAC_ClientDirector::BeginPhase(EPhase Phase, int32 DayIndex)
 	SchedulePhase = Phase;
 	ScheduleDay = DayIndex;
 	PhaseTime = 0.f;
+	LastSpawnTime = 0.f;
 	NextSpawn = 0;
 	SpawnTimes.Empty();
 	if (Phase == EPhase::Day)
@@ -515,13 +532,26 @@ void UAC_ClientDirector::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 		return;
 	}
 	PhaseTime += DeltaTime;
-	while (NextSpawn < SpawnTimes.Num() && PhaseTime >= SpawnTimes[NextSpawn])
+	const UPDA_GameConfig* Cfg = GetGM(this)->Config;
+	while (NextSpawn < SpawnTimes.Num())
 	{
+		// Pull the next client forward when the store is running dry, so the player never waits on the fixed schedule.
+		const bool bDue = PhaseTime >= SpawnTimes[NextSpawn];
+		const bool bPull = ActiveClientCount() < Cfg->MinActiveClients && PhaseTime - LastSpawnTime >= Cfg->MinSpawnGapSec;
+		if (!bDue && !bPull)
+		{
+			break;
+		}
 		if (!TrySpawnScheduled())
 		{
 			break; // store full: retry next tick until a place frees up
 		}
+		LastSpawnTime = PhaseTime;
 		++NextSpawn;
+		if (bPull && !bDue)
+		{
+			break; // one pulled client per tick; the count is re-evaluated once it exists
+		}
 	}
 }
 

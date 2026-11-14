@@ -17,43 +17,26 @@ ADCBrowsePoint::ADCBrowsePoint()
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
-ADCClientQueue::ADCClientQueue()
+ADCCounterPoint::ADCCounterPoint()
 {
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 }
 
-int32 ADCClientQueue::MaxSize() const
+bool ADCCounterPoint::TryClaim(ADCClient* Client)
 {
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	return GM && GM->Config ? FMath::Min(Points.Num(), GM->Config->MaxQueueSize) : Points.Num();
-}
-
-FVector ADCClientQueue::GetPointLocation(int32 Index) const
-{
-	return GetActorTransform().TransformPosition(Points[FMath::Clamp(Index, 0, Points.Num() - 1)]);
-}
-
-int32 ADCClientQueue::TryJoin(ADCClient* Client)
-{
-	if (Slots.Num() >= MaxSize())
+	if (Occupant.IsValid() && Occupant != Client)
 	{
-		return -1;
+		return false;
 	}
-	return Slots.Add(Client);
+	Occupant = Client;
+	return true;
 }
 
-void ADCClientQueue::Remove(ADCClient* Client)
+void ADCCounterPoint::Release(ADCClient* Client)
 {
-	if (Slots.Remove(Client) == 0)
+	if (Occupant == Client)
 	{
-		return;
-	}
-	for (int32 i = 0; i < Slots.Num(); ++i)
-	{
-		if (ADCClient* C = Slots[i].Get())
-		{
-			C->OnQueueIndex(i); // everyone behind steps forward
-		}
+		Occupant = nullptr;
 	}
 }
 
@@ -86,12 +69,12 @@ void ADCClient::PossessedBy(AController* NewController)
 	}
 }
 
-void ADCClient::Init(const FClientRuntime& InRuntime, UAC_ClientDirector* InDirector, ADCClientQueue* InQueue, ADCBrowsePoint* InBrowse,
+void ADCClient::Init(const FClientRuntime& InRuntime, UAC_ClientDirector* InDirector, ADCCounterPoint* InCounter, ADCBrowsePoint* InBrowse,
 	FVector InExit, float InPatienceSec, float BrowseTimeSec)
 {
 	Runtime = InRuntime;
 	Director = InDirector;
-	Queue = InQueue;
+	Counter = InCounter;
 	Browse = InBrowse;
 	ExitLocation = InExit;
 	PatienceMax = InPatienceSec;
@@ -156,10 +139,10 @@ void ADCClient::Arrive()
 	{
 	case EGoal::Browse:
 		SetClientState(EClientState::Browsing);
-		GetWorldTimerManager().SetTimer(BrowseTimer, this, &ADCClient::JoinQueue, BrowseTime);
+		GetWorldTimerManager().SetTimer(BrowseTimer, this, &ADCClient::TryGoToCounter, BrowseTime);
 		break;
-	case EGoal::Queue:
-		if (QueueIndex == 0 && Runtime.State == EClientState::Queued)
+	case EGoal::Counter:
+		if (Runtime.State == EClientState::Queued)
 		{
 			SetClientState(EClientState::AtCounter); // patience starts now
 			if (Director.IsValid())
@@ -176,29 +159,25 @@ void ADCClient::Arrive()
 	}
 }
 
-void ADCClient::JoinQueue()
+void ADCClient::TryGoToCounter()
 {
+	if (!Counter.IsValid())
+	{
+		StartLeaving(false);
+		return;
+	}
+	if (!Counter->TryClaim(this))
+	{
+		// Counter busy: keep looking at the tapes and ask again shortly
+		GetWorldTimerManager().SetTimer(BrowseTimer, this, &ADCClient::TryGoToCounter, 1.f);
+		return;
+	}
 	if (Browse.IsValid())
 	{
 		Browse->bOccupied = false;
 	}
-	QueueIndex = Queue.IsValid() ? Queue->TryJoin(this) : -1;
-	if (QueueIndex < 0)
-	{
-		StartLeaving(false); // shouldn't happen: the director gates spawns by queue size
-		return;
-	}
-	SetClientState(EClientState::Queued);
-	MoveToGoal(Queue->GetPointLocation(QueueIndex), EGoal::Queue);
-}
-
-void ADCClient::OnQueueIndex(int32 Index)
-{
-	QueueIndex = Index;
-	if (Runtime.State == EClientState::Queued)
-	{
-		MoveToGoal(Queue->GetPointLocation(Index), EGoal::Queue);
-	}
+	SetClientState(EClientState::Queued); // walking to the counter
+	MoveToGoal(Counter->GetActorLocation(), EGoal::Counter);
 }
 
 void ADCClient::MarkServed(const FText& Farewell)
@@ -226,11 +205,10 @@ void ADCClient::StartLeaving(bool bServed)
 	{
 		Browse->bOccupied = false;
 	}
-	if (Queue.IsValid())
+	if (Counter.IsValid())
 	{
-		Queue->Remove(this);
+		Counter->Release(this);
 	}
-	QueueIndex = -1;
 	SetClientState(EClientState::Leaving);
 	if (Director.IsValid())
 	{
@@ -255,7 +233,8 @@ void ADCClient::Tick(float DeltaSeconds)
 		DrawDebugString(GetWorld(), FVector(0.f, 0.f, 140.f), Text, this, FColor::Yellow, 0.f);
 	}
 #endif
-	if (Runtime.State == EClientState::AtCounter)
+	// The clock starts once the player says "Coming right up"
+	if (Runtime.State == EClientState::AtCounter && bOrderAcknowledged)
 	{
 		Runtime.PatienceLeft -= DeltaSeconds;
 		if (Runtime.PatienceLeft <= 0.f)

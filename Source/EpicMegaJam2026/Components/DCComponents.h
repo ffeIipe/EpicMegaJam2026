@@ -108,7 +108,7 @@ public:
 
 	// Spawns at the door with the order of 5.2: the next DT_ScriptedOrders row if any is left (it also fixes the archetype),
 	// otherwise a level and recipe drawn from what the player has unlocked.
-	// Returns null if the store is full or the level lacks a door/queue.
+	// Returns null if the store is full or the level lacks a door/counter point.
 	UFUNCTION(BlueprintCallable) class ADCClient* SpawnClient(FName ArchetypeRow);
 	UFUNCTION(BlueprintCallable) class ADCClient* GetFrontClient() const;
 	// Delivers the film in hand to the front client: base price now, tip/fine with the delayed review.
@@ -125,7 +125,7 @@ public:
 	int32 ActiveClientCount() const;
 
 private:
-	class ADCClientQueue* FindQueue() const;
+	class ADCCounterPoint* FindCounter() const;
 	const struct FClientTierData* FindTier(int32 Tier) const;
 	FText PickLine(const UDataTable* Table, ESpawnPhase Phase) const;
 	// 5.2 steps 3 to 5: level, recipe and the Target it adds up to. Fills Tier, Target and HintedSkills.
@@ -148,6 +148,7 @@ private:
 	TArray<float> SpawnTimes; // seconds from phase start, ascending
 	int32 NextSpawn = 0;
 	float PhaseTime = 0.f;
+	float LastSpawnTime = 0.f;
 	EPhase SchedulePhase = EPhase::Day;
 	int32 ScheduleDay = 1;
 	int32 ScriptedUsed = 0; // DT_ScriptedOrders rows already given out this run

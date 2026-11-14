@@ -1,4 +1,4 @@
-// Store NPC, queue and browse points (SystemsDesigns.md sections 5.5 and 9).
+// Store NPC, counter and browse points (SystemsDesigns.md sections 5.5 and 9).
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,10 +8,10 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "DCClient.generated.h"
 
-class ADCClientQueue;
+class ADCCounterPoint;
 class UAC_ClientDirector;
 
-// Shelf spot where a client lingers before queueing
+// Shelf spot where a client lingers until the counter is free
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API ADCBrowsePoint : public AActor
 {
@@ -21,27 +21,21 @@ public:
 	bool bOccupied = false;
 };
 
-// Ordered queue points in front of the counter; point 0 is the front.
+// Where the served client stands: move this actor in the level. There is no queue; the others keep browsing until it is free.
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API ADCClientQueue : public AActor
+class EPICMEGAJAM2026_API ADCCounterPoint : public AActor
 {
 	GENERATED_BODY()
 public:
-	ADCClientQueue();
+	ADCCounterPoint();
 
-	// Queue point positions relative to this actor. Index 0 = front (at the counter).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Queue", meta = (MakeEditWidget = true))
-	TArray<FVector> Points = { FVector(0, 0, 0), FVector(150, 0, 0), FVector(300, 0, 0) };
-
-	// Returns the joined index, or -1 if the queue is full (size = min(points, MaxQueueSize)).
-	int32 TryJoin(class ADCClient* Client);
-	void Remove(class ADCClient* Client);
-	ADCClient* GetFront() const { return Slots.Num() > 0 ? Slots[0].Get() : nullptr; }
-	FVector GetPointLocation(int32 Index) const;
-	int32 MaxSize() const;
+	// True if the client got the spot (or already had it)
+	bool TryClaim(class ADCClient* Client);
+	void Release(class ADCClient* Client);
+	ADCClient* GetClient() const { return Occupant.Get(); }
 
 private:
-	TArray<TWeakObjectPtr<ADCClient>> Slots;
+	TWeakObjectPtr<ADCClient> Occupant;
 };
 
 UCLASS(Blueprintable)
@@ -56,7 +50,7 @@ public:
 	// Player already heard the order and said "Coming right up"
 	UPROPERTY(BlueprintReadWrite) bool bOrderAcknowledged = false;
 
-	void Init(const FClientRuntime& InRuntime, UAC_ClientDirector* InDirector, ADCClientQueue* InQueue, ADCBrowsePoint* InBrowse,
+	void Init(const FClientRuntime& InRuntime, UAC_ClientDirector* InDirector, ADCCounterPoint* InCounter, ADCBrowsePoint* InBrowse,
 		FVector InExit, float InPatienceSec, float BrowseTimeSec);
 
 	// ABP to use per skeleton (the NPC meshes share one male and one female skeleton); set in BP_Client.
@@ -66,7 +60,6 @@ public:
 	void ApplyMesh(class USkeletalMesh* InMesh);
 
 	bool IsAtFront() const { return Runtime.State == EClientState::AtCounter; }
-	void OnQueueIndex(int32 Index);
 	// Called by the director after payment: farewell line, then leave as served.
 	void MarkServed(const FText& Farewell);
 	void ForceLeave(); // night closing: leave with no penalty
@@ -78,22 +71,21 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 
 private:
-	enum class EGoal : uint8 { None, Browse, Queue, Exit };
+	enum class EGoal : uint8 { None, Browse, Counter, Exit };
 
 	void MoveToGoal(FVector Location, EGoal NewGoal);
 	void Arrive();
 	void StartLeaving(bool bServed);
 	void SetClientState(EClientState S) { Runtime.State = S; }
 	UFUNCTION() void OnMoveCompleted(FAIRequestID RequestID, EPathFollowingResult::Type Result);
-	void JoinQueue();
+	void TryGoToCounter();
 
 	TWeakObjectPtr<UAC_ClientDirector> Director;
-	TWeakObjectPtr<ADCClientQueue> Queue;
+	TWeakObjectPtr<ADCCounterPoint> Counter;
 	TWeakObjectPtr<ADCBrowsePoint> Browse;
 	FVector ExitLocation = FVector::ZeroVector;
 	FVector GoalLocation = FVector::ZeroVector;
 	float BrowseTime = 3.f;
-	int32 QueueIndex = -1;
 	EGoal Goal = EGoal::None;
 	FTimerHandle BrowseTimer;
 };

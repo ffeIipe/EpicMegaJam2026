@@ -20,17 +20,19 @@ class UCommonActivatableWidgetStack;
 class UProgressBar;
 struct FSkillVector;
 
-// Verde Lumon, Azul corporativo, Verde lima oliva, Gris verdoso, Beige institucional, plus dark panel tones
+// Saturated retro-store palette (menu mockup). Names are roles: Grey = body text, Beige = headings and buttons, Lime = accents.
+// SourceArt/UI/gen_ui_textures.js bakes the same values into the panel and title textures: change both together.
 namespace DCPalette
 {
-	inline const FLinearColor Green(FColor(0x47, 0x7C, 0x55));
-	inline const FLinearColor Blue(FColor(0x41, 0x6D, 0xAD));
-	inline const FLinearColor Lime(FColor(0xA4, 0xB6, 0x5B));
-	inline const FLinearColor Grey(FColor(0xC5, 0xC7, 0xBB));
-	inline const FLinearColor Beige(FColor(0xD6, 0xCB, 0xB1));
-	inline const FLinearColor Navy(FColor(0x15, 0x20, 0x36));
-	inline const FLinearColor NavyLight(FColor(0x22, 0x33, 0x55));
-	inline const FLinearColor Red(FColor(0xC8, 0x55, 0x3D));
+	inline const FLinearColor Green(FColor(0x2B, 0xC4, 0x68));
+	inline const FLinearColor Blue(FColor(0x25, 0x63, 0xEB));
+	inline const FLinearColor Lime(FColor(0xB8, 0xF2, 0x4A));
+	inline const FLinearColor Yellow(FColor(0xFF, 0xD2, 0x3F));
+	inline const FLinearColor Grey(FColor(0xE8, 0xEE, 0xF8));
+	inline const FLinearColor Beige(FColor(0xFF, 0xF8, 0xE7));
+	inline const FLinearColor Navy(FColor(0x0C, 0x18, 0x38));
+	inline const FLinearColor NavyLight(FColor(0x18, 0x30, 0x6E));
+	inline const FLinearColor Red(FColor(0xFF, 0x4F, 0x4F));
 }
 
 // ---------------------------------------------------------------- Text styles (Press Start 2P for display, VT323 for body)
@@ -39,6 +41,9 @@ UCLASS() class EPICMEGAJAM2026_API UDCText_Title : public UCommonTextStyle { GEN
 UCLASS() class EPICMEGAJAM2026_API UDCText_Heading : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Heading(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_Body : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Body(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_Accent : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Accent(); };
+// Match-meter bands next to Accent (Great / Good): yellow for Okay, red for Poor
+UCLASS() class EPICMEGAJAM2026_API UDCText_Caution : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Caution(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_Warn : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Warn(); };
 // Stars and arrow glyphs only exist in the display font
 UCLASS() class EPICMEGAJAM2026_API UDCText_Stars : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Stars(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_Button : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Button(); };
@@ -144,7 +149,7 @@ protected:
 namespace DCUI
 {
 	// Content padding for the title plate (UDCBorder_Header): clears its slanted ends and stripe
-	inline const FMargin HeaderPadding(42.f, 12.f, 28.f, 12.f);
+	inline const FMargin HeaderPadding(48.f, 12.f, 36.f, 12.f);
 
 	EPICMEGAJAM2026_API UCommonTextBlock* Text(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Text, TSubclassOf<UCommonTextStyle> Style = UDCText_Body::StaticClass());
 	EPICMEGAJAM2026_API UCommonBorder* Border(UWidgetTree* Tree, UPanelWidget* Parent, TSubclassOf<UCommonBorderStyle> Style, FMargin Padding);

@@ -2,27 +2,25 @@
 #include "Components/DCComponents.h"
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
+#include "Core/BPFL_Scoring.h"
 #include "Data/PDA_GameConfig.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/EditableTextBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
-#include "Components/Overlay.h"
-#include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
-#include "Components/UniformGridPanel.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WrapBox.h"
 #include "Input/CommonUIInputTypes.h"
 
 namespace
 {
 	const FName AllTab = "All";
-	constexpr int32 GridColumns = 4;
-	const FVector2D TileCover(110.f, 156.f);
+	constexpr float ListWidth = 560.f, PickerWidth = 600.f, DetailWidth = 460.f;
 
 	FName GenreName(EGenre G) { return FName(*StaticEnum<EGenre>()->GetNameStringByValue((int64)G)); }
 
@@ -84,23 +82,27 @@ void UDCInventoryWidget::NativeOnInitialized()
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), true, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, 1)));
 }
 
-void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInGrid, UAC_FilmCrafting* InCrafting)
+void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInPicker, UAC_FilmCrafting* InCrafting)
 {
 	Inventory = InInventory;
 	Config = InConfig;
-	bGrid = bInGrid;
+	bPicker = bInPicker;
 	Crafting = InCrafting;
 
 	UVerticalBox* Root = WidgetTree->ConstructWidget<UVerticalBox>();
 	WidgetTree->RootWidget = Root;
-	Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
+	// Eleven tabs don't fit one row: they wrap at the width of the list (plus the detail panel on shelves)
+	const float ListW = bPicker ? PickerWidth : ListWidth;
+	Tabs = WidgetTree->ConstructWidget<UWrapBox>();
+	Tabs->SetInnerSlotPadding(FVector2D(4.f, 4.f));
+	Tabs->SetExplicitWrapSize(true);
+	Tabs->SetWrapSize(bPicker ? ListW + 20.f : ListW + DetailWidth + 64.f);
 	Root->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 	auto AddTab = [this](const FString& Label, FName Id)
 	{
 		UDCButton* Tab = DCUI::Button(WidgetTree, Tabs, Label.ToUpper(), Id, UDCButton_Tab::StaticClass());
 		Tab->SetIsSelectable(true);
 		Tab->OnPayloadClicked.AddDynamic(this, &UDCInventoryWidget::OnTabClicked);
-		Cast<UHorizontalBoxSlot>(Tab->Slot)->SetPadding(FMargin(0.f, 0.f, 2.f, 0.f));
 	};
 	AddTab(TEXT("All"), AllTab);
 	if (Config && Config->GenreTable)
@@ -119,23 +121,14 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	Root->AddChild(Body);
 	UCommonBorder* ListPanel = DCUI::Border(WidgetTree, Body, UDCBorder_Inset::StaticClass(), FMargin(10.f));
 	USizeBox* ListSize = WidgetTree->ConstructWidget<USizeBox>();
-	ListSize->SetWidthOverride(bGrid ? GridColumns * (TileCover.X + 34.f) : 520.f);
+	ListSize->SetWidthOverride(ListW);
 	ListSize->SetHeightOverride(440.f);
 	ListPanel->SetContent(ListSize);
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
 	ListSize->AddChild(Scroll);
-	if (bGrid)
-	{
-		UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>();
-		Grid->SetSlotPadding(FMargin(4.f));
-		List = Grid;
-	}
-	else
-	{
-		List = WidgetTree->ConstructWidget<UVerticalBox>();
-	}
+	List = WidgetTree->ConstructWidget<UVerticalBox>();
 	Scroll->AddChild(List);
-	if (bGrid)
+	if (bPicker)
 	{
 		Refresh();
 		return;
@@ -145,7 +138,7 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	UCommonBorder* DetailPanel = DCUI::Border(WidgetTree, Body, UDCBorder_Inset::StaticClass(), FMargin(16.f));
 	Cast<UHorizontalBoxSlot>(DetailPanel->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 	USizeBox* DetailSize = WidgetTree->ConstructWidget<USizeBox>();
-	DetailSize->SetWidthOverride(460.f);
+	DetailSize->SetWidthOverride(DetailWidth);
 	DetailSize->SetHeightOverride(440.f);
 	DetailPanel->SetContent(DetailSize);
 	UVerticalBox* D = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -219,10 +212,9 @@ void UDCInventoryWidget::Refresh()
 	}
 	if (Rows.IsEmpty())
 	{
-		DCUI::Text(WidgetTree, List, bGrid ? TEXT("No tapes left to combine.") : TEXT("No tapes on this shelf."));
+		DCUI::Text(WidgetTree, List, bPicker ? TEXT("No tapes left to combine.") : TEXT("No tapes on this shelf."));
 	}
 
-	int32 Index = 0;
 	for (const FName& Row : Rows)
 	{
 		FVHSData Tape;
@@ -232,47 +224,31 @@ void UDCInventoryWidget::Refresh()
 		}
 		UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, Tape.Title.ToString(), Row, UDCButton_Row::StaticClass());
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCInventoryWidget::OnTapeClicked);
+		// Row: thumbnail, title with the skills under it, copies, stars
 		Btn->Label->RemoveFromParent();
-		if (bGrid)
-		{
-			// Tile: cover over the title, the skills and the copies
-			UImage* Cover = AddCover(WidgetTree, Btn->Content, TileCover);
-			SetCover(Cover, &Tape, Config);
-			Cast<UVerticalBoxSlot>(Cover->GetParent()->Slot)->SetHorizontalAlignment(HAlign_Center);
-			Btn->Content->AddChildToVerticalBox(Btn->Label)->SetHorizontalAlignment(HAlign_Center);
-			Btn->Label->SetWrapTextAt(TileCover.X + 16.f);
-			Btn->Label->SetJustification(ETextJustify::Center);
-			DCUI::SkillStrip(WidgetTree, Btn->Content, Tape.Skills);
-			DCUI::Text(WidgetTree, Btn->Content, FString::Printf(TEXT("x%d"), Copies(Row)), UDCText_Accent::StaticClass());
-			Cast<UUniformGridPanel>(List)->AddChildToUniformGrid(Btn, Index / GridColumns, Index % GridColumns);
-		}
-		else
-		{
-			// Row: thumbnail, title with the skills under it, copies, stars
-			UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-			Btn->Content->AddChild(H);
-			SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), &Tape, Config);
-			UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
-			Text->AddChildToVerticalBox(Btn->Label);
-			DCUI::SkillStrip(WidgetTree, Text, Tape.Skills);
-			UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
-			TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-			TitleSlot->SetVerticalAlignment(VAlign_Center);
-			TitleSlot->SetPadding(FMargin(12.f, 0.f));
-			H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("x%d  "), Copies(Row)), UDCText_Accent::StaticClass()))->SetVerticalAlignment(VAlign_Center);
-			H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Tape.Rating), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
-			Btn->SetIsSelectable(true);
-			Btn->SetIsSelected(Row == SelectedTape, false);
-			List->AddChild(Btn);
-		}
-		++Index;
+		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Btn->Content->AddChild(H);
+		SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), &Tape, Config);
+		UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
+		Text->AddChildToVerticalBox(Btn->Label);
+		DCUI::SkillStrip(WidgetTree, Text, Tape.Skills);
+		UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
+		TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		TitleSlot->SetVerticalAlignment(VAlign_Center);
+		TitleSlot->SetPadding(FMargin(12.f, 0.f));
+		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("x%d  "), Copies(Row)), UDCText_Accent::StaticClass()))->SetVerticalAlignment(VAlign_Center);
+		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Tape.Rating), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
+		// A selected button ignores clicks: the picker needs repeat clicks (one copy per click), so only shelf rows select
+		Btn->SetIsSelectable(!bPicker);
+		Btn->SetIsSelected(!bPicker && Row == SelectedTape, false);
+		List->AddChild(Btn);
 	}
 	ShowDetail(SelectedTape);
 }
 
 void UDCInventoryWidget::OnTapeClicked(FName Row)
 {
-	if (!bGrid)
+	if (!bPicker)
 	{
 		SelectedTape = Row;
 		for (UWidget* W : List->GetAllChildren())
@@ -292,7 +268,7 @@ void UDCInventoryWidget::ShowDetail(FName Row)
 	FVHSData Tape;
 	if (!Detail)
 	{
-		return; // grid layout has no detail panel
+		return; // the picker has no detail panel
 	}
 	const bool bHas = !Row.IsNone() && Inventory->GetVHSData(Row, Tape);
 	Detail->SetVisibility(bHas ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Hidden);
@@ -318,13 +294,14 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	Inventory = GM->Inventory;
 	Crafting = GM->FilmCrafting;
 	Config = GM->Config;
+	Director = GM->ClientDirector;
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 0.5f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
 	DCUI::Header(WidgetTree, V, TEXT("COMBINE VHS"), TEXT("Mix tapes: their skills add up"));
 	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
 	V->AddChild(Body);
 
-	// Left: the tapes with copies left as cover tiles; a click fills the next empty slot
+	// Left: the tapes with copies left; a click fills the next empty slot
 	UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
 	DCUI::Border(WidgetTree, Body, UDCBorder_Panel::StaticClass(), FMargin(12.f))->SetContent(Left);
 	DCUI::Text(WidgetTree, Left, TEXT("VHS INVENTORY"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 10.f));
@@ -335,41 +312,39 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	Inventory->OnInventoryChanged.AddDynamic(Picker, &UDCInventoryWidget::Refresh);
 	Crafting->OnFilmStateChanged.AddDynamic(this, &UDCFilmCraftingWidget::OnFilmStateChanged);
 
-	// Right: the slots (MaxSlots built, the locked ones collapsed), the live skill sum, the film title and the combine button
+	// Right: one row per slot (MaxSlots built, the locked ones collapsed), the live skill sum, the film title and the combine button
 	UVerticalBox* Right = WidgetTree->ConstructWidget<UVerticalBox>();
 	UCommonBorder* RightPanel = DCUI::Border(WidgetTree, Body, UDCBorder_Panel::StaticClass(), FMargin(16.f));
 	RightPanel->SetContent(Right);
 	Cast<UHorizontalBoxSlot>(RightPanel->Slot)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 	SlotsHeader = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Heading::StaticClass());
 	SlotsHeader->SetMargin(FMargin(0.f, 0.f, 0.f, 12.f));
-	UUniformGridPanel* Slots = WidgetTree->ConstructWidget<UUniformGridPanel>();
-	Slots->SetSlotPadding(FMargin(0.f, 0.f, 12.f, 8.f));
-	Right->AddChild(Slots);
-	constexpr int32 SlotColumnsPerRow = 3;
 	for (int32 i = 0; i < FMath::Max(Config->MaxSlots, 1); ++i)
 	{
 		const FName SlotName(*FString::FromInt(i));
-		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-		Slots->AddChildToUniformGrid(Column, i / SlotColumnsPerRow, i % SlotColumnsPerRow);
-		SlotColumns.Add(Column);
-		UOverlay* CoverStack = WidgetTree->ConstructWidget<UOverlay>();
-		Column->AddChild(CoverStack);
-		SlotCovers.Add(AddCover(WidgetTree, CoverStack, TileCover));
-		UDCButton* Clear = DCUI::Button(WidgetTree, CoverStack, TEXT("x"), SlotName, UDCButton_Tab::StaticClass());
-		UOverlaySlot* ClearSlot = Cast<UOverlaySlot>(Clear->Slot);
-		ClearSlot->SetHorizontalAlignment(HAlign_Right);
-		ClearSlot->SetVerticalAlignment(VAlign_Top);
-		ClearSlot->SetPadding(FMargin(4.f));
+		UCommonBorder* Box = DCUI::Border(WidgetTree, Right, UDCBorder_Inset::StaticClass(), FMargin(12.f, 8.f));
+		Cast<UVerticalBoxSlot>(Box->Slot)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		SlotBoxes.Add(Box);
+		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Box->SetContent(H);
+		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("%d"), i + 1), UDCText_Heading::StaticClass()))->SetVerticalAlignment(VAlign_Center);
+		UCommonTextBlock* Title = DCUI::Text(WidgetTree, nullptr, TEXT(""));
+		Title->SetWrapTextAt(300.f);
+		UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Title);
+		TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		TitleSlot->SetVerticalAlignment(VAlign_Center);
+		TitleSlot->SetPadding(FMargin(14.f, 0.f));
+		SlotTexts.Add(Title);
+		UDCButton* Clear = DCUI::Button(WidgetTree, H, TEXT("x"), SlotName, UDCButton_Tab::StaticClass());
+		Cast<UHorizontalBoxSlot>(Clear->Slot)->SetVerticalAlignment(VAlign_Center);
 		Clear->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnClearClicked);
 		SlotClears.Add(Clear);
-		DCUI::Text(WidgetTree, Column, FString::Printf(TEXT("SLOT %d"), i + 1), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 8.f, 0.f, 2.f));
-		UCommonTextBlock* Title = DCUI::Text(WidgetTree, Column, TEXT(""));
-		Title->SetWrapTextAt(TileCover.X);
-		SlotTexts.Add(Title);
 	}
 
 	DCUI::Text(WidgetTree, Right, TEXT("FILM PROFILE"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 8.f, 0.f, 4.f));
 	ProfileText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
+	DCUI::Text(WidgetTree, Right, TEXT("MATCH WITH THE ORDER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 8.f, 0.f, 4.f));
+	MatchText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Body::StaticClass());
 
 	TitleBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 	TitleBox->SetHintText(FText::FromString(TEXT("Film title")));
@@ -389,7 +364,7 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	Cast<UVerticalBoxSlot>(DiscardButton->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	HeldText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
 	StatusText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
-	StatusText->SetWrapTextAt(3.f * (TileCover.X + 12.f));
+	StatusText->SetWrapTextAt(400.f);
 }
 
 void UDCFilmCraftingWidget::NativeOnActivated()
@@ -406,19 +381,35 @@ void UDCFilmCraftingWidget::Refresh()
 		return;
 	}
 	Picker->Refresh(); // copies already in a slot leave the list
-	for (int32 i = 0; i < SlotColumns.Num(); ++i)
+	for (int32 i = 0; i < SlotBoxes.Num(); ++i)
 	{
-		SlotColumns[i]->SetVisibility(i < Crafting->UnlockedSlots ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		SlotBoxes[i]->SetVisibility(i < Crafting->UnlockedSlots ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
 		const FName Row = Crafting->SlotRows.IsValidIndex(i) ? Crafting->SlotRows[i] : NAME_None;
 		FVHSData Tape;
 		const bool bHas = !Row.IsNone() && Inventory->GetVHSData(Row, Tape);
 		SlotTexts[i]->SetText(bHas ? Tape.Title : FText::FromString(TEXT("(empty)")));
-		SetCover(SlotCovers[i], bHas ? &Tape : nullptr, Config);
 		SlotClears[i]->SetVisibility(bHas ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 	}
 	const int32 Filled = Crafting->GetFilledSlots();
 	SlotsHeader->SetText(FText::FromString(FString::Printf(TEXT("SELECTED VHS (%d/%d)"), Filled, Crafting->UnlockedSlots)));
 	ProfileText->SetText(FText::FromString(DCUI::SkillLines(Crafting->GetProfile(), Config->SkillCap)));
+	const ADCClient* Front = Director ? Director->GetFrontClient() : nullptr;
+	if (Front && Front->IsAtFront() && Filled >= 1)
+	{
+		const float Known = UBPFL_Scoring::ComputeKnownErrorRatio(Crafting->GetProfile(), Front->Runtime.HintedSkills, Front->Runtime.bFullyHinted, Config);
+		switch (UBPFL_Scoring::GetReaction(Known, Config))
+		{
+		case EReaction::Loved: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(FText::FromString(TEXT("GREAT"))); break;
+		case EReaction::Liked: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(FText::FromString(TEXT("GOOD"))); break;
+		case EReaction::Neutral: MatchText->SetStyle(UDCText_Caution::StaticClass()); MatchText->SetText(FText::FromString(TEXT("OKAY"))); break;
+		default: MatchText->SetStyle(UDCText_Warn::StaticClass()); MatchText->SetText(FText::FromString(TEXT("POOR"))); break;
+		}
+	}
+	else
+	{
+		MatchText->SetStyle(UDCText_Body::StaticClass());
+		MatchText->SetText(FText::FromString(Front && Front->IsAtFront() ? TEXT("Pick a tape to see how it fits") : TEXT("No client at the counter")));
+	}
 	TitleBox->SetIsEnabled(Filled >= 1); // title only editable once a tape is in
 	ConfirmButton->SetIsEnabled(Crafting->CanConfirm());
 	DiscardButton->SetIsEnabled(Crafting->HeldFilms.Num() > 0);

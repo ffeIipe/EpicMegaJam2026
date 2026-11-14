@@ -96,7 +96,7 @@ public:
 			const int32 Total = Rt.Target.Funny + Rt.Target.Scary + Rt.Target.Brave + Rt.Target.Thoughtful + Rt.Target.Romantic;
 			Test->TestEqual(TEXT("generated client is level 1"), Rt.Tier, 1);
 			Test->TestTrue(TEXT("recipe of 1 to 2 one-star tapes: 3 to 6 points"), Total >= 3 && Total <= 6);
-			Test->TestEqual(TEXT("level 1 hints 2 skills"), Rt.HintedSkills.Num(), 2);
+			Test->TestTrue(TEXT("level 1 hints everything it wants"), Rt.HintedSkills.Num() >= 2 && Rt.bFullyHinted);
 			return true;
 		}
 		}

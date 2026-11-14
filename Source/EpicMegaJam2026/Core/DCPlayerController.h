@@ -125,7 +125,7 @@ private:
 
 	ECameraZone CameraZone = ECameraZone::Counter;
 	bool bDialogueDue = false; // a dialogue should open as soon as nothing blocks it
-	// Placeholder transition (no LS_ToBackRoom assigned): glide between two poses
+	// Placeholder transition (no BackRoomSequence assigned): glide between two poses
 	bool bFallbackTransition = false;
 	bool bFallbackForward = true;
 	float TransitionTime = 0.f;

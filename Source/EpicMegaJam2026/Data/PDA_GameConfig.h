@@ -40,6 +40,8 @@ public:
 
 	// --- Hints (section 5.4)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hints") int32 HintHighMin = 3;
+	// Clients of this level or lower always hint every skill they want (MaxHintedSkills only caps the filler "None" hints)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hints") int32 FullHintMaxTier = 2;
 
 	// --- Progression and inventory (sections 4.3, 7.1)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 StartUnlockedSlots = 3;
@@ -55,6 +57,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float LovedMaxError = 0.10f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float LikedMaxError = 0.35f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") float NeutralMaxError = 0.65f;
+	// ErrorRatio divides by max(ErrorFloor, target total), so one stray point on a small order isn't a disaster
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scoring") int32 ErrorFloor = 4;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 TipAtPerfect = 12;
 
 	// --- Time
@@ -68,6 +72,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") float ClientPatienceBaseSec = 60.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") float ClientPatienceMaxSec = 90.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") int32 MaxQueueSize = 3;
+	// Below this many clients in the store, the next scheduled client is pulled forward (at most one per MinSpawnGapSec).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") int32 MinActiveClients = 2;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") float MinSpawnGapSec = 6.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") float BrowseTimeMinSec = 3.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") float BrowseTimeMaxSec = 6.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") int32 LeavePenalty = 0;
@@ -96,9 +103,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookPitchLimit = 30.f;
 	// Fraction of each limit (from its edge inwards) where the look eases to a stop instead of cutting. 0 = hard cut.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0", ClampMax = "1")) float LookSoftZone = 0.4f;
-	// LS_ToBackRoom (art): played forward to reach the back room and in reverse to return. Without it the camera glides
+	// MS_ToDeposit (art): played forward to reach the back room and in reverse to return. Without it the camera glides
 	// to the actor tagged BackRoomCameraTag (or just waits) for BackRoomTransitionSec.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") TSoftObjectPtr<class ULevelSequence> BackRoomSequence;
+	// Playback speed of BackRoomSequence in both directions (2 = twice as fast). Applies the next time the sequence player is created, i.e. on the next PIE.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.1")) float BackRoomPlayRate = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float BackRoomTransitionSec = 1.75f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") FName BackRoomCameraTag = "BackRoomCamera";
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float MouseSensitivity = 1.f;

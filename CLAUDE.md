@@ -11,7 +11,7 @@
 | Archivo | Contenido |
 |---|---|
 | `Source/EpicMegaJam2026/UI/DCCommonUI.h/.cpp` | Piezas compartidas: paleta `DCPalette`, estilos `UDCText_*` / `UDCBorder_*` / `UDCButton_*`, acciones de input `UDCUIInputData`, botón `UDCButton`, hint de tecla `UDCActionButton`, base de pantallas `UDCScreen`, `UDCRootLayout` (stack de pantallas + barra de teclas) y los helpers `DCUI::` |
-| `UI/DCWidgets.*` | Inventario (pestañas + filas/grilla), Combine VHS, diálogo, panel de pedido |
+| `UI/DCWidgets.*` | Inventario (pestañas que saltan de línea + filas), Combine VHS (lista + slots en filas), diálogo, panel de pedido |
 | `UI/DCMenuWidgets.*` | Proveedor, estantería, resumen del día, menú principal, pausa, cartel de tutorial |
 | `UI/DCHudWidgets.*` | HUD (con hotbar), toast de reseñas, pantallas finales, etiqueta 3D de los props |
 | `Core/DCPlayerController.*` | Crea los widgets, abre y cierra pantallas |
@@ -50,6 +50,7 @@
 
 ### Look
 
+- **Colores.** Paleta saturada en `DCPalette` (verde y azul vivos, navy oscuro, amarillo para títulos y estrellas). `SourceArt/UI/gen_ui_textures.js` hornea los mismos valores en las texturas de panel y título: si cambia uno, cambiar el otro y reimportar.
 - **Tipografía.** Press Start 2P para títulos, botones, estrellas ★ y flechas ◀▶ (VT323 no tiene esos glifos); VT323 para el cuerpo. Con `FontDPI=72` los tamaños son píxeles, y Press Start 2P se ve nítida en múltiplos de 8.
 - **Texturas 9-slice.** Se usan en `UDCBorder_Panel`, `Header` e `Inset` y en `UDCButton_Primary` y `Tab`. La plaqueta es gris y se tiñe con el color del estilo. Si cambiás el generador, los tamaños y márgenes de `SliceBrush` y `Plate` en `DCCommonUI.cpp` tienen que coincidir con él.
   - El padding del contenido tiene que ser mayor o igual al grosor del marco: 10 px en el panel, 8 px en la plaqueta.

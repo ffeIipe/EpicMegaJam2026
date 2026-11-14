@@ -79,13 +79,15 @@ namespace
 // ---------------------------------------------------------------- Styles
 
 // Sizes are pixels (FontDPI=72 in DefaultEngine.ini); Press Start 2P stays crisp on multiples of 8
-UDCText_Title::UDCText_Title() { SetText(this, true, 24, DCPalette::Beige, true); }
+UDCText_Title::UDCText_Title() { SetText(this, true, 32, DCPalette::Yellow, true); }
 UDCText_Heading::UDCText_Heading() { SetText(this, true, 16, DCPalette::Beige); }
-UDCText_Body::UDCText_Body() { SetText(this, false, 28, DCPalette::Grey); }
-UDCText_Accent::UDCText_Accent() { SetText(this, false, 28, DCPalette::Lime); }
-UDCText_Stars::UDCText_Stars() { SetText(this, true, 16, DCPalette::Lime); }
-UDCText_Button::UDCText_Button() { SetText(this, true, 12, DCPalette::Beige); }
-UDCText_Tab::UDCText_Tab() { SetText(this, true, 8, DCPalette::Beige); }
+UDCText_Body::UDCText_Body() { SetText(this, false, 32, DCPalette::Grey); }
+UDCText_Accent::UDCText_Accent() { SetText(this, false, 32, DCPalette::Lime); }
+UDCText_Caution::UDCText_Caution() { SetText(this, false, 32, DCPalette::Yellow); }
+UDCText_Warn::UDCText_Warn() { SetText(this, false, 32, DCPalette::Red); }
+UDCText_Stars::UDCText_Stars() { SetText(this, true, 16, DCPalette::Yellow); }
+UDCText_Button::UDCText_Button() { SetText(this, true, 16, DCPalette::Beige); }
+UDCText_Tab::UDCText_Tab() { SetText(this, true, 10, DCPalette::Beige); }
 
 // Frames are 10px thick (panel) and 8px (plate): content padding must be at least that
 UDCBorder_Panel::UDCBorder_Panel()
@@ -95,9 +97,9 @@ UDCBorder_Panel::UDCBorder_Panel()
 // Slanted ends don't stretch vertically well: the plate is sized for one line of title text (see DCUI::HeaderPadding)
 UDCBorder_Header::UDCBorder_Header()
 {
-	Background = SliceBrush(TEXT("T_UI_Header"), FVector2D(88.f, 52.f), FMargin(46.f, 0.f, 28.f, 0.f), FLinearColor::White, Box(DCPalette::Blue, DCPalette::Green, 3.f));
+	Background = SliceBrush(TEXT("T_UI_Header"), FVector2D(100.f, 66.f), FMargin(50.f, 0.f, 34.f, 0.f), FLinearColor::White, Box(DCPalette::Blue, DCPalette::Green, 3.f));
 }
-UDCBorder_Inset::UDCBorder_Inset() { Background = Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Blue, 0.5f), Box(DCPalette::NavyLight.CopyWithNewOpacity(0.6f), DCPalette::Blue)); }
+UDCBorder_Inset::UDCBorder_Inset() { Background = Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Blue, 0.2f), Box(DCPalette::NavyLight.CopyWithNewOpacity(0.6f), DCPalette::Blue)); }
 UDCBorder_KeyCap::UDCBorder_KeyCap() { Background = Box(DCPalette::Navy, DCPalette::Grey, 2.f, 3.f); }
 
 UDCButton_Primary::UDCButton_Primary()
@@ -205,8 +207,10 @@ void UDCActionButton::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 	SetStyle(UDCButton_Row::StaticClass()); // applied once the base class has built its internal button
+	UCommonBorder* Plate = DCUI::Border(WidgetTree, nullptr, UDCBorder_Inset::StaticClass(), FMargin(10.f, 6.f)); // dark plate behind each hint
+	WidgetTree->RootWidget = Plate;
 	UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-	WidgetTree->RootWidget = H;
+	Plate->SetContent(H);
 	UCommonBorder* Cap = DCUI::Border(WidgetTree, H, UDCBorder_KeyCap::StaticClass(), FMargin(8.f, 4.f));
 	Cast<UHorizontalBoxSlot>(Cap->Slot)->SetVerticalAlignment(VAlign_Center);
 	KeyText = WidgetTree->ConstructWidget<UCommonTextBlock>();

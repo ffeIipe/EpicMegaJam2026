@@ -1,0 +1,31 @@
+Name,Skill,Direction,Text
+Funny_TooLittle_1,Funny,TooLittle,Could have been a lot funnier.
+Funny_TooLittle_2,Funny,TooLittle,I did not crack a single smile.
+Funny_TooLittle_3,Funny,TooLittle,The jokes landed in some other theater.
+Funny_TooMuch_1,Funny,TooMuch,Less slapstick and more story please.
+Funny_TooMuch_2,Funny,TooMuch,It is a comedy that forgot to be a movie.
+Funny_TooMuch_3,Funny,TooMuch,Every scene is a punchline. Exhausting.
+Scary_TooLittle_1,Scary,TooLittle,Nothing here would frighten a sleeping cat.
+Scary_TooLittle_2,Scary,TooLittle,Where is the dread? I am still waiting for it.
+Scary_TooLittle_3,Scary,TooLittle,Too safe. I wanted to check under my bed afterwards.
+Scary_TooMuch_1,Scary,TooMuch,Way too scary for me.
+Scary_TooMuch_2,Scary,TooMuch,I had to leave the room twice. Not a compliment.
+Scary_TooMuch_3,Scary,TooMuch,Subtle would have been nice. This was a fright attack.
+Brave_TooLittle_1,Brave,TooLittle,The hero hides in every scene. Be bolder.
+Brave_TooLittle_2,Brave,TooLittle,Where is the courage? All I saw was waiting.
+Brave_TooLittle_3,Brave,TooLittle,Nobody here takes a real risk.
+Brave_TooMuch_1,Brave,TooMuch,The hero is reckless to the point of nonsense.
+Brave_TooMuch_2,Brave,TooMuch,Bravery is fine but these stunts are just reckless.
+Brave_TooMuch_3,Brave,TooMuch,Every problem is solved by charging head first. Tiring.
+Thoughtful_TooLittle_1,Thoughtful,TooLittle,Pretty to look at but nothing to think about afterwards.
+Thoughtful_TooLittle_2,Thoughtful,TooLittle,The plot never asks anything of me.
+Thoughtful_TooLittle_3,Thoughtful,TooLittle,Shallow. I expected a little more to chew on.
+Thoughtful_TooMuch_1,Thoughtful,TooMuch,Too much talking. I came for a movie not a lecture.
+Thoughtful_TooMuch_2,Thoughtful,TooMuch,I got lost in the metaphors and gave up.
+Thoughtful_TooMuch_3,Thoughtful,TooMuch,Heavy handed. Just tell me the story.
+Romantic_TooLittle_1,Romantic,TooLittle,Not a single spark between the leads.
+Romantic_TooLittle_2,Romantic,TooLittle,I was rooting for a kiss that never came.
+Romantic_TooLittle_3,Romantic,TooLittle,Cold romance. Even the couple seemed bored.
+Romantic_TooMuch_1,Romantic,TooMuch,Enough with the love scenes. The plot is missing.
+Romantic_TooMuch_2,Romantic,TooMuch,Syrupy. My teeth hurt.
+Romantic_TooMuch_3,Romantic,TooMuch,The romance swallowed the whole film.

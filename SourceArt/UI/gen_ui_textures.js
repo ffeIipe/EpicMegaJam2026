@@ -12,8 +12,8 @@ const mix = (c1, c2, t) => c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
 const shade = (c, f) => [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f), c[3]];
 const grey = (v) => [Math.round(v * 255), Math.round(v * 255), Math.round(v * 255), 255];
 
-const GREEN = hex('477C55'), BLUE = hex('416DAD'), LIME = hex('A4B65B'), GREY = hex('C5C7BB');
-const NAVY = hex('152036', 240), INK = hex('0B1222');
+const GREEN = hex('2BC468'), BLUE = hex('2563EB'), LIME = hex('B8F24A'), GREY = hex('E8EEF8');
+const NAVY = hex('0C1838', 240), INK = hex('060C1E');
 const CLEAR = [0, 0, 0, 0];
 
 // Inset depth of a pixel in a W x H rectangle whose corners are cut by C at 45 degrees (negative = outside)
@@ -45,13 +45,13 @@ function plate() {
 		if (d === 0) return grey(0.1);
 		if (d <= 2) return grey(1.0);
 		if (d === 3) return grey(0.22);
-		return grey(0.68);
+		return grey(0.8); // high so saturated tints stay saturated in the fill
 	} };
 }
 
 // Title plate: parallelogram leaning right, with a green stripe at its left end. Baked colors (two hues).
 function header() {
-	const W = 44, H = 26, R = 0.5;
+	const W = 50, H = 33, R = 0.5; // 66px tall: one line of 32px title text plus padding
 	const left = (y) => Math.round(R * (H - 1 - y));
 	const right = (y) => W - 1 - Math.round(R * y);
 	const region = (x, y) => {

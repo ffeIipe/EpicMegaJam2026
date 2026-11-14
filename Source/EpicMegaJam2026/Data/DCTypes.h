@@ -143,6 +143,8 @@ struct FClientRuntime
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Tier = 1;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FSkillVector Target;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) TArray<FHintedSkill> HintedSkills;
+	// True when every skill the target asks for is hinted, so an unhinted skill is a known 0 (the match meter relies on it)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bFullyHinted = false;
 	// Multiplies the tip: the persona's TipMult (section 5.6), 1 without a persona
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) float TipMult = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText OrderText;

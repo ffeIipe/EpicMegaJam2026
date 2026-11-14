@@ -21,7 +21,7 @@ bool FDCScoringExamplesTest::RunTest(const FString& Parameters)
 		int32 ExpMiss, float ExpRatio, EReaction ExpReaction, int32 ExpPrice, int32 ExpTip, int32 ExpFine)
 	{
 		const FString N(Name);
-		const float Ratio = UBPFL_Scoring::ComputeErrorRatio(Profile, Target);
+		const float Ratio = UBPFL_Scoring::ComputeErrorRatio(Profile, Target, Cfg);
 		const EReaction R = UBPFL_Scoring::GetReaction(Ratio, Cfg);
 		TestEqual(N + TEXT(" miss"), UBPFL_Scoring::ComputeMiss(Profile, Target), ExpMiss);
 		TestEqual(N + TEXT(" error ratio"), Ratio, ExpRatio, 0.001f);
@@ -33,9 +33,9 @@ bool FDCScoringExamplesTest::RunTest(const FString& Parameters)
 
 	Run(TEXT("Case1"), 1.0f, SV(3), SV(3), 0, 0.f, EReaction::Loved, 10, 12, 0);
 	Run(TEXT("Case2"), 1.0f, SV(3, 3), SV(3, 2), 1, 0.167f, EReaction::Liked, 10, 10, 0);
-	Run(TEXT("Case3"), 1.0f, SV(3), SV(0, 3), 6, 2.f, EReaction::Hated, 10, 0, 15);
+	Run(TEXT("Case3"), 1.0f, SV(3), SV(0, 3), 6, 1.5f, EReaction::Hated, 10, 0, 15);
 	Run(TEXT("Case4"), 1.5f, SV(5, 0, 2, 0, 1), SV(5, 0, 1, 0, 1), 1, 0.125f, EReaction::Liked, 15, 16, 0);
-	Run(TEXT("Case5"), 1.0f, SV(3), SV(3, 0, 0, 3), 3, 1.f, EReaction::Hated, 10, 0, 15);
+	Run(TEXT("Case5"), 1.0f, SV(3), SV(3, 0, 0, 3), 3, 0.75f, EReaction::Hated, 10, 0, 15);
 
 	// Case 6: four Funny 3 tapes cap at SkillCap
 	TestEqual(TEXT("Case6 profile cap"), UBPFL_Scoring::ComputeProfile({ SV(3), SV(3), SV(3), SV(3) }, Cfg).Funny, 10);
@@ -51,6 +51,26 @@ bool FDCScoringExamplesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Feedback skill 2"), Skill == ESkill::Brave);
 	TestTrue(TEXT("Feedback direction 2"), Dir == EFeedbackDirection::TooLittle);
 	TestFalse(TEXT("No feedback on an exact film"), UBPFL_Scoring::GetFeedbackSkill(SV(3), SV(3), Skill, Dir));
+	// Error floor: one stray point on a Funny 3 order is 1/4, not 1/3
+	TestEqual(TEXT("Floor"), UBPFL_Scoring::ComputeErrorRatio(SV(3, 1), SV(3), Cfg), 0.25f, 0.001f);
+
+	// Match meter: only the hints count, never the Target
+	auto Known = [&](FSkillVector Profile, TArray<FHintedSkill> Hints, bool bFull)
+	{
+		return UBPFL_Scoring::ComputeKnownErrorRatio(Profile, Hints, bFull, Cfg);
+	};
+	FHintedSkill FunnyHigh, ScaryNone, FunnySome;
+	FunnyHigh.Skill = ESkill::Funny; FunnyHigh.Level = EHintLevel::High;
+	ScaryNone.Skill = ESkill::Scary; ScaryNone.Level = EHintLevel::None;
+	FunnySome.Skill = ESkill::Funny; FunnySome.Level = EHintLevel::Some;
+	TestEqual(TEXT("Known exact"), Known(SV(3), { FunnyHigh, ScaryNone }, true), 0.f, 0.001f);
+	TestEqual(TEXT("Known scary violated"), Known(SV(3, 1), { FunnyHigh, ScaryNone }, true), 0.25f, 0.001f);
+	TestEqual(TEXT("Known High short"), Known(SV(2), { FunnyHigh }, true), 0.25f, 0.001f);
+	TestEqual(TEXT("Known High above the minimum is fine"), Known(SV(6), { FunnyHigh }, true), 0.f, 0.001f);
+	TestEqual(TEXT("Known Some range"), Known(SV(2), { FunnySome }, true), 0.f, 0.001f);
+	TestEqual(TEXT("Known Some over"), Known(SV(3), { FunnySome }, true), 0.25f, 0.001f);
+	TestEqual(TEXT("Unhinted ignored when not fully hinted"), Known(SV(3, 0, 0, 3), { FunnyHigh }, false), 0.f, 0.001f);
+	TestEqual(TEXT("Unhinted is 0 when fully hinted"), Known(SV(3, 0, 0, 3), { FunnyHigh }, true), 0.75f, 0.001f);
 	return true;
 }
 

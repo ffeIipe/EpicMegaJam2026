@@ -12,6 +12,7 @@ class UAC_FilmCrafting;
 class UAC_ClientDirector;
 class UPDA_GameConfig;
 class UHorizontalBox;
+class UWrapBox;
 class UTextBlock;
 class UEditableTextBox;
 class UImage;
@@ -19,8 +20,8 @@ class UProgressBar;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVHSPicked, FName, VHSRow);
 
-// WBP_Inventory: genre tabs (ALL + DT_Genres, cycled with the tab actions) and the owned tapes with their copies and
-// their 5 skills, as cover tiles (VHS player: copies not yet in a slot) or as rows with a detail panel (shelves: read-only stock)
+// WBP_Inventory: genre tabs (ALL + DT_Genres, cycled with the tab actions) and the owned tapes as rows with their copies and
+// their 5 skills. Shelves: read-only stock with a detail panel. VHS player (picker): copies not yet in a slot, a click picks one
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCInventoryWidget : public UCommonUserWidget
 {
@@ -29,7 +30,7 @@ public:
 	UPROPERTY(BlueprintAssignable) FOnVHSPicked OnVHSPicked;
 
 	// InCrafting (VHS player only): copies already in a slot are not offered again
-	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInGrid, UAC_FilmCrafting* InCrafting);
+	UFUNCTION(BlueprintCallable) void Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInPicker, UAC_FilmCrafting* InCrafting);
 	UFUNCTION(BlueprintCallable) void Refresh();
 	UFUNCTION(BlueprintCallable) void SetGenre(EGenre Genre);
 
@@ -45,7 +46,7 @@ private:
 	UPROPERTY() TObjectPtr<UAC_Inventory> Inventory;
 	UPROPERTY() TObjectPtr<UAC_FilmCrafting> Crafting;
 	UPROPERTY() TObjectPtr<UPDA_GameConfig> Config;
-	UPROPERTY() TObjectPtr<UHorizontalBox> Tabs;
+	UPROPERTY() TObjectPtr<UWrapBox> Tabs;
 	UPROPERTY() TObjectPtr<UPanelWidget> List;
 	UPROPERTY() TObjectPtr<UWidget> Detail;
 	UPROPERTY() TObjectPtr<UImage> DetailCover;
@@ -56,7 +57,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailSynopsis;
 	FName SelectedTab = "All"; // "All" or an EGenre name
 	FName SelectedTape;
-	bool bGrid = false;
+	bool bPicker = false;
 };
 
 // WBP_FilmCrafting ("Combine VHS"): a click on a tape fills the first empty slot (3 to 5 slots, empty and repeated allowed),
@@ -90,10 +91,12 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> StatusText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> ProfileText;
-	// One entry per possible slot (MaxSlots); the ones past UnlockedSlots are collapsed
-	UPROPERTY() TArray<TObjectPtr<UWidget>> SlotColumns;
+	// Poor / Okay / Good / Great vs. what the front client asked for (hints only, never the hidden target)
+	UPROPERTY() TObjectPtr<UCommonTextBlock> MatchText;
+	UPROPERTY() TObjectPtr<UAC_ClientDirector> Director;
+	// One row per possible slot (MaxSlots); the ones past UnlockedSlots are collapsed
+	UPROPERTY() TArray<TObjectPtr<UWidget>> SlotBoxes;
 	UPROPERTY() TArray<TObjectPtr<UCommonTextBlock>> SlotTexts;
-	UPROPERTY() TArray<TObjectPtr<UImage>> SlotCovers;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> SlotClears;
 };
 
