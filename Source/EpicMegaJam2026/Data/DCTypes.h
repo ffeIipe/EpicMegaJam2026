@@ -47,7 +47,11 @@ UENUM(BlueprintType)
 enum class EReaction : uint8 { Loved, Liked, Neutral, Hated };
 
 UENUM(BlueprintType)
-enum class EInteractType : uint8 { CashRegister, BackRoomDoor, Shelf, VHSPlayer, Computer };
+enum class EInteractType : uint8 { CashRegister, BackRoomDoor, Shelf, VHSPlayer, Computer }; // v2.1: BackRoomDoor, Shelf and VHSPlayer are unused, kept so saved values don't shift
+
+// Where the camera is (section 9): the player never walks, a sequence carries the camera to the back room and back
+UENUM(BlueprintType)
+enum class ECameraZone : uint8 { Counter, ToBackRoom, BackRoom, ToCounter };
 
 // Numbers shown in WBP_DaySummary (section 8)
 USTRUCT(BlueprintType)

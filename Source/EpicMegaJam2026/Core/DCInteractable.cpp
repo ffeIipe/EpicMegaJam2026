@@ -55,9 +55,7 @@ FText ADCInteractable::GetLabel() const
 	{
 	case EInteractType::CashRegister: return FText::FromString(TEXT("Supplier: buy tapes"));
 	case EInteractType::Computer: return FText::FromString(TEXT("Computer: unlocks"));
-	case EInteractType::VHSPlayer: return FText::FromString(TEXT("VHS player: make a film"));
-	case EInteractType::Shelf: return FText::Format(FText::FromString(TEXT("{0} shelf")), StaticEnum<EGenre>()->GetDisplayNameTextByValue((int64)ShelfGenre));
-	default: return FText::GetEmpty();
+	default: return FText::GetEmpty(); // shelves and the VHS player are scenery since v2.1
 	}
 }
 

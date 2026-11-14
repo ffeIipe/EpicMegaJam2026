@@ -10,7 +10,7 @@ class UProgressBar;
 class UImage;
 class UBorder;
 
-// WBP_HUD: money, goal, day/phase, rent, held film, crosshair, the interaction prompt and the tape hotbar.
+// WBP_HUD: money, goal, day/phase, rent, held film, crosshair, the interaction prompt and the back-room key hint.
 // Always active: it is the CommonUI root that puts input back in game mode when no screen is up.
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCHUDWidget : public UCommonActivatableWidget
@@ -35,6 +35,8 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> Prompt;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptKeyText;
+	UPROPERTY() TObjectPtr<UWidget> BackRoomHint; // "[SPACE] Back room", only with the camera at the counter
+	UPROPERTY() TObjectPtr<UCommonTextBlock> BackRoomKeyText;
 	float DisplayedMoney = -1.f;
 };
 
