@@ -86,6 +86,7 @@ private:
 	void BeginTransition(bool bForward);
 	void FinishTransition();
 	void TickFallbackTransition(float DeltaTime);
+	void LookAtDialogueClient(float DeltaTime);
 	ULevelSequencePlayer* GetSequencePlayer();
 	UFUNCTION() void HandleSequenceFinished();
 

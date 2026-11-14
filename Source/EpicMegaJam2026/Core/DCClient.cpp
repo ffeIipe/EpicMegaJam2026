@@ -109,6 +109,8 @@ void ADCClient::ApplyMesh(USkeletalMesh* InMesh)
 		return;
 	}
 	GetMesh()->SetSkeletalMesh(InMesh);
+	// The NPC rigs follow Mixamo (facing +Y), which is what lets Mixamo clips play on them unchanged
+	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 	if (const TSubclassOf<UAnimInstance>* Anim = AnimBySkeleton.Find(InMesh->GetSkeleton()))
 	{
 		GetMesh()->SetAnimInstanceClass(*Anim);

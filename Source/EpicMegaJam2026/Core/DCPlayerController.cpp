@@ -171,6 +171,11 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 		TickFallbackTransition(DeltaTime);
 		return;
 	}
+	if (CameraZone == ECameraZone::Counter && DialogueClient.IsValid())
+	{
+		LookAtDialogueClient(DeltaTime); // the dialogue took the mouse: the camera turns to whoever is talking
+		return;
+	}
 	// No looking or interacting during the sequences or in the back room
 	if (CameraZone != ECameraZone::Counter || IsBlockedByUI())
 	{
@@ -205,6 +210,25 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 		Rot += FRotator(FMath::FRandRange(-Strength, Strength), FMath::FRandRange(-Strength, Strength), 0.f);
 	}
 	SetControlRotation(Rot);
+}
+
+void ADCPlayerController::LookAtDialogueClient(float DeltaTime)
+{
+	const UPDA_GameConfig* Cfg = GetWorld()->GetAuthGameMode<ADCGameMode>()->Config;
+	const ADCClient* Client = DialogueClient.Get();
+	const FVector Eye = GetPawn()->GetActorLocation() + FVector(0.f, 0.f, 64.f); // same eye height as the camera
+	const FVector Head = Client->GetActorLocation() + FVector(0.f, 0.f, Client->GetSimpleCollisionHalfHeight() * 0.7f);
+	const FRotator Target = (Head - Eye).Rotation();
+	// Aim only inside the linear part of the look range, so LookRaw and LookRot stay equal and the player takes over without a jump
+	const float YawKnee = Cfg->LookYawLimit * (1.f - Cfg->LookSoftZone);
+	const float PitchKnee = Cfg->LookPitchLimit * (1.f - Cfg->LookSoftZone);
+	const float TargetYaw = FMath::Clamp(FRotator::NormalizeAxis(Target.Yaw - CounterRot.Yaw), -YawKnee, YawKnee);
+	const float TargetPitch = FMath::Clamp(FRotator::NormalizeAxis(Target.Pitch - CounterRot.Pitch), -PitchKnee, PitchKnee);
+	LookRaw.X = FMath::FInterpTo(LookRaw.X, TargetYaw, DeltaTime, Cfg->DialogueLookSpeed);
+	LookRaw.Y = FMath::FInterpTo(LookRaw.Y, TargetPitch, DeltaTime, Cfg->DialogueLookSpeed);
+	LookRot.Yaw = CounterRot.Yaw + SoftLimit(LookRaw.X, Cfg->LookYawLimit, Cfg->LookSoftZone);
+	LookRot.Pitch = CounterRot.Pitch + SoftLimit(LookRaw.Y, Cfg->LookPitchLimit, Cfg->LookSoftZone);
+	SetControlRotation(LookRot);
 }
 
 bool ADCPlayerController::CanGoToBackRoom() const

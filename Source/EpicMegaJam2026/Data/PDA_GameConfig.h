@@ -91,6 +91,8 @@ public:
 	// --- Camera
 	// The camera is fixed at the counter and looks within +-limit degrees of its starting direction
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookYawLimit = 60.f;
+	// How fast the camera turns towards the client while their dialogue is open (higher = quicker)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float DialogueLookSpeed = 4.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") float LookPitchLimit = 30.f;
 	// Fraction of each limit (from its edge inwards) where the look eases to a stop instead of cutting. 0 = hard cut.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0", ClampMax = "1")) float LookSoftZone = 0.4f;

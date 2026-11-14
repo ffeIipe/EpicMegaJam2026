@@ -1,0 +1,13 @@
+import unreal
+at = unreal.AssetToolsHelpers.get_asset_tools()
+master = unreal.load_asset('/Game/Characters/M_NPC_Master')
+src = unreal.load_asset('/Game/Characters/MI_Character_Female_02')
+f = unreal.MaterialInstanceConstantFactoryNew()
+mi = at.create_asset('MI_Character_Female_01', '/Game/Characters', unreal.MaterialInstanceConstant, f)
+mi.set_editor_property('parent', master)
+for p in src.get_editor_property('texture_parameter_values'): unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(mi, p.parameter_info.name, p.parameter_value)
+for p in src.get_editor_property('scalar_parameter_values'): unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(mi, p.parameter_info.name, p.parameter_value)
+sm = unreal.load_asset('/Game/Characters/NPCs/Female/Character_Female_01/Character_Female_01')
+mats = list(sm.get_editor_property('materials')); mats[0].set_editor_property('material_interface', mi); sm.set_editor_property('materials', mats)
+unreal.EditorAssetLibrary.save_loaded_assets([mi, sm])
+print('NPCFIX done', mi.get_editor_property('parent').get_name(), [t.parameter_value.get_name() for t in mi.get_editor_property('texture_parameter_values')])
