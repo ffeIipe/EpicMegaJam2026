@@ -33,6 +33,10 @@
 		{
 			"Name": "DaySequence",
 			"Enabled": true
+		},
+		{
+			"Name": "MovieRenderPipeline",
+			"Enabled": true
 		}
 	]
 }
