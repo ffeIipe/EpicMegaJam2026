@@ -85,8 +85,15 @@ UDCText_Body::UDCText_Body() { SetText(this, false, 32, DCPalette::Grey); }
 UDCText_Accent::UDCText_Accent() { SetText(this, false, 32, DCPalette::Lime); }
 UDCText_Caution::UDCText_Caution() { SetText(this, false, 32, DCPalette::Yellow); }
 UDCText_Warn::UDCText_Warn() { SetText(this, false, 32, DCPalette::Red); }
+UDCText_SkillFunny::UDCText_SkillFunny() { SetText(this, false, 32, DCPalette::SkillFunny); }
+UDCText_SkillScary::UDCText_SkillScary() { SetText(this, false, 32, DCPalette::SkillScary); }
+UDCText_SkillBrave::UDCText_SkillBrave() { SetText(this, false, 32, DCPalette::SkillBrave); }
+UDCText_SkillThoughtful::UDCText_SkillThoughtful() { SetText(this, false, 32, DCPalette::SkillThoughtful); }
+UDCText_SkillRomantic::UDCText_SkillRomantic() { SetText(this, false, 32, DCPalette::SkillRomantic); }
 UDCText_Stars::UDCText_Stars() { SetText(this, true, 16, DCPalette::Yellow); }
 UDCText_Button::UDCText_Button() { SetText(this, true, 16, DCPalette::Beige); }
+UDCText_MenuButton::UDCText_MenuButton() { SetText(this, true, 16, FLinearColor::White, true); }
+UDCText_MenuButtonDisabled::UDCText_MenuButtonDisabled() { SetText(this, true, 16, FLinearColor(1.f, 1.f, 1.f, 0.45f), true); }
 UDCText_Tab::UDCText_Tab() { SetText(this, true, 10, DCPalette::Beige); }
 
 // Frames are 10px thick (panel) and 8px (plate): content padding must be at least that
@@ -100,7 +107,10 @@ UDCBorder_Header::UDCBorder_Header()
 	Background = SliceBrush(TEXT("T_UI_Header"), FVector2D(100.f, 66.f), FMargin(50.f, 0.f, 34.f, 0.f), FLinearColor::White, Box(DCPalette::Blue, DCPalette::Green, 3.f));
 }
 UDCBorder_Inset::UDCBorder_Inset() { Background = Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Blue, 0.2f), Box(DCPalette::NavyLight.CopyWithNewOpacity(0.6f), DCPalette::Blue)); }
+UDCBorder_Transparent::UDCBorder_Transparent() { Background = Box(FLinearColor::Transparent, FLinearColor::Transparent, 0.f, 0.f); }
 UDCBorder_KeyCap::UDCBorder_KeyCap() { Background = Box(DCPalette::Navy, DCPalette::Grey, 2.f, 3.f); }
+UDCBorder_LockShackle::UDCBorder_LockShackle() { Background = Box(FLinearColor::Transparent, DCPalette::Yellow, 3.f, 6.f); }
+UDCBorder_LockBody::UDCBorder_LockBody() { Background = Box(DCPalette::Yellow, DCPalette::Yellow, 2.f, 3.f); }
 
 UDCButton_Primary::UDCButton_Primary()
 {
@@ -110,6 +120,18 @@ UDCButton_Primary::UDCButton_Primary()
 		Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Grey, 0.25f), Box(DCPalette::NavyLight, DCPalette::Grey.CopyWithNewOpacity(0.3f))),
 		UDCText_Button::StaticClass(), FMargin(18.f, 12.f));
 	MinHeight = 30; // the plate's 9-slice corners need 28px
+}
+
+UDCButton_Menu::UDCButton_Menu()
+{
+	SetButton(this,
+		Box(FLinearColor(1.f, 1.f, 1.f, 0.50f), FLinearColor(1.f, 1.f, 1.f, 0.65f), 1.5f, 4.f),
+		Box(FLinearColor(1.f, 1.f, 1.f, 0.70f), FLinearColor(1.f, 1.f, 1.f, 0.85f), 1.5f, 4.f),
+		Box(FLinearColor(1.f, 1.f, 1.f, 0.80f), FLinearColor::White, 1.5f, 4.f),
+		Box(FLinearColor(1.f, 1.f, 1.f, 0.22f), FLinearColor(1.f, 1.f, 1.f, 0.30f), 1.5f, 4.f),
+		UDCText_MenuButton::StaticClass(), FMargin(18.f, 12.f));
+	DisabledTextStyle = UDCText_MenuButtonDisabled::StaticClass();
+	MinHeight = 30;
 }
 
 UDCButton_Tab::UDCButton_Tab()
@@ -309,10 +331,15 @@ namespace DCUI
 		UCanvasPanel* Canvas = Tree->ConstructWidget<UCanvasPanel>();
 		Tree->RootWidget = Canvas;
 		UCommonBorder* B = Border(Tree, nullptr, Style, FMargin(20.f, 16.f));
-		UCanvasPanelSlot* S = Canvas->AddChildToCanvas(B);
+		// The border sits in a stack so Header() can put its plate above the border
+		UVerticalBox* Stack = Tree->ConstructWidget<UVerticalBox>();
+		Stack->AddChildToVerticalBox(B);
+		UCanvasPanelSlot* S = Canvas->AddChildToCanvas(Stack);
 		S->SetAnchors(Anchors);
 		S->SetAlignment(Alignment);
-		S->SetPosition(Position);
+		// Centered screens sit a bit above the middle so they don't run under the key-hint bar at the bottom (UDCRootLayout)
+		const bool bCentered = Anchors.Minimum.Equals(FVector2D(0.5f, 0.5f));
+		S->SetPosition(bCentered ? Position - FVector2D(0.f, 50.f) : Position);
 		S->SetAutoSize(true);
 		UVerticalBox* V = Tree->ConstructWidget<UVerticalBox>();
 		B->SetContent(V);
@@ -325,19 +352,20 @@ namespace DCUI
 
 	void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle)
 	{
-		UCommonBorder* Plate = Border(Tree, Parent, UDCBorder_Header::StaticClass(), HeaderPadding);
+		// Parent is the panel's content box: its parent is the border, whose parent is the stack made by Panel()
+		UVerticalBox* Stack = Parent->GetParent() ? Cast<UVerticalBox>(Parent->GetParent()->GetParent()) : nullptr;
+		check(Stack);
+		UCommonBorder* Plate = Border(Tree, nullptr, UDCBorder_Header::StaticClass(), HeaderPadding);
 		Plate->SetContent(Text(Tree, nullptr, Title, UDCText_Title::StaticClass()));
+		Stack->InsertChildAt(0, Plate);
 		if (UVerticalBoxSlot* S = Cast<UVerticalBoxSlot>(Plate->Slot))
 		{
 			S->SetHorizontalAlignment(HAlign_Left);
+			S->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 		}
 		if (!Subtitle.IsEmpty())
 		{
-			Text(Tree, Parent, Subtitle)->SetMargin(FMargin(4.f, 6.f, 0.f, 0.f));
-		}
-		if (UVerticalBoxSlot* S = Cast<UVerticalBoxSlot>(Parent->GetChildAt(Parent->GetChildrenCount() - 1)->Slot))
-		{
-			S->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f)); // gap under the header block
+			Text(Tree, Parent, Subtitle)->SetMargin(FMargin(4.f, 0.f, 0.f, 12.f));
 		}
 	}
 
@@ -363,32 +391,50 @@ namespace DCUI
 
 	FString Stars(int32 Rating)
 	{
-		const int32 R = FMath::Clamp(Rating, 0, 5);
-		return FString::ChrN(R, TEXT('★')) + FString::ChrN(5 - R, TEXT('☆'));
+		return FString::Printf(TEXT("★ %d"), FMath::Clamp(Rating, 0, 5)); // one star + the number, e.g. "★ 4"
 	}
 
-	void SkillStrip(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills)
+	void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills)
 	{
-		static const TCHAR* Letters = TEXT("FSBTR");
-		UHorizontalBox* Strip = Tree->ConstructWidget<UHorizontalBox>();
-		Parent->AddChild(Strip);
+		UCommonBorder* Box = Border(Tree, nullptr, UDCBorder_Panel::StaticClass(), FMargin(12.f));
+		UVerticalBox* V = Tree->ConstructWidget<UVerticalBox>();
+		Box->SetContent(V);
+		Text(Tree, V, TEXT("SKILLS"), UDCText_Heading::StaticClass());
+		SkillList(Tree, V, Skills, 0, true);
+		if (V->GetChildrenCount() == 1)
+		{
+			Text(Tree, V, TEXT("None"));
+		}
+		Target->SetToolTip(Box);
+	}
+
+	FString CleanTitle(const FText& Title)
+	{
+		return Title.ToString().Replace(TEXT("★"), TEXT("")).Replace(TEXT("  "), TEXT(" ")).TrimStartAndEnd();
+	}
+
+	TSubclassOf<UCommonTextStyle> SkillStyle(int32 SkillIndex)
+	{
+		switch ((ESkill)SkillIndex)
+		{
+		case ESkill::Funny: return UDCText_SkillFunny::StaticClass();
+		case ESkill::Scary: return UDCText_SkillScary::StaticClass();
+		case ESkill::Brave: return UDCText_SkillBrave::StaticClass();
+		case ESkill::Thoughtful: return UDCText_SkillThoughtful::StaticClass();
+		default: return UDCText_SkillRomantic::StaticClass();
+		}
+	}
+
+	void SkillList(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap, bool bHideZero)
+	{
 		for (int32 i = 0; i < DCNumSkills; ++i)
 		{
 			const int32 Value = Skills.Get((ESkill)i);
-			UCommonTextBlock* Label = Text(Tree, Strip, FString::Printf(TEXT("%c%d"), Letters[i], Value));
-			Label->SetRenderOpacity(Value > 0 ? 1.f : 0.3f);
-			Cast<UHorizontalBoxSlot>(Label->Slot)->SetPadding(FMargin(0.f, 0.f, 4.f, 0.f));
+			if (!bHideZero || Value > 0)
+			{
+				const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
+				Text(Tree, Parent, Cap > 0 ? FString::Printf(TEXT("%s %d/%d"), *Name, Value, Cap) : FString::Printf(TEXT("%s %d"), *Name, Value), SkillStyle(i));
+			}
 		}
-	}
-
-	FString SkillLines(const FSkillVector& Skills, int32 Cap)
-	{
-		FString Out;
-		for (int32 i = 0; i < DCNumSkills; ++i)
-		{
-			const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
-			Out += Cap > 0 ? FString::Printf(TEXT("%s %d/%d\n"), *Name, Skills.Get((ESkill)i), Cap) : FString::Printf(TEXT("%s %d\n"), *Name, Skills.Get((ESkill)i));
-		}
-		return Out.TrimEnd();
 	}
 }

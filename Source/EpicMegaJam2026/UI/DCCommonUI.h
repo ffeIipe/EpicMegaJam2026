@@ -33,6 +33,13 @@ namespace DCPalette
 	inline const FLinearColor Navy(FColor(0x0C, 0x18, 0x38));
 	inline const FLinearColor NavyLight(FColor(0x18, 0x30, 0x6E));
 	inline const FLinearColor Red(FColor(0xFF, 0x4F, 0x4F));
+	// One color per skill, taken from the genre that maps to it (SystemsDesigns.md 4.1): Comedy white, Horror black, Action red, Drama violet, Romance pink.
+	// Black can't be read on navy, so Scary is a mid grey.
+	inline const FLinearColor SkillFunny(FColor(0xFF, 0xFF, 0xFF));
+	inline const FLinearColor SkillScary(FColor(0x8E, 0x93, 0xA6));
+	inline const FLinearColor SkillBrave(FColor(0xFF, 0x4F, 0x4F));
+	inline const FLinearColor SkillThoughtful(FColor(0xB0, 0x7C, 0xFF));
+	inline const FLinearColor SkillRomantic(FColor(0xFF, 0x8A, 0xC8));
 }
 
 // ---------------------------------------------------------------- Text styles (Press Start 2P for display, VT323 for body)
@@ -47,6 +54,14 @@ UCLASS() class EPICMEGAJAM2026_API UDCText_Warn : public UCommonTextStyle { GENE
 // Stars and arrow glyphs only exist in the display font
 UCLASS() class EPICMEGAJAM2026_API UDCText_Stars : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Stars(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_Button : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Button(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_MenuButton : public UCommonTextStyle { GENERATED_BODY() public: UDCText_MenuButton(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_MenuButtonDisabled : public UCommonTextStyle { GENERATED_BODY() public: UDCText_MenuButtonDisabled(); };
+// One per skill, colored from DCPalette::Skill*; pick with DCUI::SkillStyle
+UCLASS() class EPICMEGAJAM2026_API UDCText_SkillFunny : public UCommonTextStyle { GENERATED_BODY() public: UDCText_SkillFunny(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_SkillScary : public UCommonTextStyle { GENERATED_BODY() public: UDCText_SkillScary(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_SkillBrave : public UCommonTextStyle { GENERATED_BODY() public: UDCText_SkillBrave(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_SkillThoughtful : public UCommonTextStyle { GENERATED_BODY() public: UDCText_SkillThoughtful(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_SkillRomantic : public UCommonTextStyle { GENERATED_BODY() public: UDCText_SkillRomantic(); };
 // Genre tabs: eight of them have to fit the width of a list
 UCLASS() class EPICMEGAJAM2026_API UDCText_Tab : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Tab(); };
 
@@ -55,11 +70,16 @@ UCLASS() class EPICMEGAJAM2026_API UDCText_Tab : public UCommonTextStyle { GENER
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Panel : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Panel(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Header : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Header(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Inset : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Inset(); };
+UCLASS() class EPICMEGAJAM2026_API UDCBorder_Transparent : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Transparent(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_KeyCap : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_KeyCap(); };
+// The two pieces of the padlock icon on a locked slot: hollow shackle, solid body
+UCLASS() class EPICMEGAJAM2026_API UDCBorder_LockShackle : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_LockShackle(); };
+UCLASS() class EPICMEGAJAM2026_API UDCBorder_LockBody : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_LockBody(); };
 
 // ---------------------------------------------------------------- Button styles
 
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Primary : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Primary(); };
+UCLASS() class EPICMEGAJAM2026_API UDCButton_Menu : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Menu(); };
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Tab : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Tab(); };
 // List rows, cover tiles and key hints: flat until hovered/selected
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Row : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Row(); };
@@ -159,10 +179,13 @@ namespace DCUI
 	// Title bar of a screen (blue plate, display font), with an optional subtitle under it
 	EPICMEGAJAM2026_API void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle = FString());
 	EPICMEGAJAM2026_API FString Stars(int32 Rating);
-	// The 5 skills of a tape with their numbers (F S B T R, placeholders until art has icons); skills at 0 are dimmed (section 4.1)
-	EPICMEGAJAM2026_API void SkillStrip(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills);
-	// One "Funny 3" line per skill; with a cap, "Funny 3/10"
-	EPICMEGAJAM2026_API FString SkillLines(const FSkillVector& Skills, int32 Cap = 0);
+	// Hover tooltip on Target listing the skills that are not zero (section 4.1)
+	EPICMEGAJAM2026_API void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills);
+	// Tape titles come from the table with a "★" the fonts can't draw: drop it
+	EPICMEGAJAM2026_API FString CleanTitle(const FText& Title);
+	EPICMEGAJAM2026_API TSubclassOf<UCommonTextStyle> SkillStyle(int32 SkillIndex);
+	// One line per skill in its color: "Funny 3", or "Funny 3/10" with a cap; zeros are skipped when bHideZero
+	EPICMEGAJAM2026_API void SkillList(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap = 0, bool bHideZero = false);
 	EPICMEGAJAM2026_API FSlateBrush Box(const FLinearColor& Fill, const FLinearColor& Outline, float OutlineWidth = 2.f, float Radius = 4.f);
 	// Patience/goal bar in the palette
 	EPICMEGAJAM2026_API UProgressBar* Bar(UWidgetTree* Tree, UPanelWidget* Parent, float Width);

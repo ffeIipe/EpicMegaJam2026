@@ -98,6 +98,8 @@ struct FSkillVector
 		}
 	}
 
+	int32 Total() const { return Funny + Scary + Brave + Thoughtful + Romantic; }
+
 	void Set(ESkill Skill, int32 Value)
 	{
 		switch (Skill)

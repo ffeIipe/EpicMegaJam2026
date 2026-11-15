@@ -219,7 +219,8 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 		const int32 StarMax = FMath::Min(TierRow ? TierRow->RecipeStarMax : 1, GM->Unlocks->UnlockedStarTier);
 		const int32 MinTapes = TierRow ? TierRow->RecipeTapesMin : 1;
 		const int32 MaxTapes = TierRow ? TierRow->RecipeTapesMax : 2;
-		const int32 Tapes = FMath::Clamp(FMath::RandRange(MinTapes, MaxTapes), 1, GM->FilmCrafting->UnlockedSlots); // never more than the slots
+		// Combining is the core mechanic: every order takes at least 2 tapes, and never more than the slots
+		const int32 Tapes = FMath::Clamp(FMath::RandRange(MinTapes, MaxTapes), 2, FMath::Max(2, GM->FilmCrafting->UnlockedSlots));
 
 		// The archetype's genres, or every unlocked genre when that leaves none
 		TSet<EGenre> Genres;
@@ -477,6 +478,11 @@ bool UAC_ClientDirector::DeliverFilm(ADCClient* Client)
 void UAC_ClientDirector::ApplyReview(const FReview& Review)
 {
 	GetGM(this)->Economy->AddMoney(Review.MoneyDelta); // tip or fine arrives with the online review
+	ReviewHistory.Insert(Review, 0);
+	if (ReviewHistory.Num() > MaxReviewHistory)
+	{
+		ReviewHistory.SetNum(MaxReviewHistory);
+	}
 	OnReviewReceived.Broadcast(Review);
 }
 

@@ -1,6 +1,7 @@
 #include "Components/DCComponents.h"
 #include "Core/DCGameMode.h"
 #include "Core/BPFL_Scoring.h"
+#include "Components/DCFilmTitles.h"
 
 static const UPDA_GameConfig* GetConfig(const UActorComponent* C)
 {
@@ -315,7 +316,13 @@ FSkillVector UAC_FilmCrafting::GetProfile() const
 bool UAC_FilmCrafting::CanConfirm() const
 {
 	const UPDA_GameConfig* Cfg = GetConfig(this);
-	return Cfg && GetFilledSlots() >= 1 && HeldFilms.Num() < Cfg->MaxHeldFilms;
+	return Cfg && GetFilledSlots() >= Cfg->MinTapesToCombine && HeldFilms.Num() < Cfg->MaxHeldFilms;
+}
+
+FString UAC_FilmCrafting::SuggestTitle() const
+{
+	const UPDA_GameConfig* Cfg = GetConfig(this);
+	return Cfg && GetFilledSlots() >= 1 ? DCFilmTitles::Generate(GetProfile(), UsedTitles, Cfg->MaxGeneratedTitleLength) : FString();
 }
 
 bool UAC_FilmCrafting::ConfirmFilm(FText Title)
@@ -336,9 +343,18 @@ bool UAC_FilmCrafting::ConfirmFilm(FText Title)
 
 	FCreatedFilm Film;
 	FString TitleStr = Title.ToString().TrimStartAndEnd().Left(Cfg->MaxFilmTitleLength);
-	Film.Title = TitleStr.IsEmpty() ? FText::FromString(FString::Printf(TEXT("Untitled Cut #%d"), FilmsCreated + 1)) : FText::FromString(TitleStr);
 	Film.SlotRows = SlotRows;
 	Film.SkillProfile = GetProfile();
+	if (TitleStr.IsEmpty())
+	{
+		TitleStr = DCFilmTitles::Generate(Film.SkillProfile, UsedTitles, Cfg->MaxGeneratedTitleLength);
+	}
+	if (TitleStr.IsEmpty()) // generator ran out of fresh combinations
+	{
+		TitleStr = FString::Printf(TEXT("Untitled Cut #%d"), FilmsCreated + 1);
+	}
+	UsedTitles.Add(TitleStr);
+	Film.Title = FText::FromString(TitleStr);
 	for (const FName& Row : SlotRows)
 	{
 		GM->Inventory->ConsumeTape(Row); // one copy per filled slot; NAME_None is ignored

@@ -38,9 +38,9 @@ public:
 		struct FScript { FSkillVector Target; TArray<FName> Tapes; };
 		auto SV = [](int32 Funny, int32 Scary) { FSkillVector V; V.Funny = Funny; V.Scary = Scary; return V; };
 		static const TArray<FScript> Scripts = {
-			{ SV(3, 0), { "VHS_Comedy_1_01" } },
+			{ SV(6, 0), { "VHS_Comedy_1_01", "VHS_Comedy_1_01" } },
 			{ SV(3, 3), { "VHS_Comedy_1_01", "VHS_Horror_1_01" } },
-			{ SV(0, 3), { "VHS_Horror_1_01" } } };
+			{ SV(0, 6), { "VHS_Horror_1_01", "VHS_Horror_1_01" } } };
 
 		switch (Stage)
 		{
@@ -95,7 +95,7 @@ public:
 			const FClientRuntime& Rt = Client->Runtime;
 			const int32 Total = Rt.Target.Funny + Rt.Target.Scary + Rt.Target.Brave + Rt.Target.Thoughtful + Rt.Target.Romantic;
 			Test->TestEqual(TEXT("generated client is level 1"), Rt.Tier, 1);
-			Test->TestTrue(TEXT("recipe of 1 to 2 one-star tapes: 3 to 6 points"), Total >= 3 && Total <= 6);
+			Test->TestEqual(TEXT("every order is a combination: 2 one-star tapes with the starting 2 slots = 6 points"), Total, 6);
 			Test->TestTrue(TEXT("level 1 hints everything it wants"), Rt.HintedSkills.Num() >= 2 && Rt.bFullyHinted);
 			return true;
 		}

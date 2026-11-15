@@ -10,12 +10,18 @@
 class UVerticalBox;
 class UHorizontalBox;
 class UScrollBox;
+class UImage;
+class UMediaPlayer;
+class UMediaSource;
+class UMediaTexture;
+class UMaterialInterface;
 class UAC_Unlocks;
 class UAC_Inventory;
 class UAC_Economy;
 class UAC_DayNightCycle;
 class UPDA_GameConfig;
 class UDCInventoryWidget;
+class UDCSettingsWidget;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMenuButton);
 
@@ -73,7 +79,8 @@ private:
 	int32 SelectedStars = 0; // 0 = all
 };
 
-// WBP_Computer: every unlock (genres, VHS player slots, star licenses) with price, requirements and a buy button (section 7.1)
+// WBP_Computer: one tab per kind of purchase (genres, combine machine slots, star licenses) with price, requirements and a buy button (section 7.1),
+// plus a rent tab (tonight's rent vs. your money) and the latest reviews
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCComputerWidget : public UDCScreen
 {
@@ -87,14 +94,23 @@ protected:
 
 private:
 	UFUNCTION() void HandleBuy(FName UnlockId);
-	UFUNCTION() void OnMoneyChanged(int32 NewMoney, int32 Delta) { UpdateAffordability(); }
+	UFUNCTION() void OnTabClicked(FName Tab);
+	UFUNCTION() void OnMoneyChanged(int32 NewMoney, int32 Delta);
 	UFUNCTION() void OnUnlockPurchased(FName UnlockId) { Refresh(); }
+	UFUNCTION() void OnReviewReceived(const FReview& Review) { Refresh(); }
+	void CycleTab(int32 Dir);
+	void BuildUnlocks(EUnlockType Type);
+	void BuildRent();
+	void BuildReviews();
 	void UpdateAffordability();
 
 	UPROPERTY() TObjectPtr<UAC_Unlocks> Unlocks;
 	UPROPERTY() TObjectPtr<UPDA_GameConfig> Config;
+	UPROPERTY() TObjectPtr<UHorizontalBox> Tabs;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> MoneyText;
 	UPROPERTY() TObjectPtr<UVerticalBox> List;
 	UPROPERTY() TObjectPtr<UScrollBox> Scroll;
+	FName SelectedTab;
 	struct FUnlockButton { TWeakObjectPtr<UDCButton> Button; FName Id; };
 	TArray<FUnlockButton> Buttons;
 };
@@ -131,7 +147,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HintText;
 };
 
-// WBP_MainMenu: Play closes it
+// WBP_MainMenu: left-aligned menu over a looping background video (Play/Continue, New Game, Credits, Options, Exit)
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCMainMenuWidget : public UDCScreen
 {
@@ -139,12 +155,53 @@ class EPICMEGAJAM2026_API UDCMainMenuWidget : public UDCScreen
 public:
 	UDCMainMenuWidget(const FObjectInitializer& ObjectInitializer);
 
+	// Optional editor-assigned media assets; when null, falls back to /Game/DirectorsCut/UI/Media/* or Content/Movies/Menu.mp4.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Video") TObjectPtr<UMediaPlayer> MediaPlayer;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Video") TObjectPtr<UMediaSource> MediaSource;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Video") TObjectPtr<UMediaTexture> MediaTexture;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Video") TObjectPtr<UMaterialInterface> VideoMaterial;
+
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeOnActivated() override;
+	virtual void NativeDestruct() override;
+	virtual bool NativeOnHandleBackAction() override;
 
 private:
-	UFUNCTION() void HandlePlay(FName Unused) { DeactivateWidget(); }
+	enum class EMenuPage : uint8 { Main, Continue, NewGame, Credits, Options };
+
+	void SetupBackgroundVideo();
+	void ShowPage(EMenuPage Page);
+	void RefreshMainButtons();
+	void RefreshSlots(bool bForNewGame);
+	void StartGameOnSlot(const FString& SlotName, bool bNewGame);
+	void Cue(const TCHAR* Name) const;
+
+	UFUNCTION() void HandlePlay(FName Unused);
+	UFUNCTION() void HandleNewGame(FName Unused);
+	UFUNCTION() void HandleCredits(FName Unused);
+	UFUNCTION() void HandleOptions(FName Unused);
 	UFUNCTION() void HandleQuit(FName Unused);
+	UFUNCTION() void HandleBackToMain(FName Unused);
+	UFUNCTION() void HandleSlotClicked(FName SlotName);
+	UFUNCTION() void HandleConfirmOverwrite(FName Unused);
+	UFUNCTION() void HandleCancelOverwrite(FName Unused);
+
+	EMenuPage CurrentPage = EMenuPage::Main;
+	FString PendingOverwriteSlot;
+
+	UPROPERTY() TObjectPtr<UImage> VideoImage;
+	UPROPERTY() TObjectPtr<UCommonBorder> PanelBorder;
+	UPROPERTY() TObjectPtr<UVerticalBox> MainButtons;
+	UPROPERTY() TObjectPtr<UDCButton> PlayButton;
+	UPROPERTY() TObjectPtr<UVerticalBox> SlotsPage;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> SlotsTitle;
+	UPROPERTY() TObjectPtr<UVerticalBox> SlotsList;
+	UPROPERTY() TObjectPtr<UVerticalBox> OverwriteConfirmBox;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> OverwriteConfirmText;
+	UPROPERTY() TObjectPtr<UVerticalBox> CreditsPage;
+	UPROPERTY() TObjectPtr<UVerticalBox> OptionsPage;
+	UPROPERTY() TObjectPtr<UDCSettingsWidget> Settings;
 };
 
 class FDCKeyCapture;
@@ -196,5 +253,6 @@ private:
 	UPROPERTY() TObjectPtr<UDCButton> OptionsBackButton;
 	UFUNCTION() void HandleContinue(FName Unused) { DeactivateWidget(); }
 	UFUNCTION() void HandleRestart(FName Unused);
+	UFUNCTION() void HandleMainMenu(FName Unused);
 	UFUNCTION() void HandleQuit(FName Unused);
 };

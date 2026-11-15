@@ -55,22 +55,26 @@ bool FDCScoringExamplesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Floor"), UBPFL_Scoring::ComputeErrorRatio(SV(3, 1), SV(3), Cfg), 0.25f, 0.001f);
 
 	// Match meter: only the hints count, never the Target
-	auto Known = [&](FSkillVector Profile, TArray<FHintedSkill> Hints, bool bFull)
+	auto Known = [&](FSkillVector Profile, TArray<FHintedSkill> Hints, bool bFull, int32 TargetTotal)
 	{
-		return UBPFL_Scoring::ComputeKnownErrorRatio(Profile, Hints, bFull, Cfg);
+		return UBPFL_Scoring::ComputeKnownErrorRatio(Profile, Hints, bFull, TargetTotal, Cfg);
 	};
 	FHintedSkill FunnyHigh, ScaryNone, FunnySome;
 	FunnyHigh.Skill = ESkill::Funny; FunnyHigh.Level = EHintLevel::High;
 	ScaryNone.Skill = ESkill::Scary; ScaryNone.Level = EHintLevel::None;
 	FunnySome.Skill = ESkill::Funny; FunnySome.Level = EHintLevel::Some;
-	TestEqual(TEXT("Known exact"), Known(SV(3), { FunnyHigh, ScaryNone }, true), 0.f, 0.001f);
-	TestEqual(TEXT("Known scary violated"), Known(SV(3, 1), { FunnyHigh, ScaryNone }, true), 0.25f, 0.001f);
-	TestEqual(TEXT("Known High short"), Known(SV(2), { FunnyHigh }, true), 0.25f, 0.001f);
-	TestEqual(TEXT("Known High above the minimum is fine"), Known(SV(6), { FunnyHigh }, true), 0.f, 0.001f);
-	TestEqual(TEXT("Known Some range"), Known(SV(2), { FunnySome }, true), 0.f, 0.001f);
-	TestEqual(TEXT("Known Some over"), Known(SV(3), { FunnySome }, true), 0.25f, 0.001f);
-	TestEqual(TEXT("Unhinted ignored when not fully hinted"), Known(SV(3, 0, 0, 3), { FunnyHigh }, false), 0.f, 0.001f);
-	TestEqual(TEXT("Unhinted is 0 when fully hinted"), Known(SV(3, 0, 0, 3), { FunnyHigh }, true), 0.75f, 0.001f);
+	TestEqual(TEXT("Known exact"), Known(SV(3), { FunnyHigh, ScaryNone }, true, 3), 0.f, 0.001f);
+	TestEqual(TEXT("Known scary violated"), Known(SV(3, 1), { FunnyHigh, ScaryNone }, true, 3), 0.25f, 0.001f);
+	TestEqual(TEXT("Known High short"), Known(SV(2), { FunnyHigh }, true, 3), 0.25f, 0.001f);
+	TestEqual(TEXT("Known High above the minimum is fine"), Known(SV(6), { FunnyHigh }, true, 6), 0.f, 0.001f);
+	TestEqual(TEXT("Known Some range"), Known(SV(2), { FunnySome }, true, 2), 0.f, 0.001f);
+	TestEqual(TEXT("Known Some over"), Known(SV(3), { FunnySome }, true, 2), 0.25f, 0.001f);
+	TestEqual(TEXT("Unhinted ignored when not fully hinted"), Known(SV(3, 0, 0, 3), { FunnyHigh }, false, 6), 0.f, 0.001f);
+	TestEqual(TEXT("Unhinted is 0 when fully hinted"), Known(SV(3, 0, 0, 3), { FunnyHigh }, true, 3), 0.75f, 0.001f);
+	// The bug this fixes: a Funny 6 order with "Funny High" must not read GREAT with one Funny 3 tape
+	TestEqual(TEXT("One tape falls short of a 6 point order"), Known(SV(3), { FunnyHigh, ScaryNone }, true, 6), 0.5f, 0.001f);
+	TestTrue(TEXT("...and that reads Neutral (Okay), not Loved"), UBPFL_Scoring::GetReaction(0.5f, Cfg) == EReaction::Neutral);
+	TestEqual(TEXT("Two tapes reach it"), Known(SV(6), { FunnyHigh, ScaryNone }, true, 6), 0.f, 0.001f);
 	return true;
 }
 

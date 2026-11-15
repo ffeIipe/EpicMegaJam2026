@@ -46,9 +46,9 @@ namespace
 			{
 				UAC_Inventory* Inv = GM->Inventory;
 				GM->Config->MovieBudgetGoal = 1000000;
-				Test->TestEqual(TEXT("starting tapes (3 rows, 5 copies)"), Inv->GetOwnedVHS().Num(), 3);
+				Test->TestEqual(TEXT("starting tapes (3 rows, 7 copies)"), Inv->GetOwnedVHS().Num(), 3);
 				UAC_Unlocks* U = GM->Unlocks;
-				Test->TestEqual(TEXT("starting slots"), GM->FilmCrafting->UnlockedSlots, 3);
+				Test->TestEqual(TEXT("starting slots"), GM->FilmCrafting->UnlockedSlots, 2);
 				Test->TestEqual(TEXT("starting star level"), U->UnlockedStarTier, 1);
 				Test->TestEqual(TEXT("starting genres"), U->GetGenreCount(), 3);
 
@@ -66,7 +66,10 @@ namespace
 
 				// Computer: slots, star levels and genres, each bought once and in order
 				E->AddMoney(2000);
+				Test->TestFalse(TEXT("Slot_4 needs Slot_3"), U->CanBuyUnlock("Slot_4"));
 				Test->TestFalse(TEXT("Slot_5 needs Slot_4"), U->CanBuyUnlock("Slot_5"));
+				Test->TestTrue(TEXT("buy Slot_3"), U->BuyUnlock("Slot_3"));
+				Test->TestEqual(TEXT("3 slots in the player"), GM->FilmCrafting->SlotRows.Num(), 3);
 				Test->TestTrue(TEXT("buy Slot_4"), U->BuyUnlock("Slot_4"));
 				Test->TestEqual(TEXT("4 slots in the player"), GM->FilmCrafting->SlotRows.Num(), 4);
 				Test->TestTrue(TEXT("buy Slot_5"), U->BuyUnlock("Slot_5"));

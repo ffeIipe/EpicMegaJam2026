@@ -1,4 +1,5 @@
 #include "UI/DCHudWidgets.h"
+#include "Core/DCGameInstance.h"
 #include "Core/DCGameMode.h"
 #include "Core/DCPlayerController.h"
 #include "Core/DCSettings.h"
@@ -173,6 +174,9 @@ void UDCEndScreenWidget::NativeOnInitialized()
 	DayBlock = DCUI::Text(WidgetTree, V, TEXT(""));
 	DayBlock->SetMargin(FMargin(0.f, 12.f));
 	DCUI::Button(WidgetTree, V, TEXT("RESTART"))->OnPayloadClicked.AddDynamic(this, &UDCEndScreenWidget::OnRestart);
+	UDCButton* MainMenuBtn = DCUI::Button(WidgetTree, V, TEXT("BACK TO MAIN MENU"));
+	MainMenuBtn->OnPayloadClicked.AddDynamic(this, &UDCEndScreenWidget::OnMainMenu);
+	Cast<UVerticalBoxSlot>(MainMenuBtn->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 }
 
 void UDCEndScreenWidget::Show(int32 DayReached)
@@ -185,6 +189,17 @@ void UDCEndScreenWidget::OnRestart(FName Unused)
 {
 	UGameplayStatics::SetGamePaused(this, false);
 	UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this)));
+}
+
+void UDCEndScreenWidget::OnMainMenu(FName Unused)
+{
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	{
+		GI->TravelToMainMenu();
+		return;
+	}
+	UGameplayStatics::SetGamePaused(this, false);
+	UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/_MainGame/Level/MAP_MainMenu")));
 }
 
 // ---------------------------------------------------------------- World label

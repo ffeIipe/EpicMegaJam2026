@@ -38,9 +38,9 @@ float UBPFL_Scoring::ComputeErrorRatio(const FSkillVector& Profile, const FSkill
 	return (float)ComputeMiss(Profile, Target) / FMath::Max(FMath::Max(1, Config->ErrorFloor), TargetTotal);
 }
 
-float UBPFL_Scoring::ComputeKnownErrorRatio(const FSkillVector& Profile, const TArray<FHintedSkill>& Hints, bool bFullyHinted, const UPDA_GameConfig* Config)
+float UBPFL_Scoring::ComputeKnownErrorRatio(const FSkillVector& Profile, const TArray<FHintedSkill>& Hints, bool bFullyHinted, int32 TargetTotal, const UPDA_GameConfig* Config)
 {
-	int32 Miss = 0, Expected = 0;
+	int32 Miss = 0;
 	bool bHinted[DCNumSkills] = {};
 	for (const FHintedSkill& H : Hints)
 	{
@@ -48,7 +48,6 @@ float UBPFL_Scoring::ComputeKnownErrorRatio(const FSkillVector& Profile, const T
 		const int32 Hi = H.Level == EHintLevel::High ? Config->SkillCap : H.Level == EHintLevel::Some ? FMath::Max(1, Config->HintHighMin - 1) : 0;
 		const int32 V = Profile.Get(H.Skill);
 		Miss += V < Lo ? Lo - V : V > Hi ? V - Hi : 0;
-		Expected += Lo;
 		bHinted[(int32)H.Skill] = true;
 	}
 	if (bFullyHinted)
@@ -58,7 +57,8 @@ float UBPFL_Scoring::ComputeKnownErrorRatio(const FSkillVector& Profile, const T
 			Miss += bHinted[i] ? 0 : Profile.Get((ESkill)i);
 		}
 	}
-	return (float)Miss / FMath::Max(FMath::Max(1, Config->ErrorFloor), Expected);
+	Miss = FMath::Max(Miss, FMath::Abs(Profile.Total() - TargetTotal));
+	return (float)Miss / FMath::Max(FMath::Max(1, Config->ErrorFloor), TargetTotal);
 }
 
 float UBPFL_Scoring::ComputeAccuracy(float ErrorRatio)

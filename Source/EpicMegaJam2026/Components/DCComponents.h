@@ -93,6 +93,9 @@ public:
 	UPROPERTY(BlueprintAssignable) FOnClientReachedCounter OnClientReachedCounter;
 	UPROPERTY(BlueprintAssignable) FOnClientLeft OnClientLeft;
 	UPROPERTY(BlueprintAssignable) FOnReviewReceived OnReviewReceived;
+	// Newest first, capped at MaxReviewHistory; shown on the computer
+	UPROPERTY(BlueprintReadOnly) TArray<FReview> ReviewHistory;
+	static constexpr int32 MaxReviewHistory = 20;
 
 	UAC_ClientDirector();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -226,7 +229,7 @@ public:
 	UPROPERTY(BlueprintAssignable) FOnFilmStateChanged OnFilmStateChanged;
 
 	// Slots of the VHS player (section 4.4). The step 7 unlocks component raises UnlockedSlots with SetUnlockedSlots.
-	UPROPERTY(BlueprintReadOnly) int32 UnlockedSlots = 3;
+	UPROPERTY(BlueprintReadOnly) int32 UnlockedSlots = 2;
 	// One DT_VHS row per slot, NAME_None = empty; always UnlockedSlots long
 	UPROPERTY(BlueprintReadOnly) TArray<FName> SlotRows;
 	UPROPERTY(BlueprintReadOnly) TArray<FCreatedFilm> HeldFilms;
@@ -245,6 +248,8 @@ public:
 	UFUNCTION(BlueprintCallable) bool CanConfirm() const;
 	// Spends one copy per filled slot and puts the film in hand.
 	UFUNCTION(BlueprintCallable) bool ConfirmFilm(FText Title);
+	// A fresh satirical title for the tapes in the slots (empty when none is filled); the panel writes it in the title field.
+	FString SuggestTitle() const;
 	// Gives the held film's tapes back to the inventory (4.4 rule 8).
 	UFUNCTION(BlueprintCallable) void DiscardHeldFilm();
 	// The film leaves the hand at delivery: the tapes stay spent.
@@ -252,4 +257,6 @@ public:
 
 private:
 	int32 FilmsCreated = 0;
+	// Every title handed out this run: the generator never repeats one
+	TSet<FString> UsedTitles;
 };

@@ -53,7 +53,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailTitle;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailStars;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailGenre;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailSkills;
+	UPROPERTY() TObjectPtr<UVerticalBox> DetailSkills;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> DetailSynopsis;
 	FName SelectedTab = "All"; // "All" or an EGenre name
 	FName SelectedTape;
@@ -85,19 +85,29 @@ private:
 	UPROPERTY() TObjectPtr<UPDA_GameConfig> Config;
 	UPROPERTY() TObjectPtr<UDCInventoryWidget> Picker;
 	UPROPERTY() TObjectPtr<UEditableTextBox> TitleBox;
+	// The suggestion last written into TitleBox: while the box still holds it, the next slot change replaces it; a title the player typed is kept
+	FString AutoTitle;
+	TArray<FName> LastSlotRows;
 	UPROPERTY() TObjectPtr<UDCButton> ConfirmButton;
 	UPROPERTY() TObjectPtr<UDCButton> DiscardButton;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> SlotsHeader;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> StatusText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> ProfileText;
+	UPROPERTY() TObjectPtr<UVerticalBox> ProfileText;
 	// Poor / Okay / Good / Great vs. what the front client asked for (hints only, never the hidden target)
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MatchText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> OrderText;
+	UPROPERTY() TObjectPtr<UProgressBar> OrderPatience;
+	// "Order size: N points   Your film: M"
+	UPROPERTY() TObjectPtr<UCommonTextBlock> PointsText;
 	UPROPERTY() TObjectPtr<UAC_ClientDirector> Director;
 	// One row per possible slot (MaxSlots); the ones past UnlockedSlots are collapsed
 	UPROPERTY() TArray<TObjectPtr<UWidget>> SlotBoxes;
 	UPROPERTY() TArray<TObjectPtr<UCommonTextBlock>> SlotTexts;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> SlotClears;
+	// The next slot to buy, shown with a padlock until it is unlocked at the computer
+	UPROPERTY() TObjectPtr<UWidget> LockedBox;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> LockedText;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDialogueButton);

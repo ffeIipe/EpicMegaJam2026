@@ -44,8 +44,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hints") int32 FullHintMaxTier = 2;
 
 	// --- Progression and inventory (sections 4.3, 7.1)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 StartUnlockedSlots = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 StartUnlockedSlots = 2;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 MaxSlots = 5;
+	// Tapes needed in the slots before COMBINE unlocks: mixing is the core mechanic, a lone tape is not a film of your own
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 MinTapesToCombine = 2;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 StartUnlockedStarTier = 1;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Progression") int32 PremiumMinGenres = 6;
 	// DT_VHS row -> copies. TODO(DESIGN): rows exist after step 4 (pure tapes `_01` of 1 star)
@@ -85,6 +87,8 @@ public:
 
 	// --- Crafting
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") int32 MaxFilmTitleLength = 30;
+	// Title made by the generator when the player leaves the field empty
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") int32 MaxGeneratedTitleLength = 20;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crafting") int32 MaxHeldFilms = 1;
 
 	// --- Economy
@@ -146,8 +150,8 @@ public:
 	{
 		StarPoints = { 3, 4, 5, 6, 7 };
 		TapePriceByStar = { 4, 6, 9, 14, 20 };
-		StartingTapes.Add("VHS_Horror_1_01", 2);
-		StartingTapes.Add("VHS_Comedy_1_01", 2);
+		StartingTapes.Add("VHS_Horror_1_01", 3); // every order needs a combination, so the 3 scripted ones use 2 tapes each
+		StartingTapes.Add("VHS_Comedy_1_01", 3);
 		StartingTapes.Add("VHS_Action_1_01", 1);
 		ReviewStars.Add(EReaction::Loved, 5);
 		ReviewStars.Add(EReaction::Liked, 4);

@@ -76,6 +76,7 @@ protected:
 
 private:
 	UFUNCTION() void OnRestart(FName Unused);
+	UFUNCTION() void OnMainMenu(FName Unused);
 	UPROPERTY() TObjectPtr<UCommonTextBlock> TitleBlock;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> DayBlock;
 };

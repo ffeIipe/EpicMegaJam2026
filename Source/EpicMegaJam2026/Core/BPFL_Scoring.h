@@ -26,12 +26,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Scoring")
 	static float ComputeErrorRatio(const FSkillVector& Profile, const FSkillVector& Target, const UPDA_GameConfig* Config);
 
-	// What the player can know: the error ratio against the client's spoken hints only, never the Target.
-	// High = at least HintHighMin, Some = 1 to HintHighMin-1, None = 0; a skill inside its range costs nothing.
+	// What the player can know: a lower bound of the real error ratio, built from the spoken hints and the order's total points
+	// (the sum of the Target, shown to the player), never the per-skill Target.
+	// Miss = max(hint miss, |profile total - TargetTotal|): both are lower bounds of the real Miss, so it is never optimistic
+	// about size. This is what makes a lone tape fall short of an order that needs a combination.
+	// Hints: High = at least HintHighMin, Some = 1 to HintHighMin-1, None = 0; a skill inside its range costs nothing.
 	// Unhinted skills count as 0 only when the hints cover everything the client wants (bFullyHinted), else they're ignored.
 	// Feed it to GetReaction for the Poor / Okay / Good / Great band.
 	UFUNCTION(BlueprintPure, Category = "Scoring")
-	static float ComputeKnownErrorRatio(const FSkillVector& Profile, const TArray<FHintedSkill>& Hints, bool bFullyHinted, const UPDA_GameConfig* Config);
+	static float ComputeKnownErrorRatio(const FSkillVector& Profile, const TArray<FHintedSkill>& Hints, bool bFullyHinted, int32 TargetTotal, const UPDA_GameConfig* Config);
 
 	// 6.1: clamp(1 - ErrorRatio, 0, 1)
 	UFUNCTION(BlueprintPure, Category = "Scoring")

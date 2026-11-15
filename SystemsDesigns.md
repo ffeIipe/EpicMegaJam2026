@@ -21,7 +21,7 @@ Este documento es la fuente de verdad del juego para la UE MegaJam 2026 (tema: *
 
 ## 1. Visión y loop principal
 
-El jugador es un cineasta frustrado que atiende un videoclub. Los clientes piden películas que no existen y él las arma mezclando VHS en el depósito (3 slots al empezar, hasta 5): su propio *director's cut*. Si el cliente queda conforme, paga y deja propina. Si no, llega una queja con multa. Es un juego **incremental**: se pierde si no se puede pagar la renta del local y se gana al juntar el presupuesto para filmar una película propia.
+El jugador es un cineasta frustrado que atiende un videoclub. Los clientes piden películas que no existen y él las arma mezclando VHS en el depósito (2 slots al empezar, hasta 5; el tercero se compra en la computadora): su propio *director's cut*. Si el cliente queda conforme, paga y deja propina. Si no, llega una queja con multa. Es un juego **incremental**: se pierde si no se puede pagar la renta del local y se gana al juntar el presupuesto para filmar una película propia.
 
 **Pilares (no negociables):**
 
@@ -141,19 +141,19 @@ Las 500 filas **no se cargan a mano**: las genera un script determinista, con un
 
 ### 4.3 Inventario
 
-`AC_Inventory` guarda **cantidades por cinta** (`TMap<Name, int>`: fila de `DT_VHS` → copias). El inventario inicial sale de `DA_GameConfig.StartingTapes`: 2 copias de la cinta pura de Horror, 2 de la de Comedy y 1 de la de Action (las dos primeras alcanzan para los tres pedidos scripteados).
+`AC_Inventory` guarda **cantidades por cinta** (`TMap<Name, int>`: fila de `DT_VHS` → copias). El inventario inicial sale de `DA_GameConfig.StartingTapes`: 3 copias de la cinta pura de Horror, 3 de la de Comedy y 1 de la de Action (las dos primeras alcanzan para los tres pedidos scripteados, que usan 2 cintas cada uno).
 
 Las cintas se compran de a una copia en el proveedor y se desbloquean por género y estrellas (sección 7.1). Al armar una película se gastan (sección 4.4).
 
 ### 4.4 Armado (`AC_FilmCrafting`)
 
-El jugador tiene `UnlockedSlots` slots de combinación (inicial `StartUnlockedSlots` = 3, máximo `MaxSlots` = 5). Se suben desde la computadora (sección 7.1). Los slots no tienen nombre ni orden narrativo: son "Slot 1", "Slot 2", etc.
+El jugador tiene `UnlockedSlots` slots de combinación (inicial `StartUnlockedSlots` = 2, máximo `MaxSlots` = 5). Se suben desde la computadora (sección 7.1). **El panel de armado muestra el próximo slot a comprar con un candado** ("SLOT 3 LOCKED, unlock it at the computer"); los siguientes aparecen cuando se compra el anterior. Los slots no tienen nombre ni orden narrativo: son "Slot 1", "Slot 2", etc.
 
 **Flujo en el panel de armado (se abre solo al llegar al depósito, sección 9):** el jugador elige un slot, elige una cinta del inventario para ese slot, y repite con los demás. Aprieta *"Combine"*. Puede volver a tocar un slot lleno para cambiarlo o vaciarlo antes de combinar.
 
 **Reglas:**
 
-1. Se permite **dejar slots vacíos**. Hace falta al menos 1 cinta para combinar.
+1. Se permite **dejar slots vacíos**. Hacen falta al menos `MinTapesToCombine` (inicial 2) cintas para combinar: con una sola el botón queda bloqueado y dice "NEED 2+ TAPES".
 2. Se permite **repetir la misma cinta en varios slots** mientras alcance el stock: usar la misma cinta en 2 slots gasta 2 copias.
 3. Se permite repetir género libremente.
 4. La **suma de skills se actualiza en vivo** mientras se llenan los slots, con el perfil resultante a la vista (no se muestra el objetivo del pedido).
@@ -194,7 +194,7 @@ Al spawnear, `AC_ClientDirector` arma el cliente así:
 1. Elige un arquetipo visual de `DT_ClientArchetypes` según `SpawnWeight` y la fase.
 2. **Pedidos scripteados:** los primeros clientes de la partida usan las filas de `DT_ScriptedOrders` en orden (sección 5.4). Si hay una fila para este cliente, se usa su `Target` y su arquetipo y se saltan los pasos siguientes.
 3. Elige un nivel según `SpawnWeight` de `DT_ClientTiers`, entre los niveles con `Tier ≤ UnlockedStarTier`.
-4. Arma una **receta**: sortea `n` cintas con `n` entre `RecipeTapesMin` y `RecipeTapesMax` del nivel, **sin pasar de `UnlockedSlots`**. Cada cinta sale de las filas de `DT_VHS` con género desbloqueado, estrellas dentro del rango del nivel y `Rating ≤ UnlockedStarTier`. Si el arquetipo tiene `AllowedGenres` no vacío, las cintas salen de esos géneros (si la intersección con los desbloqueados queda vacía, de cualquier género desbloqueado). Se prefieren cintas distintas; se permite repetir si el grupo es chico.
+4. Arma una **receta**: sortea `n` cintas con `n` entre `RecipeTapesMin` y `RecipeTapesMax` del nivel, **nunca menos de 2** (todo pedido exige una combinación, que es la mecánica principal) y **sin pasar de `UnlockedSlots`**. Cada cinta sale de las filas de `DT_VHS` con género desbloqueado, estrellas dentro del rango del nivel y `Rating ≤ UnlockedStarTier`. Si el arquetipo tiene `AllowedGenres` no vacío, las cintas salen de esos géneros (si la intersección con los desbloqueados queda vacía, de cualquier género desbloqueado). Se prefieren cintas distintas; se permite repetir si el grupo es chico.
 5. `Target` = el perfil de esa receta, con la misma fórmula del perfil de película (suma por skill, tope `SkillCap`).
 
 **Por qué así:** el objetivo siempre se puede alcanzar exactamente con cintas que el proveedor vende, y su magnitud queda ajustada sola al nivel del cliente (mismo mecanismo que escala los pedidos con las estrellas y con los slots). No hay que balancear una escala aparte.
@@ -226,9 +226,9 @@ El pedido se arma concatenando saludo + frases de pista + cierre. Las pistas dic
 
 | # | Target | Pistas | Qué enseña |
 | --- | --- | --- | --- |
-| 1 | `Funny 3` (el resto en 0) | Funny `High` + Scary `None` ("nada de monstruos") | Una cinta, y que lo que no pide también cuenta |
+| 1 | `Funny 6` (el resto en 0) | Funny `High` + Scary `None` ("nada de monstruos") | Combinar: la misma cinta en 2 slots suma, y lo que no pide también cuenta |
 | 2 | `Funny 3, Scary 3` | Funny `High` + Scary `High` | **Combinar dos cintas** (el Director's Cut), dentro del primer minuto |
-| 3 | `Scary 3` (el resto en 0) | Scary `High` + Funny `None` | Repetir la mecánica con el otro género |
+| 3 | `Scary 6` (el resto en 0) | Scary `High` + Funny `None` | Repetir la mecánica con el otro género |
 
 El inventario inicial (sección 4.3) alcanza para los tres. Desde el cliente 4 el pedido se genera con la receta de la sección 5.2.
 
@@ -277,7 +277,7 @@ ErrorRatio = \frac{Miss}{\max(1,\ \sum_{s} Target[s])} \qquad Accuracy = \operat
 ```
 
 - Se normaliza por el total del objetivo para que los umbrales sirvan igual en pedidos chicos (1★) y grandes (5★). El divisor tiene un piso: `max(ErrorFloor, total)` con `ErrorFloor` = 4 (inicial), para que un punto de más en un pedido chico no sea una multa.
-- **Medidor de coincidencia (Combine VHS).** Muestra Poor / Okay / Good / Great con `ComputeKnownErrorRatio` (mismos umbrales que la reacción), calculado **solo con las pistas dichas**, nunca con el `Target`: `High` pide ≥ `HintHighMin`, `Some` pide 1 a `HintHighMin-1`, `None` pide 0. Una skill sin pista se ignora, salvo que el cliente esté `bFullyHinted` (todas las skills que pide están hinteadas), y entonces cuenta como 0. Los clientes con `Tier ≤ FullHintMaxTier` (inicial 2) hintean siempre todas las skills que piden.
+- **Medidor de coincidencia (Combine VHS).** Muestra Poor / Okay / Good / Great con `ComputeKnownErrorRatio` (mismos umbrales que la reacción), calculado **solo con las pistas dichas y el tamaño total del pedido** (`Target.Total()`, que la pantalla muestra como "Order size: N points"), nunca con el `Target` por skill. `Miss = max(error contra las pistas, |total de la película − total del pedido|)`: las dos son cotas inferiores del error real, así que el medidor nunca es optimista con el tamaño. Esto hace que **una sola cinta no alcance** un pedido que exige combinar (cada cinta de 1★ aporta 3 puntos y un pedido de 2 cintas pide 6). Las pistas: `High` pide ≥ `HintHighMin`, `Some` pide 1 a `HintHighMin-1`, `None` pide 0. Una skill sin pista se ignora, salvo que el cliente esté `bFullyHinted` (todas las skills que pide están hinteadas), y entonces cuenta como 0. Los clientes con `Tier ≤ FullHintMaxTier` (inicial 2) hintean siempre todas las skills que piden.
 - Pasarse cuenta igual que quedarse corto: `|Profile − Target|`.
 - Las estrellas de las cintas ya no entran en la fórmula: están en el presupuesto de puntos de cada cinta (sección 4.1).
 
@@ -348,7 +348,8 @@ Ya no hay catálogos de paquetes (`DT_Catalogs` se eliminó, sección 12.1): las
 | `Genre_SciFi` | Desbloquea Sci-Fi | 80 | |
 | `Genre_Adventure` | Desbloquea Adventure | 100 | |
 | `Genre_Thriller` | Desbloquea Thriller | 120 | |
-| `Slot_4` | `UnlockedSlots` 3 → 4 | 100 | |
+| `Slot_3` | `UnlockedSlots` 2 → 3 | 50 | |
+| `Slot_4` | `UnlockedSlots` 3 → 4 | 100 | `Slot_3` |
 | `Slot_5` | `UnlockedSlots` 4 → 5 | 160 | `Slot_4` |
 | `Stars_2` | `UnlockedStarTier` 1 → 2 | 60 | |
 | `Stars_3` | `UnlockedStarTier` 2 → 3 | 100 | `Stars_2` |
@@ -359,7 +360,7 @@ Ya no hay catálogos de paquetes (`DT_Catalogs` se eliminó, sección 12.1): las
 
 Los dos géneros premium son caros y exigen tener antes la mayoría de los géneros base ("que no sea tan fácil comprarlos").
 
-**Estado inicial:** géneros Horror, Comedy y Action; `UnlockedSlots` = 3; `UnlockedStarTier` = 1.
+**Estado inicial:** géneros Horror, Comedy y Action; `UnlockedSlots` = 2; `UnlockedStarTier` = 1.
 
 > **Riesgo de balance:** la victoria se dispara con `Money ≥ MovieBudgetGoal` y la meta actual (400) fue pensada para ~20 minutos sin gastar en desbloqueos. Con esta economía el dinero se gasta en cintas y en la computadora, así que probablemente haya que subir `MovieBudgetGoal` (el valor original del board era 800). Verificar en playtest.
 
@@ -534,11 +535,11 @@ Todo el contenido y el balance del juego viven en estos assets dentro de `/Game/
 | Skills | StarPoints (Array de 5) | 3 / 4 / 5 / 6 / 7 |
 | Skills | TapesPerStar | 10 |
 | Pistas | HintHighMin | 3 |
-| Armado | StartUnlockedSlots / MaxSlots | 3 / 5 |
+| Armado | StartUnlockedSlots / MaxSlots | 2 / 5 |
 | Armado | MaxFilmTitleLength / MaxHeldFilms | 30 / 1 |
 | Progresión | StartUnlockedStarTier | 1 |
 | Progresión | PremiumMinGenres | 6 |
-| Inventario | StartingTapes (Map Name → int) | Pura Horror ×2, pura Comedy ×2, pura Action ×1 |
+| Inventario | StartingTapes (Map Name → int) | Pura Horror ×3, pura Comedy ×3, pura Action ×1 |
 | Inventario | TapePriceByStar (Array de 5) | 4 / 6 / 9 / 14 / 20 |
 | Puntaje | LovedMaxError / LikedMaxError / NeutralMaxError | 0.10 / 0.35 / 0.65 |
 | Economía | StartMoney / MovieBudgetGoal | 50 / 400 (ver riesgo en 7.1) |

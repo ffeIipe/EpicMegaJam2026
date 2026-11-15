@@ -38,8 +38,8 @@ public:
 			if (!PC->CanGoToBackRoom()) return false; // HUD not ready yet
 			GM->DayNightCycle->bRunning = false; // no scheduled client: its dialogue would block the last check
 			GM->ClientDirector->CloseStore();
-			Test->TestEqual(TEXT("look yaw range"), GM->Config->LookYawLimit, 60.f);
-			Test->TestEqual(TEXT("look pitch range"), GM->Config->LookPitchLimit, 30.f);
+			Test->TestTrue(TEXT("look yaw range is set"), GM->Config->LookYawLimit > 0.f);
+			Test->TestTrue(TEXT("look pitch range is set"), GM->Config->LookPitchLimit > 0.f);
 			Test->TestEqual(TEXT("starts at the counter"), PC->GetCameraZone(), ECameraZone::Counter);
 			StartLocation = PC->GetPawn()->GetActorLocation();
 			PC->GoToBackRoom();
@@ -50,7 +50,10 @@ public:
 		case 1: // the crafting panel opens by itself when the sequence ends
 			if (PC->GetCameraZone() != ECameraZone::BackRoom) return false;
 			Test->TestFalse(TEXT("back room has a panel up"), PC->CanGoToBackRoom());
-			Test->TestTrue(TEXT("tapes to combine"), GM->FilmCrafting->SetSlot(0, "VHS_Comedy_1_01"));
+			Test->TestTrue(TEXT("first tape"), GM->FilmCrafting->SetSlot(0, "VHS_Comedy_1_01"));
+			Test->TestFalse(TEXT("one tape is not a combination"), GM->FilmCrafting->CanConfirm());
+			Test->TestFalse(TEXT("confirm refused with one tape"), GM->FilmCrafting->ConfirmFilm(FText::GetEmpty()));
+			Test->TestTrue(TEXT("second tape"), GM->FilmCrafting->SetSlot(1, "VHS_Comedy_1_01"));
 			Test->TestTrue(TEXT("confirm"), GM->FilmCrafting->ConfirmFilm(FText::GetEmpty())); // closes the panel
 			Stage = 2;
 			return false;

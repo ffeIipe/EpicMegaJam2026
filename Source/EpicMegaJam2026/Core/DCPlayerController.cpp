@@ -1,4 +1,5 @@
 #include "Core/DCPlayerController.h"
+#include "Core/DCGameInstance.h"
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
 #include "Core/DCInteractable.h"
@@ -93,10 +94,11 @@ void ADCPlayerController::BeginPlay()
 	GM->DayNightCycle->OnDayClosed.AddDynamic(this, &ADCPlayerController::HandleDayClosed);
 	GM->DayNightCycle->OnPhaseChanged.AddDynamic(this, &ADCPlayerController::HandlePhaseChanged);
 
-	// Unattended runs (automated tests) skip the menu so the game starts by itself
-	if (GM->Config->bShowMainMenu && !FApp::IsUnattended())
+	// Main menu now runs in its own level (MAP_MainMenu); apply any active save slot when entering MAP_Rewind.
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
 	{
-		PushScreen<UDCMainMenuWidget>(RootLayout, MainMenuWidgetClass);
+		// TODO(SAVE): ApplyActiveSaveToGameMode(GM) when full save serialization is implemented.
+		GI->ApplyActiveSaveToGameMode(GM);
 	}
 }
 
@@ -122,6 +124,12 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 {
 	const UDCScreen* DCScreen = Cast<UDCScreen>(Screen);
 	SetPause(DCScreen && DCScreen->bPausesGame);
+	if (OrderPanelWidget)
+	{
+		// The combine screen shows the order itself, and the dialogue says the same thing as the panel
+		const bool bShowsOrder = Cast<UDCFilmCraftingWidget>(Screen) || Cast<UDCDialogueWidget>(Screen);
+		OrderPanelWidget->SetVisibility(bShowsOrder ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
 	if (!Cast<UDCDialogueWidget>(Screen))
 	{
 		DialogueClient.Reset();
@@ -240,6 +248,10 @@ void ADCPlayerController::GoToBackRoom()
 {
 	if (CanGoToBackRoom() && GetPawn())
 	{
+		if (TutorialWidget)
+		{
+			TutorialWidget->HideHint(); // SPACE pressed: the "go to the back room" sign has done its job
+		}
 		BeginTransition(true);
 	}
 }
@@ -574,6 +586,11 @@ void ADCPlayerController::ShowTutorial(const TCHAR* Text, bool& bFlag)
 
 void ADCPlayerController::HandleDayClosed(const FDaySummary& Summary)
 {
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	{
+		// Save slot bracket: keep slot metadata (money & day) updated at the end of each day
+		GI->SaveActiveSlotMetadata(Summary.MoneyNow, Summary.DayIndex);
+	}
 	UDCDaySummaryWidget* Screen = PushScreen<UDCDaySummaryWidget>(RootLayout, DaySummaryWidgetClass);
 	Screen->OnOpenStore.AddUniqueDynamic(this, &ADCPlayerController::HandleOpenStore);
 	Screen->Show(Summary);
