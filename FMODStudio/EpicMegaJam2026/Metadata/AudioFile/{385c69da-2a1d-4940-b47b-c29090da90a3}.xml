@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{385c69da-2a1d-4940-b47b-c29090da90a3}">
+		<property name="assetPath">
+			<value>ElevenLabs_2026-11-15T05_59_51_Patrick - An engaging audiobook narrator_pvc_s30_sim53_v4.mp3</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>0.67918367346938779</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{263de8c8-4ef4-4517-9687-449a77577a81}</destination>
+		</relationship>
+	</object>
+</objects>

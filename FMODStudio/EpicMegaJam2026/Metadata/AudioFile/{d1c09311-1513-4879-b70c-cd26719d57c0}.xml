@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{d1c09311-1513-4879-b70c-cd26719d57c0}">
+		<property name="assetPath">
+			<value>ElevenLabs_2026-11-15T06_01_47_Bryan - Clear, Conversational Host_pvc_s30_sim53_v4.mp3</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>1.0710204081632653</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{263de8c8-4ef4-4517-9687-449a77577a81}</destination>
+		</relationship>
+	</object>
+</objects>
