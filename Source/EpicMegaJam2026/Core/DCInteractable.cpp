@@ -6,6 +6,9 @@
 #include "UI/DCHudWidgets.h"
 #include "Data/PDA_GameConfig.h"
 #include "Engine/DataTable.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 ADCInteractable::ADCInteractable()
@@ -33,6 +36,15 @@ ADCInteractable::ADCInteractable()
 	LabelWidget->SetRelativeScale3D(FVector(0.5f)); // widget pixels are world units: half size keeps neighbouring shelf labels apart
 	LabelWidget->SetTwoSided(true);
 	LabelWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Green(TEXT("/Game/_MainGame/Niagara/NS_Dolar_Green.NS_Dolar_Green"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Red(TEXT("/Game/_MainGame/Niagara/NS_Dolar_Red.NS_Dolar_Red"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Sparkle(TEXT("/Game/_MainGame/Niagara/NS_Diamond.NS_Diamond"));
+	GainFX = Green.Object;
+	LossFX = Red.Object;
+	NewsFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("NewsFX"));
+	NewsFX->SetupAttachment(Mesh);
+	NewsFX->SetAsset(Sparkle.Object);
+	NewsFX->SetAutoActivate(false);
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false; // only while the computer has news
 }
@@ -89,6 +101,15 @@ void ADCInteractable::OnMoneyChanged(int32 NewMoney, int32 Delta)
 		{
 			Widget->PunchMoney(Delta);
 		}
+		if (UNiagaraSystem* FX = Delta > 0 ? GainFX.Get() : LossFX.Get())
+		{
+			// Short burst: stop emitting after 0.4 s even if the system loops; live particles fade out and it auto-destroys
+			if (UNiagaraComponent* Burst = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, FX, GetActorLocation() + FVector(0.f, 0.f, 60.f)))
+			{
+				FTimerHandle Unused;
+				GetWorldTimerManager().SetTimer(Unused, FTimerDelegate::CreateWeakLambda(Burst, [Burst] { Burst->Deactivate(); }), 0.4f, false);
+			}
+		}
 		if (Delta > 0)
 		{
 			ShakeLeft = 0.5f;
@@ -123,6 +144,7 @@ void ADCInteractable::CheckNews(FName UnlockId)
 void ADCInteractable::ClearNews()
 {
 	bHasNews = false;
+	NewsFX->Deactivate();
 	SetActorTickEnabled(false);
 	SetActorRotation(BaseRotation);
 	SetLabelText(GetLabel());
@@ -157,6 +179,15 @@ void ADCInteractable::Tick(float DeltaTime)
 	}
 	// A 0.7 s shake every 2.2 s, fading in and out, so it reads as "hey" and not as a glitch
 	const float Phase = FMath::Fmod(T, 2.2f);
+	// Sparkle burst at the start of each wobble: 0.4 s, then it stops until the next one
+	if (Phase < 0.4f && !NewsFX->IsActive())
+	{
+		NewsFX->Activate(true);
+	}
+	else if (Phase >= 0.4f && NewsFX->IsActive())
+	{
+		NewsFX->Deactivate();
+	}
 	const float Envelope = Phase < 0.7f ? FMath::Sin(Phase / 0.7f * PI) : 0.f;
 	SetActorRotation(BaseRotation + FRotator(Envelope * FMath::Sin(T * 40.f) * 1.5f, 0.f, Envelope * FMath::Sin(T * 33.f) * 3.f));
 	// Sparkle: the label blinks between two star patterns

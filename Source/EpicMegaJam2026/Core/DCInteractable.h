@@ -9,6 +9,8 @@
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class UWidgetComponent;
+class UNiagaraSystem;
+class UNiagaraComponent;
 
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API ADCInteractable : public AActor
@@ -26,6 +28,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UTextRenderComponent> MoneyDisplay;
 	// Floating label in the UI style: the prop name, or the money on the cash register
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UWidgetComponent> LabelWidget;
+
+	// Niagara feedback: gain/loss bursts on the cash register, sparkle on the computer while it has news
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") TObjectPtr<UNiagaraSystem> GainFX;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") TObjectPtr<UNiagaraSystem> LossFX;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Juice") TObjectPtr<UNiagaraComponent> NewsFX;
 
 	virtual void BeginPlay() override;
 

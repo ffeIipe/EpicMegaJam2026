@@ -8,7 +8,7 @@ public class EpicMegaJam2026 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "AIModule", "NavigationSystem", "GameplayTasks", "FMODStudio", "CommonUI", "CommonInput", "GameplayTags", "LevelSequence", "MovieScene", "MediaAssets" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "AIModule", "NavigationSystem", "GameplayTasks", "FMODStudio", "CommonUI", "CommonInput", "GameplayTags", "LevelSequence", "MovieScene", "MediaAssets", "Niagara" });
 
 		PublicIncludePaths.Add(ModuleDirectory); // allows "Core/..." and "Data/..." includes
 

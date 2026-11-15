@@ -56,6 +56,7 @@ public:
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeOnActivated() override;
+	virtual void NativeOnDeactivated() override;
 
 private:
 	UFUNCTION() void OnTabClicked(FName Genre) { SelectedGenre = Genre; Refresh(); }
@@ -92,6 +93,7 @@ public:
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeOnActivated() override;
+	virtual void NativeOnDeactivated() override;
 
 private:
 	UFUNCTION() void HandleBuy(FName UnlockId);

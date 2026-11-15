@@ -13,6 +13,7 @@ class EPICMEGAJAM2026_API UPDA_AudioConfig : public UPrimaryDataAsset
 
 public:
 	// --- Ambience & Music
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambience & Music") TObjectPtr<UFMODEvent> Music;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambience & Music") TObjectPtr<UFMODEvent> MainMenuMusic;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambience & Music") TObjectPtr<UFMODEvent> DayMusic;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ambience & Music") TObjectPtr<UFMODEvent> NightMusic;
@@ -26,9 +27,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> StoreDoorClose;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> WarehouseDoorOpen;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> WarehouseDoorClose;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> OpenSupplier;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> CloseSupplier;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> TurnOnComputer;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment & Doors") TObjectPtr<UFMODEvent> TurnOffComputer;
 
 	// --- Clients
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") TObjectPtr<UFMODEvent> Footsteps;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") TObjectPtr<UFMODEvent> FemaleCustomerTalk;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") TObjectPtr<UFMODEvent> MaleCustomerTalk;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") TObjectPtr<UFMODEvent> ClientAtCounter;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") TObjectPtr<UFMODEvent> DialogueOpen;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Clients") TObjectPtr<UFMODEvent> OrderAccepted;
@@ -48,10 +55,14 @@ public:
 	// --- Economy & Computer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> MoneyUp;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> MoneyDown;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> BuyFilm;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> SellFilm;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> TapePurchased;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> UnlockPurchased;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> ComputerNotification;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> RentCharged;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> GoodReview;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> BadReview;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> ReviewLoved;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> ReviewLiked;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy & Computer") TObjectPtr<UFMODEvent> ReviewNeutral;
@@ -60,6 +71,7 @@ public:
 	// --- UI & Flow
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI & Flow") TObjectPtr<UFMODEvent> MenuClick;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI & Flow") TObjectPtr<UFMODEvent> MenuHover;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI & Flow") TObjectPtr<UFMODEvent> Notification;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI & Flow") TObjectPtr<UFMODEvent> TabSwitch;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI & Flow") TObjectPtr<UFMODEvent> PauseOpen;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI & Flow") TObjectPtr<UFMODEvent> ScreenClose;
@@ -79,6 +91,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom") TMap<FName, TObjectPtr<UFMODEvent>> CustomCues;
 
 	UPDA_AudioConfig();
+	virtual void PostLoad() override;
 
 	/** Resolves a cue name (including legacy aliases) to its FMOD event, falling back to CustomCues. */
 	UFUNCTION(BlueprintPure, Category = "Audio")

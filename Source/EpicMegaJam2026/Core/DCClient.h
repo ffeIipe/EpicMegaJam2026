@@ -60,6 +60,8 @@ public:
 	void ApplyMesh(class USkeletalMesh* InMesh);
 
 	bool IsAtFront() const { return Runtime.State == EClientState::AtCounter; }
+	bool IsFemaleCustomer() const;
+	void PlayTalkSound() const;
 	// Called by the director after payment: farewell line, then leave as served.
 	void MarkServed(const FText& Farewell);
 	void ForceLeave(); // night closing: leave with no penalty

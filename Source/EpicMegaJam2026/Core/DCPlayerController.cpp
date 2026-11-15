@@ -663,13 +663,11 @@ bool ADCPlayerController::OpenInteractableScreen(EInteractType Type)
 	}
 	if (Type == EInteractType::CashRegister)
 	{
-		Cue(TEXT("Click"));
 		PushScreen<UDCSupplierWidget>(RootLayout, SupplierWidgetClass);
 		return true;
 	}
 	if (Type == EInteractType::Computer)
 	{
-		Cue(TEXT("Click"));
 		for (TActorIterator<ADCInteractable> It(GetWorld()); It; ++It)
 		{
 			if (It->InteractType == EInteractType::Computer)
@@ -706,6 +704,10 @@ void ADCPlayerController::OpenDialogue(ADCClient* Client)
 	DialogueClient = Client;
 	RefreshTutorial();
 	Cue(TEXT("DialogueOpen"));
+	if (!bDeliver)
+	{
+		Client->PlayTalkSound();
+	}
 }
 
 void ADCPlayerController::TryOpenDialogue()

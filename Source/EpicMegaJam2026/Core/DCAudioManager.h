@@ -61,7 +61,10 @@ private:
 	FFMODEventInstance AmbienceInstance;
 	FFMODEventInstance LightBuzzInstance;
 	FFMODEventInstance MusicInstance;
+	FFMODEventInstance ComputerInstance;
 	TWeakObjectPtr<UFMODEvent> CurrentAmbienceEvent;
 	TWeakObjectPtr<UFMODEvent> CurrentLightBuzzEvent;
 	TWeakObjectPtr<UFMODEvent> CurrentMusicEvent;
+	bool bCurrentBackRoom = false;
+	EPhase CurrentPhase = EPhase::Day;
 };

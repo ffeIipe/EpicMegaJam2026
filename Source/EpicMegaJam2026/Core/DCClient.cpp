@@ -183,9 +183,32 @@ void ADCClient::TryGoToCounter()
 	MoveToGoal(Counter->GetActorLocation(), EGoal::Counter);
 }
 
+bool ADCClient::IsFemaleCustomer() const
+{
+	if (const USkeletalMesh* MeshAsset = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr)
+	{
+		const FString MeshPath = MeshAsset->GetPathName();
+		if (MeshPath.Contains(TEXT("Female"), ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+		if (MeshPath.Contains(TEXT("Male"), ESearchCase::IgnoreCase))
+		{
+			return false;
+		}
+	}
+	return Runtime.ArchetypeRow.ToString().Contains(TEXT("Female"), ESearchCase::IgnoreCase);
+}
+
+void ADCClient::PlayTalkSound() const
+{
+	ADCAudioManager::PlayCueAtLocationStatic(this, IsFemaleCustomer() ? TEXT("FemaleCustomerTalk") : TEXT("MaleCustomerTalk"), GetActorLocation());
+}
+
 void ADCClient::MarkServed(const FText& Farewell)
 {
 	SetClientState(EClientState::Served);
+	PlayTalkSound();
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::White, Farewell.ToString()); // placeholder speech bubble
@@ -213,6 +236,7 @@ void ADCClient::StartLeaving(bool bServed)
 		Counter->Release(this);
 	}
 	SetClientState(EClientState::Leaving);
+	ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("StoreDoorOpen"), ExitLocation);
 	UDCDoorSwing::Pulse(this, ExitLocation, 8.f); // held open while they walk to it
 	if (Director.IsValid())
 	{

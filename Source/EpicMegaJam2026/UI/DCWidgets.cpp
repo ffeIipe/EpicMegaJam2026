@@ -9,6 +9,8 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
@@ -79,7 +81,7 @@ void UDCInventoryWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("PrevTab"), false, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, -1)));
-	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), true, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, 1)));
+	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), false, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, 1)));
 }
 
 void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInPicker, UAC_FilmCrafting* InCrafting)
@@ -303,8 +305,55 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 0.5f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
 	DCUI::Header(WidgetTree, V, TEXT("COMBINE VHS"), TEXT("Mix tapes: their skills add up"));
+	// Two views of the same screen: mixing tapes, and the permanent library of films already made
+	UHorizontalBox* ViewTabs = WidgetTree->ConstructWidget<UHorizontalBox>();
+	V->AddChildToVerticalBox(ViewTabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	for (const TPair<const TCHAR*, const TCHAR*>& Def : { TPair<const TCHAR*, const TCHAR*>(TEXT("Combine"), TEXT("COMBINE")), TPair<const TCHAR*, const TCHAR*>(TEXT("Crafted"), TEXT("CRAFTED FILMS")) })
+	{
+		UDCButton* Tab = DCUI::Button(WidgetTree, ViewTabs, Def.Value, Def.Key, UDCButton_Tab::StaticClass());
+		Tab->SetIsSelectable(true);
+		Tab->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnViewClicked);
+		ViewTabButtons.Add(Tab);
+	}
+	// Both views share one overlay: the hidden one keeps its layout space, so the library is exactly as big as the combine view
+	UOverlay* Views = WidgetTree->ConstructWidget<UOverlay>();
+	V->AddChild(Views);
 	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
-	V->AddChild(Body);
+	Views->AddChild(Body);
+	CombineBody = Body;
+
+	// Library view: list of crafted films on the left, the hovered one's stars and stats on the right; a click puts it in hand
+	UHorizontalBox* Library = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UOverlaySlot* LibrarySlot = Views->AddChildToOverlay(Library);
+	LibrarySlot->SetHorizontalAlignment(HAlign_Fill);
+	LibrarySlot->SetVerticalAlignment(VAlign_Fill);
+	CraftedBody = Library;
+	UCommonBorder* CraftedPanel = DCUI::Border(WidgetTree, Library, UDCBorder_Inset::StaticClass(), FMargin(10.f));
+	Cast<UHorizontalBoxSlot>(CraftedPanel->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UScrollBox* CraftedScroll = WidgetTree->ConstructWidget<UScrollBox>();
+	CraftedPanel->SetContent(CraftedScroll);
+	CraftedList = WidgetTree->ConstructWidget<UVerticalBox>();
+	CraftedScroll->AddChild(CraftedList);
+	UCommonBorder* CraftedDetailPanel = DCUI::Border(WidgetTree, Library, UDCBorder_Inset::StaticClass(), FMargin(16.f));
+	Cast<UHorizontalBoxSlot>(CraftedDetailPanel->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
+	USizeBox* CraftedDetailSize = WidgetTree->ConstructWidget<USizeBox>();
+	CraftedDetailSize->SetWidthOverride(DetailWidth);
+	CraftedDetailPanel->SetContent(CraftedDetailSize);
+	UVerticalBox* CraftedDetail = WidgetTree->ConstructWidget<UVerticalBox>();
+	CraftedDetailSize->AddChild(CraftedDetail);
+	CraftedTitle = DCUI::Text(WidgetTree, CraftedDetail, TEXT(""), UDCText_Heading::StaticClass());
+	CraftedTitle->SetWrapTextAt(DetailWidth - 40.f);
+	CraftedStars = DCUI::Text(WidgetTree, CraftedDetail, TEXT(""), UDCText_Stars::StaticClass());
+	CraftedStars->SetMargin(FMargin(0.f, 6.f, 0.f, 10.f));
+	DCUI::Text(WidgetTree, CraftedDetail, TEXT("SKILLS"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
+	CraftedSkills = WidgetTree->ConstructWidget<UVerticalBox>();
+	CraftedDetail->AddChild(CraftedSkills);
+	DCUI::Text(WidgetTree, CraftedDetail, TEXT("MADE FROM"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 10.f, 0.f, 4.f));
+	CraftedTapes = DCUI::Text(WidgetTree, CraftedDetail, TEXT(""), UDCText_Body::StaticClass());
+	CraftedTapes->SetWrapTextAt(DetailWidth - 40.f);
+	UCommonTextBlock* CraftedHint = DCUI::Text(WidgetTree, CraftedDetail, TEXT("Click a film to take it to the counter"), UDCText_Accent::StaticClass());
+	CraftedHint->SetMargin(FMargin(0.f, 10.f, 0.f, 0.f));
+	CraftedHint->SetWrapTextAt(DetailWidth - 40.f);
 
 	// Left: the tapes with copies left; a click fills the next empty slot
 	UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -413,7 +462,7 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 
 	ConfirmButton = DCUI::Button(WidgetTree, Right, TEXT("COMBINE"));
 	ConfirmButton->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnConfirm);
-	DiscardButton = DCUI::Button(WidgetTree, Right, TEXT("Discard held film"), NAME_None, UDCButton_Tab::StaticClass());
+	DiscardButton = DCUI::Button(WidgetTree, Right, TEXT("Put away held film"), NAME_None, UDCButton_Tab::StaticClass());
 	DiscardButton->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnDiscard);
 	Cast<UVerticalBoxSlot>(DiscardButton->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	HeldText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
@@ -425,12 +474,75 @@ void UDCFilmCraftingWidget::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 	StatusText->SetText(FText::GetEmpty());
+	ShowView(false);
 	Refresh();
+}
+
+void UDCFilmCraftingWidget::ShowView(bool bCrafted)
+{
+	CombineBody->SetVisibility(bCrafted ? ESlateVisibility::Hidden : ESlateVisibility::SelfHitTestInvisible); // Hidden, not Collapsed: it keeps the size
+	CraftedBody->SetVisibility(bCrafted ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	SetSelected(ViewTabButtons[0], !bCrafted);
+	SetSelected(ViewTabButtons[1], bCrafted);
+	if (bCrafted)
+	{
+		ShowFilm(Crafting->CraftedFilms.Num() - 1); // the newest until the mouse picks another
+	}
+}
+
+void UDCFilmCraftingWidget::ShowFilm(int32 Index)
+{
+	const FCreatedFilm* Film = Crafting->CraftedFilms.IsValidIndex(Index) ? &Crafting->CraftedFilms[Index] : nullptr;
+	ShownFilm = Film ? Index : INDEX_NONE;
+	CraftedTitle->SetText(Film ? Film->Title : FText::FromString(TEXT("No films yet")));
+	CraftedSkills->ClearChildren();
+	TMap<FName, int32> Counts;
+	int32 RatingSum = 0, Filled = 0;
+	if (Film)
+	{
+		DCUI::SkillList(WidgetTree, CraftedSkills, Film->SkillProfile, Config->SkillCap);
+		FVHSData Tape;
+		for (const FName& Row : Film->SlotRows)
+		{
+			if (!Row.IsNone() && Inventory->GetVHSData(Row, Tape))
+			{
+				Counts.FindOrAdd(Row)++;
+				RatingSum += Tape.Rating;
+				++Filled;
+			}
+		}
+	}
+	// A film has no rating of its own: it shows the average of the tapes it was made from
+	CraftedStars->SetText(FText::FromString(Filled ? DCUI::Stars(FMath::RoundToInt((float)RatingSum / Filled)) : FString()));
+	FString Made;
+	FVHSData Tape;
+	for (const TPair<FName, int32>& Pair : Counts)
+	{
+		Inventory->GetVHSData(Pair.Key, Tape);
+		Made += FString::Printf(TEXT("%s%s\n"), *DCUI::CleanTitle(Tape.Title), Pair.Value > 1 ? *FString::Printf(TEXT(" x%d"), Pair.Value) : TEXT(""));
+	}
+	CraftedTapes->SetText(FText::FromString(Made.TrimEnd()));
+}
+
+void UDCFilmCraftingWidget::OnViewClicked(FName View)
+{
+	ShowView(View == "Crafted");
 }
 
 void UDCFilmCraftingWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (CraftedBody->GetVisibility() != ESlateVisibility::Collapsed)
+	{
+		for (const UDCButton* Btn : CraftedButtons)
+		{
+			const int32 Index = FCString::Atoi(*Btn->Payload.ToString());
+			if (Btn->IsHovered() && Index != ShownFilm)
+			{
+				ShowFilm(Index);
+			}
+		}
+	}
 	// The game keeps running behind this screen: follow the client's patience live
 	const ADCClient* Front = Director ? Director->GetFrontClient() : nullptr;
 	if (Front && Front->IsAtFront() && Front->PatienceMax > 0.f)
@@ -454,6 +566,57 @@ void UDCFilmCraftingWidget::Refresh()
 		const bool bHas = !Row.IsNone() && Inventory->GetVHSData(Row, Tape);
 		SlotTexts[i]->SetText(bHas ? FText::FromString(DCUI::CleanTitle(Tape.Title)) : FText::FromString(TEXT("(empty)")));
 		SlotClears[i]->SetVisibility(bHas ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+	if (Crafting->CraftedFilms.Num() != CraftedShown) // rebuilt only when a film is added: a click on one must not destroy its own button
+	{
+		CraftedShown = Crafting->CraftedFilms.Num();
+		CraftedList->ClearChildren();
+		CraftedButtons.Reset();
+		for (int32 i = CraftedShown - 1; i >= 0; --i)
+		{
+			const FCreatedFilm& Film = Crafting->CraftedFilms[i];
+			UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, Film.Title.ToString(), FName(*FString::FromInt(i)), UDCButton_Row::StaticClass());
+			Btn->OnPayloadClicked.AddUniqueDynamic(this, &UDCFilmCraftingWidget::OnCraftedClicked);
+			// Same row as the inventory: cover (the first tape's), title with the skills under it, stars (average of the tapes)
+			Btn->Label->RemoveFromParent();
+			UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
+			Btn->Content->AddChild(H);
+			FVHSData Tape, First;
+			bool bFirst = false;
+			int32 RatingSum = 0, Filled = 0;
+			for (const FName& Row : Film.SlotRows)
+			{
+				if (!Row.IsNone() && Inventory->GetVHSData(Row, Tape))
+				{
+					if (!bFirst)
+					{
+						First = Tape;
+						bFirst = true;
+					}
+					RatingSum += Tape.Rating;
+					++Filled;
+				}
+			}
+			SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), bFirst ? &First : nullptr, Config);
+			UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
+			Text->AddChildToVerticalBox(Btn->Label)->SetHorizontalAlignment(HAlign_Left);
+			DCUI::InlineSkills(WidgetTree, Text, Film.SkillProfile);
+			UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
+			TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			TitleSlot->SetVerticalAlignment(VAlign_Center);
+			TitleSlot->SetPadding(FMargin(12.f, 0.f));
+			H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Filled ? FMath::RoundToInt((float)RatingSum / Filled) : 0), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
+			CraftedList->AddChild(Btn);
+			CraftedButtons.Add(Btn);
+		}
+		if (CraftedShown == 0)
+		{
+			DCUI::Text(WidgetTree, CraftedList, TEXT("No films yet."));
+		}
+		if (CraftedBody->GetVisibility() != ESlateVisibility::Collapsed)
+		{
+			ShowFilm(CraftedShown - 1);
+		}
 	}
 	const bool bHasLocked = Crafting->UnlockedSlots < Config->MaxSlots;
 	LockedBox->SetVisibility(bHasLocked ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
@@ -537,6 +700,11 @@ void UDCFilmCraftingWidget::OnConfirm(FName Unused)
 		TitleBox->SetText(FText::GetEmpty());
 		AutoTitle.Empty();
 	}
+}
+
+void UDCFilmCraftingWidget::OnCraftedClicked(FName Index)
+{
+	Crafting->EquipFilm(FCString::Atoi(*Index.ToString())); // HandleFilmCreated closes this screen and sends the camera home
 }
 
 void UDCFilmCraftingWidget::OnDiscard(FName Unused)
