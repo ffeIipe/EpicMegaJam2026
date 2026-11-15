@@ -243,7 +243,10 @@ public:
 	UPROPERTY(BlueprintReadOnly) int32 UnlockedSlots = 2;
 	// One DT_VHS row per slot, NAME_None = empty; always UnlockedSlots long
 	UPROPERTY(BlueprintReadOnly) TArray<FName> SlotRows;
+	// The film in hand (at most one): a copy of an entry of CraftedFilms
 	UPROPERTY(BlueprintReadOnly) TArray<FCreatedFilm> HeldFilms;
+	// Every film ever combined: permanent and infinite, delivering one never spends it
+	UPROPERTY(BlueprintReadOnly) TArray<FCreatedFilm> CraftedFilms;
 
 	virtual void BeginPlay() override;
 
@@ -261,9 +264,11 @@ public:
 	UFUNCTION(BlueprintCallable) bool ConfirmFilm(FText Title);
 	// A fresh satirical title for the tapes in the slots (empty when none is filled); the panel writes it in the title field.
 	FString SuggestTitle() const;
-	// Gives the held film's tapes back to the inventory (4.4 rule 8).
+	// Puts the held film away (it stays in CraftedFilms).
 	UFUNCTION(BlueprintCallable) void DiscardHeldFilm();
-	// The film leaves the hand at delivery: the tapes stay spent.
+	// Takes a crafted film in hand, replacing the current one; fires OnFilmCreated like a fresh combine.
+	UFUNCTION(BlueprintCallable) bool EquipFilm(int32 Index);
+	// The film leaves the hand at delivery; it stays in CraftedFilms.
 	void ConsumeHeldFilm();
 
 private:

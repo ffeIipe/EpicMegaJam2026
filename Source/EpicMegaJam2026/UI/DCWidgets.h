@@ -78,6 +78,11 @@ private:
 	UFUNCTION() void OnClearClicked(FName SlotName);
 	UFUNCTION() void OnPicked(FName VHSRow);
 	UFUNCTION() void OnConfirm(FName Unused);
+	UFUNCTION() void OnCraftedClicked(FName Index);
+	UFUNCTION() void OnViewClicked(FName View);
+	void ShowView(bool bCrafted);
+	// Fills the library's detail panel with CraftedFilms[Index]
+	void ShowFilm(int32 Index);
 	UFUNCTION() void OnDiscard(FName Unused);
 	UFUNCTION() void OnFilmStateChanged() { Refresh(); }
 
@@ -107,6 +112,17 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UCommonTextBlock>> SlotTexts;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> SlotClears;
 	// The next slot to buy, shown with a padlock until it is unlocked at the computer
+	UPROPERTY() TObjectPtr<UWidget> CombineBody;
+	UPROPERTY() TObjectPtr<UWidget> CraftedBody;
+	UPROPERTY() TArray<TObjectPtr<UDCButton>> ViewTabButtons;
+	UPROPERTY() TObjectPtr<UVerticalBox> CraftedList;
+	UPROPERTY() TArray<TObjectPtr<UDCButton>> CraftedButtons;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedTitle;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedStars;
+	UPROPERTY() TObjectPtr<UVerticalBox> CraftedSkills;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedTapes;
+	int32 CraftedShown = -1;
+	int32 ShownFilm = INDEX_NONE;
 	UPROPERTY() TObjectPtr<UWidget> LockedBox;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> LockedText;
 };

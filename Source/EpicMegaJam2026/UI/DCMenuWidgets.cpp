@@ -83,7 +83,7 @@ void UDCSupplierWidget::NativeOnInitialized()
 	GM->Economy->OnMoneyChanged.AddDynamic(this, &UDCSupplierWidget::OnMoneyChanged);
 	Unlocks->OnUnlockPurchased.AddDynamic(this, &UDCSupplierWidget::OnUnlockPurchased);
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("PrevTab"), false, FSimpleDelegate::CreateUObject(this, &UDCSupplierWidget::CycleTab, -1)));
-	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), true, FSimpleDelegate::CreateUObject(this, &UDCSupplierWidget::CycleTab, 1)));
+	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), false, FSimpleDelegate::CreateUObject(this, &UDCSupplierWidget::CycleTab, 1)));
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
 	DCUI::Header(WidgetTree, V, TEXT("SUPPLIER"), TEXT("Tapes for sale, one copy at a time"));
@@ -105,7 +105,14 @@ void UDCSupplierWidget::NativeOnInitialized()
 void UDCSupplierWidget::NativeOnActivated()
 {
 	Super::NativeOnActivated();
+	ADCAudioManager::PlayCueStatic(this, TEXT("OpenSupplier"));
 	Refresh(); // what is on sale changes with the unlocks
+}
+
+void UDCSupplierWidget::NativeOnDeactivated()
+{
+	Super::NativeOnDeactivated();
+	ADCAudioManager::PlayCueStatic(this, TEXT("CloseSupplier"));
 }
 
 void UDCSupplierWidget::CycleTab(int32 Dir)
@@ -265,7 +272,7 @@ void UDCComputerWidget::NativeOnInitialized()
 	GM->ClientDirector->OnReviewReceived.AddDynamic(this, &UDCComputerWidget::OnReviewReceived);
 	Unlocks->OnUnlockPurchased.AddDynamic(this, &UDCComputerWidget::OnUnlockPurchased);
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("PrevTab"), false, FSimpleDelegate::CreateUObject(this, &UDCComputerWidget::CycleTab, -1)));
-	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), true, FSimpleDelegate::CreateUObject(this, &UDCComputerWidget::CycleTab, 1)));
+	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), false, FSimpleDelegate::CreateUObject(this, &UDCComputerWidget::CycleTab, 1)));
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
 	DCUI::Header(WidgetTree, V, TEXT("COMPUTER"), TEXT("Upgrade the store, check the rent and read your reviews"));
@@ -296,7 +303,14 @@ void UDCComputerWidget::NativeOnInitialized()
 void UDCComputerWidget::NativeOnActivated()
 {
 	Super::NativeOnActivated();
+	ADCAudioManager::PlayCueStatic(this, TEXT("TurnOnComputer"));
 	Refresh();
+}
+
+void UDCComputerWidget::NativeOnDeactivated()
+{
+	Super::NativeOnDeactivated();
+	ADCAudioManager::PlayCueStatic(this, TEXT("TurnOffComputer"));
 }
 
 void UDCComputerWidget::Refresh()

@@ -21,20 +21,58 @@ namespace
 	};
 
 	const FDefaultEventEntry DefaultEventEntries[] = {
+		// Ambience & Music
+		{ &UPDA_AudioConfig::Music, TEXT("/Game/FMOD/Events/MUS/Music.Music") },
+		{ &UPDA_AudioConfig::MainMenuMusic, TEXT("/Game/FMOD/Events/MUS/Music.Music") },
+		{ &UPDA_AudioConfig::DayMusic, TEXT("/Game/FMOD/Events/MUS/Music.Music") },
+		{ &UPDA_AudioConfig::NightMusic, TEXT("/Game/FMOD/Events/MUS/Music.Music") },
 		{ &UPDA_AudioConfig::CounterAmbience, TEXT("/Game/FMOD/Events/AMB/CounterAmb.CounterAmb") },
 		{ &UPDA_AudioConfig::WarehouseAmbience, TEXT("/Game/FMOD/Events/AMB/WarehouseAmb.WarehouseAmb") },
-		{ &UPDA_AudioConfig::Footsteps, TEXT("/Game/FMOD/Events/SFX/Footsteps.Footsteps") },
-		{ &UPDA_AudioConfig::DoorbellRing, TEXT("/Game/FMOD/Events/SFX/ENV/DoorbellRing.DoorbellRing") },
 		{ &UPDA_AudioConfig::LightBuzz, TEXT("/Game/FMOD/Events/SFX/ENV/LightBuzz.LightBuzz") },
-		{ &UPDA_AudioConfig::StoreDoorClose, TEXT("/Game/FMOD/Events/SFX/ENV/StoreDoorClose.StoreDoorClose") },
+		// Environment & Doors / Interactables
+		{ &UPDA_AudioConfig::DoorbellRing, TEXT("/Game/FMOD/Events/SFX/ENV/DoorbellRing.DoorbellRing") },
 		{ &UPDA_AudioConfig::StoreDoorOpen, TEXT("/Game/FMOD/Events/SFX/ENV/StoreDoorOpen.StoreDoorOpen") },
-		{ &UPDA_AudioConfig::WarehouseDoorClose, TEXT("/Game/FMOD/Events/SFX/ENV/WarehouseDoorClose.WarehouseDoorClose") },
+		{ &UPDA_AudioConfig::StoreDoorClose, TEXT("/Game/FMOD/Events/SFX/ENV/StoreDoorClose.StoreDoorClose") },
 		{ &UPDA_AudioConfig::WarehouseDoorOpen, TEXT("/Game/FMOD/Events/SFX/ENV/WarehouseDoorOpen.WarehouseDoorOpen") },
+		{ &UPDA_AudioConfig::WarehouseDoorClose, TEXT("/Game/FMOD/Events/SFX/ENV/WarehouseDoorClose.WarehouseDoorClose") },
+		{ &UPDA_AudioConfig::OpenSupplier, TEXT("/Game/FMOD/Events/SFX/INTERACTABLES/OpenSupplier.OpenSupplier") },
+		{ &UPDA_AudioConfig::CloseSupplier, TEXT("/Game/FMOD/Events/SFX/INTERACTABLES/CloseSupplier.CloseSupplier") },
+		{ &UPDA_AudioConfig::TurnOnComputer, TEXT("/Game/FMOD/Events/SFX/INTERACTABLES/TurnOnComputer.TurnOnComputer") },
+		{ &UPDA_AudioConfig::TurnOffComputer, TEXT("/Game/FMOD/Events/SFX/INTERACTABLES/TurnOffComputer.TurnOffComputer") },
+		// Clients
+		{ &UPDA_AudioConfig::Footsteps, TEXT("/Game/FMOD/Events/SFX/Footsteps.Footsteps") },
+		{ &UPDA_AudioConfig::FemaleCustomerTalk, TEXT("/Game/FMOD/Events/SFX/FemaleCustomerTalk.FemaleCustomerTalk") },
+		{ &UPDA_AudioConfig::MaleCustomerTalk, TEXT("/Game/FMOD/Events/SFX/MaleCustomerTalk.MaleCustomerTalk") },
+		{ &UPDA_AudioConfig::Delivered, TEXT("/Game/FMOD/Events/UI/SALES/SellFilm.SellFilm") },
+		// Crafting
 		{ &UPDA_AudioConfig::FilmPlace, TEXT("/Game/FMOD/Events/UI/FilmPlace.FilmPlace") },
 		{ &UPDA_AudioConfig::FilmSelect, TEXT("/Game/FMOD/Events/UI/FilmSelect.FilmSelect") },
+		// Economy & Computer
+		{ &UPDA_AudioConfig::BuyFilm, TEXT("/Game/FMOD/Events/UI/SALES/BuyFilm.BuyFilm") },
+		{ &UPDA_AudioConfig::SellFilm, TEXT("/Game/FMOD/Events/UI/SALES/SellFilm.SellFilm") },
+		{ &UPDA_AudioConfig::TapePurchased, TEXT("/Game/FMOD/Events/UI/SALES/BuyFilm.BuyFilm") },
+		{ &UPDA_AudioConfig::UnlockPurchased, TEXT("/Game/FMOD/Events/UI/SALES/BuyFilm.BuyFilm") },
+		{ &UPDA_AudioConfig::ComputerNotification, TEXT("/Game/FMOD/Events/UI/Notification.Notification") },
+		{ &UPDA_AudioConfig::GoodReview, TEXT("/Game/FMOD/Events/UI/GoodReview.GoodReview") },
+		{ &UPDA_AudioConfig::BadReview, TEXT("/Game/FMOD/Events/UI/BadReview.BadReview") },
+		{ &UPDA_AudioConfig::ReviewLoved, TEXT("/Game/FMOD/Events/UI/GoodReview.GoodReview") },
+		{ &UPDA_AudioConfig::ReviewLiked, TEXT("/Game/FMOD/Events/UI/GoodReview.GoodReview") },
+		{ &UPDA_AudioConfig::ReviewNeutral, TEXT("/Game/FMOD/Events/UI/BadReview.BadReview") },
+		{ &UPDA_AudioConfig::ReviewHated, TEXT("/Game/FMOD/Events/UI/BadReview.BadReview") },
+		// UI
 		{ &UPDA_AudioConfig::MenuClick, TEXT("/Game/FMOD/Events/UI/MENU/MenuClick.MenuClick") },
 		{ &UPDA_AudioConfig::MenuHover, TEXT("/Game/FMOD/Events/UI/MENU/MenuHover.MenuHover") },
+		{ &UPDA_AudioConfig::Notification, TEXT("/Game/FMOD/Events/UI/Notification.Notification") },
 	};
+
+	void StopEventInstance(FFMODEventInstance& Inst)
+	{
+		if (UFMODBlueprintStatics::EventInstanceIsValid(Inst))
+		{
+			UFMODBlueprintStatics::EventInstanceStop(Inst, true);
+		}
+		Inst.Instance = nullptr;
+	}
 
 	void PopulateMissingDefaultEvents(UPDA_AudioConfig& Cfg)
 	{
@@ -53,6 +91,7 @@ namespace
 		{
 			TMap<FName, FAudioEventMember> M;
 			// Ambience & Music
+			M.Add(TEXT("Music"), &UPDA_AudioConfig::Music);
 			M.Add(TEXT("MainMenuMusic"), &UPDA_AudioConfig::MainMenuMusic);
 			M.Add(TEXT("DayMusic"), &UPDA_AudioConfig::DayMusic);
 			M.Add(TEXT("NightMusic"), &UPDA_AudioConfig::NightMusic);
@@ -61,14 +100,20 @@ namespace
 			M.Add(TEXT("WarehouseAmbience"), &UPDA_AudioConfig::WarehouseAmbience);
 			M.Add(TEXT("WarehouseAmb"), &UPDA_AudioConfig::WarehouseAmbience);
 			M.Add(TEXT("LightBuzz"), &UPDA_AudioConfig::LightBuzz);
-			// Environment & Doors
+			// Environment & Doors / Interactables
 			M.Add(TEXT("DoorbellRing"), &UPDA_AudioConfig::DoorbellRing);
 			M.Add(TEXT("StoreDoorOpen"), &UPDA_AudioConfig::StoreDoorOpen);
 			M.Add(TEXT("StoreDoorClose"), &UPDA_AudioConfig::StoreDoorClose);
 			M.Add(TEXT("WarehouseDoorOpen"), &UPDA_AudioConfig::WarehouseDoorOpen);
 			M.Add(TEXT("WarehouseDoorClose"), &UPDA_AudioConfig::WarehouseDoorClose);
+			M.Add(TEXT("OpenSupplier"), &UPDA_AudioConfig::OpenSupplier);
+			M.Add(TEXT("CloseSupplier"), &UPDA_AudioConfig::CloseSupplier);
+			M.Add(TEXT("TurnOnComputer"), &UPDA_AudioConfig::TurnOnComputer);
+			M.Add(TEXT("TurnOffComputer"), &UPDA_AudioConfig::TurnOffComputer);
 			// Clients
 			M.Add(TEXT("Footsteps"), &UPDA_AudioConfig::Footsteps);
+			M.Add(TEXT("FemaleCustomerTalk"), &UPDA_AudioConfig::FemaleCustomerTalk);
+			M.Add(TEXT("MaleCustomerTalk"), &UPDA_AudioConfig::MaleCustomerTalk);
 			M.Add(TEXT("ClientAtCounter"), &UPDA_AudioConfig::ClientAtCounter);
 			M.Add(TEXT("DialogueOpen"), &UPDA_AudioConfig::DialogueOpen);
 			M.Add(TEXT("OrderAccepted"), &UPDA_AudioConfig::OrderAccepted);
@@ -85,10 +130,14 @@ namespace
 			// Economy & Computer
 			M.Add(TEXT("MoneyUp"), &UPDA_AudioConfig::MoneyUp);
 			M.Add(TEXT("MoneyDown"), &UPDA_AudioConfig::MoneyDown);
+			M.Add(TEXT("BuyFilm"), &UPDA_AudioConfig::BuyFilm);
+			M.Add(TEXT("SellFilm"), &UPDA_AudioConfig::SellFilm);
 			M.Add(TEXT("TapePurchased"), &UPDA_AudioConfig::TapePurchased);
 			M.Add(TEXT("UnlockPurchased"), &UPDA_AudioConfig::UnlockPurchased);
 			M.Add(TEXT("ComputerNotification"), &UPDA_AudioConfig::ComputerNotification);
 			M.Add(TEXT("RentCharged"), &UPDA_AudioConfig::RentCharged);
+			M.Add(TEXT("GoodReview"), &UPDA_AudioConfig::GoodReview);
+			M.Add(TEXT("BadReview"), &UPDA_AudioConfig::BadReview);
 			M.Add(TEXT("ReviewLoved"), &UPDA_AudioConfig::ReviewLoved);
 			M.Add(TEXT("Review_Loved"), &UPDA_AudioConfig::ReviewLoved);
 			M.Add(TEXT("ReviewLiked"), &UPDA_AudioConfig::ReviewLiked);
@@ -102,6 +151,7 @@ namespace
 			M.Add(TEXT("Click"), &UPDA_AudioConfig::MenuClick);
 			M.Add(TEXT("MenuHover"), &UPDA_AudioConfig::MenuHover);
 			M.Add(TEXT("Hover"), &UPDA_AudioConfig::MenuHover);
+			M.Add(TEXT("Notification"), &UPDA_AudioConfig::Notification);
 			M.Add(TEXT("TabSwitch"), &UPDA_AudioConfig::TabSwitch);
 			M.Add(TEXT("PauseOpen"), &UPDA_AudioConfig::PauseOpen);
 			M.Add(TEXT("ScreenClose"), &UPDA_AudioConfig::ScreenClose);
@@ -120,10 +170,41 @@ namespace
 		}();
 		return Map;
 	}
+
+	const TMap<FName, FAudioEventMember>& GetFallbackCueLookup()
+	{
+		static const TMap<FName, FAudioEventMember> Map = []()
+		{
+			TMap<FName, FAudioEventMember> M;
+			M.Add(TEXT("ReviewLoved"), &UPDA_AudioConfig::GoodReview);
+			M.Add(TEXT("Review_Loved"), &UPDA_AudioConfig::GoodReview);
+			M.Add(TEXT("ReviewLiked"), &UPDA_AudioConfig::GoodReview);
+			M.Add(TEXT("Review_Liked"), &UPDA_AudioConfig::GoodReview);
+			M.Add(TEXT("ReviewNeutral"), &UPDA_AudioConfig::BadReview);
+			M.Add(TEXT("Review_Neutral"), &UPDA_AudioConfig::BadReview);
+			M.Add(TEXT("ReviewHated"), &UPDA_AudioConfig::BadReview);
+			M.Add(TEXT("Review_Hated"), &UPDA_AudioConfig::BadReview);
+			M.Add(TEXT("TapePurchased"), &UPDA_AudioConfig::BuyFilm);
+			M.Add(TEXT("UnlockPurchased"), &UPDA_AudioConfig::BuyFilm);
+			M.Add(TEXT("Delivered"), &UPDA_AudioConfig::SellFilm);
+			M.Add(TEXT("ComputerNotification"), &UPDA_AudioConfig::Notification);
+			M.Add(TEXT("MainMenuMusic"), &UPDA_AudioConfig::Music);
+			M.Add(TEXT("DayMusic"), &UPDA_AudioConfig::Music);
+			M.Add(TEXT("NightMusic"), &UPDA_AudioConfig::Music);
+			return M;
+		}();
+		return Map;
+	}
 }
 
 UPDA_AudioConfig::UPDA_AudioConfig()
 {
+	PopulateMissingDefaultEvents(*this);
+}
+
+void UPDA_AudioConfig::PostLoad()
+{
+	Super::PostLoad();
 	PopulateMissingDefaultEvents(*this);
 }
 
@@ -136,6 +217,13 @@ UFMODEvent* UPDA_AudioConfig::ResolveCue(FName Name) const
 	if (const FAudioEventMember* Member = GetCueLookup().Find(Name))
 	{
 		if (UFMODEvent* Event = (this->*(*Member)).Get())
+		{
+			return Event;
+		}
+	}
+	if (const FAudioEventMember* Fallback = GetFallbackCueLookup().Find(Name))
+	{
+		if (UFMODEvent* Event = (this->*(*Fallback)).Get())
 		{
 			return Event;
 		}
@@ -157,30 +245,30 @@ void ADCAudioManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ADCAudioManager::EnsureAudioConfig()
 {
-	if (AudioConfig)
+	if (!AudioConfig)
 	{
-		return;
-	}
-	if (const UWorld* World = GetWorld())
-	{
-		if (const ADCGameMode* GM = World->GetAuthGameMode<ADCGameMode>())
+		if (const UWorld* World = GetWorld())
 		{
-			if (GM->Config && GM->Config->AudioConfig)
+			if (const ADCGameMode* GM = World->GetAuthGameMode<ADCGameMode>())
 			{
-				AudioConfig = GM->Config->AudioConfig;
-				return;
+				if (GM->Config && GM->Config->AudioConfig)
+				{
+					AudioConfig = GM->Config->AudioConfig;
+				}
 			}
-		}
-		else if (const ADCMainMenuGameMode* MenuGM = World->GetAuthGameMode<ADCMainMenuGameMode>())
-		{
-			if (MenuGM->Config && MenuGM->Config->AudioConfig)
+			else if (const ADCMainMenuGameMode* MenuGM = World->GetAuthGameMode<ADCMainMenuGameMode>())
 			{
-				AudioConfig = MenuGM->Config->AudioConfig;
-				return;
+				if (MenuGM->Config && MenuGM->Config->AudioConfig)
+				{
+					AudioConfig = MenuGM->Config->AudioConfig;
+				}
 			}
 		}
 	}
-	AudioConfig = LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Audio/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (!AudioConfig)
+	{
+		AudioConfig = LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Audio/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
 	if (!AudioConfig)
 	{
 		AudioConfig = LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Data/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet);
@@ -188,10 +276,10 @@ void ADCAudioManager::EnsureAudioConfig()
 	if (!AudioConfig)
 	{
 		AudioConfig = NewObject<UPDA_AudioConfig>(this);
-		if (AudioConfig)
-		{
-			PopulateMissingDefaultEvents(*AudioConfig);
-		}
+	}
+	if (AudioConfig)
+	{
+		PopulateMissingDefaultEvents(*AudioConfig);
 	}
 }
 
@@ -214,6 +302,28 @@ UFMODEvent* ADCAudioManager::ResolveEvent(FName Name) const
 void ADCAudioManager::PlayCue_Implementation(FName Name)
 {
 	EnsureAudioConfig();
+	if (Name == TEXT("TurnOnComputer"))
+	{
+		StopEventInstance(ComputerInstance);
+		if (UFMODEvent* Event = ResolveEvent(Name))
+		{
+			ComputerInstance = UFMODBlueprintStatics::PlayEvent2D(this, Event, false);
+			if (ComputerInstance.Instance)
+			{
+				ComputerInstance.Instance->start();
+			}
+		}
+		return;
+	}
+	if (Name == TEXT("TurnOffComputer"))
+	{
+		StopEventInstance(ComputerInstance);
+		if (UFMODEvent* Event = ResolveEvent(Name))
+		{
+			UFMODBlueprintStatics::PlayEvent2D(this, Event, true);
+		}
+		return;
+	}
 	if (UFMODEvent* Event = ResolveEvent(Name))
 	{
 		UFMODBlueprintStatics::PlayEvent2D(this, Event, true);
@@ -235,11 +345,7 @@ void ADCAudioManager::StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjec
 	{
 		return;
 	}
-	if (UFMODBlueprintStatics::EventInstanceIsValid(Instance))
-	{
-		UFMODBlueprintStatics::EventInstanceStop(Instance, true);
-	}
-	Instance.Instance = nullptr;
+	StopEventInstance(Instance);
 	CurrentEvent.Reset();
 
 	if (TargetEvent)
@@ -272,42 +378,43 @@ void ADCAudioManager::SetOptionalGlobalParameter(const char* Name, float Value) 
 void ADCAudioManager::SetZoneAmbience(ECameraZone Zone)
 {
 	EnsureAudioConfig();
-	const bool bBackRoom = (Zone == ECameraZone::BackRoom || Zone == ECameraZone::ToBackRoom);
-	UFMODEvent* ZoneEvent = AudioConfig ? (bBackRoom ? AudioConfig->WarehouseAmbience.Get() : AudioConfig->CounterAmbience.Get()) : nullptr;
+	bCurrentBackRoom = (Zone == ECameraZone::BackRoom || Zone == ECameraZone::ToBackRoom);
+	UFMODEvent* ZoneEvent = AudioConfig ? (bCurrentBackRoom ? AudioConfig->WarehouseAmbience.Get() : AudioConfig->CounterAmbience.Get()) : nullptr;
 	StartOrSwitchLoop(AmbienceInstance, CurrentAmbienceEvent, ZoneEvent);
 	UFMODEvent* BuzzEvent = AudioConfig ? AudioConfig->LightBuzz.Get() : nullptr;
 	StartOrSwitchLoop(LightBuzzInstance, CurrentLightBuzzEvent, BuzzEvent);
-	SetOptionalGlobalParameter("CameraZone", bBackRoom ? 1.f : 0.f);
+	SetOptionalGlobalParameter("Location", bCurrentBackRoom ? 1.f : 0.f);
+	SetOptionalGlobalParameter("Day-Night", CurrentPhase == EPhase::Night ? 1.f : 0.f);
 }
 
 void ADCAudioManager::SetPhaseMusic(EPhase Phase)
 {
 	EnsureAudioConfig();
+	CurrentPhase = Phase;
 	UFMODEvent* PhaseEvent = AudioConfig ? (Phase == EPhase::Night ? AudioConfig->NightMusic.Get() : AudioConfig->DayMusic.Get()) : nullptr;
+	if (!PhaseEvent && AudioConfig)
+	{
+		PhaseEvent = AudioConfig->Music.Get();
+	}
 	StartOrSwitchLoop(MusicInstance, CurrentMusicEvent, PhaseEvent);
-	SetOptionalGlobalParameter("Phase", Phase == EPhase::Night ? 1.f : 0.f);
+	SetOptionalGlobalParameter("Day-Night", Phase == EPhase::Night ? 1.f : 0.f);
+	SetOptionalGlobalParameter("Location", bCurrentBackRoom ? 1.f : 0.f);
 }
 
 void ADCAudioManager::StartMainMenuAudio()
 {
 	EnsureAudioConfig();
-	UFMODEvent* MenuMusic = AudioConfig ? AudioConfig->MainMenuMusic.Get() : nullptr;
+	UFMODEvent* MenuMusic = AudioConfig ? (AudioConfig->MainMenuMusic ? AudioConfig->MainMenuMusic.Get() : AudioConfig->Music.Get()) : nullptr;
 	StartOrSwitchLoop(MusicInstance, CurrentMusicEvent, MenuMusic);
+	SetOptionalGlobalParameter("Location", 2.f);
 }
 
 void ADCAudioManager::StopAllLoops()
 {
-	auto StopLoop = [](FFMODEventInstance& Inst)
-	{
-		if (UFMODBlueprintStatics::EventInstanceIsValid(Inst))
-		{
-			UFMODBlueprintStatics::EventInstanceStop(Inst, true);
-		}
-		Inst.Instance = nullptr;
-	};
-	StopLoop(AmbienceInstance);
-	StopLoop(LightBuzzInstance);
-	StopLoop(MusicInstance);
+	StopEventInstance(AmbienceInstance);
+	StopEventInstance(LightBuzzInstance);
+	StopEventInstance(MusicInstance);
+	StopEventInstance(ComputerInstance);
 	CurrentAmbienceEvent.Reset();
 	CurrentLightBuzzEvent.Reset();
 	CurrentMusicEvent.Reset();

@@ -158,7 +158,7 @@ UDCUIInputData::UDCUIInputData()
 	Actions = CreateDefaultSubobject<UDataTable>(TEXT("Actions"));
 	Actions->RowStruct = FCommonInputActionDataBase::StaticStruct();
 	Add("Confirm", TEXT("Select"), EKeys::Enter, EKeys::Gamepad_FaceButton_Bottom, TEXT("ENTER"));
-	Add("Back", TEXT("Back"), EKeys::Escape, EKeys::Gamepad_FaceButton_Right, TEXT("ESC"));
+	Add("Back", TEXT("Back"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Right, TEXT("SPACE"));
 	Add("PrevTab", TEXT("Previous category"), EKeys::Left, EKeys::Gamepad_LeftShoulder, TEXT("◀"));
 	// Its hint stands for both directions: PrevTab is registered hidden from the bar
 	Add("NextTab", TEXT("Change category"), EKeys::Right, EKeys::Gamepad_RightShoulder, TEXT("◀ ▶"));

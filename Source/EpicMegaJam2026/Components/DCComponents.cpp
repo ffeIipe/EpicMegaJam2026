@@ -43,11 +43,6 @@ void UAC_Economy::AddMoney(int32 Delta)
 		bWon = true;
 		OnVictory.Broadcast();
 	}
-	if (Money < 0 && !bWon && !bGameIsOver) // a fine left the player in debt: instant defeat
-	{
-		bGameIsOver = true;
-		OnGameOver.Broadcast();
-	}
 }
 
 int32 UAC_Economy::GetRentForDay(int32 DayIndex) const
@@ -321,7 +316,7 @@ FSkillVector UAC_FilmCrafting::GetProfile() const
 bool UAC_FilmCrafting::CanConfirm() const
 {
 	const UPDA_GameConfig* Cfg = GetConfig(this);
-	return Cfg && GetFilledSlots() >= Cfg->MinTapesToCombine && HeldFilms.Num() < Cfg->MaxHeldFilms;
+	return Cfg && GetFilledSlots() >= Cfg->MinTapesToCombine;
 }
 
 FString UAC_FilmCrafting::SuggestTitle() const
@@ -366,7 +361,8 @@ bool UAC_FilmCrafting::ConfirmFilm(FText Title)
 	}
 
 	++FilmsCreated;
-	HeldFilms.Add(Film);
+	CraftedFilms.Add(Film);
+	HeldFilms = { Film }; // the new film replaces whatever was in hand
 	SlotRows.Init(NAME_None, UnlockedSlots);
 	OnFilmCreated.Broadcast(Film);
 	OnFilmStateChanged.Broadcast();
@@ -375,16 +371,23 @@ bool UAC_FilmCrafting::ConfirmFilm(FText Title)
 
 void UAC_FilmCrafting::DiscardHeldFilm()
 {
-	const ADCGameMode* GM = Cast<ADCGameMode>(GetOwner());
-	if (HeldFilms.Num() > 0 && GM)
+	if (HeldFilms.Num() > 0)
 	{
-		for (const FName& Row : HeldFilms[0].SlotRows)
-		{
-			GM->Inventory->AddTape(Row); // free, and reveals nothing about the order (4.4 rule 8)
-		}
-		HeldFilms.RemoveAt(0);
+		HeldFilms.Reset();
 		OnFilmStateChanged.Broadcast();
 	}
+}
+
+bool UAC_FilmCrafting::EquipFilm(int32 Index)
+{
+	if (!CraftedFilms.IsValidIndex(Index))
+	{
+		return false;
+	}
+	HeldFilms = { CraftedFilms[Index] };
+	OnFilmCreated.Broadcast(HeldFilms[0]);
+	OnFilmStateChanged.Broadcast();
+	return true;
 }
 
 void UAC_FilmCrafting::ConsumeHeldFilm()
