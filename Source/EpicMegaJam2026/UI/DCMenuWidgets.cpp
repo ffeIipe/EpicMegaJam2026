@@ -75,6 +75,7 @@ void UDCDaySummaryWidget::Show(const FDaySummary& S)
 void UDCSupplierWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+	bPausesGame = true; // the cash register is a menu: the day stops while shopping
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	Inventory = GM->Inventory;
 	Unlocks = GM->Unlocks;
@@ -115,6 +116,7 @@ void UDCSupplierWidget::CycleTab(int32 Dir)
 		if (Cast<UDCButton>(Tabs->GetChildAt(i))->Payload == SelectedGenre)
 		{
 			SelectedGenre = Cast<UDCButton>(Tabs->GetChildAt((i + Dir + Num) % Num))->Payload;
+			ADCAudioManager::PlayCueStatic(this, TEXT("TabSwitch"));
 			Refresh();
 			return;
 		}
@@ -255,6 +257,7 @@ void UDCSupplierWidget::HandleBuyFive(FName Row)
 void UDCComputerWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+	bPausesGame = true; // the day stops while upgrading
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	Unlocks = GM->Unlocks;
 	Config = GM->Config;
@@ -342,6 +345,7 @@ void UDCComputerWidget::CycleTab(int32 Dir)
 	{
 		if (Cast<UDCButton>(Tabs->GetChildAt(i))->Payload == SelectedTab)
 		{
+			ADCAudioManager::PlayCueStatic(this, TEXT("TabSwitch"));
 			OnTabClicked(Cast<UDCButton>(Tabs->GetChildAt((i + Dir + Num) % Num))->Payload);
 			return;
 		}
@@ -962,37 +966,31 @@ void UDCMainMenuWidget::RefreshSlots(bool bForNewGame)
 
 void UDCMainMenuWidget::HandlePlay(FName Unused)
 {
-	Cue(TEXT("Click"));
 	ShowPage(EMenuPage::Continue);
 }
 
 void UDCMainMenuWidget::HandleNewGame(FName Unused)
 {
-	Cue(TEXT("Click"));
 	ShowPage(EMenuPage::NewGame);
 }
 
 void UDCMainMenuWidget::HandleCredits(FName Unused)
 {
-	Cue(TEXT("Click"));
 	ShowPage(EMenuPage::Credits);
 }
 
 void UDCMainMenuWidget::HandleOptions(FName Unused)
 {
-	Cue(TEXT("Click"));
 	ShowPage(EMenuPage::Options);
 }
 
 void UDCMainMenuWidget::HandleBackToMain(FName Unused)
 {
-	Cue(TEXT("Click"));
 	ShowPage(EMenuPage::Main);
 }
 
 void UDCMainMenuWidget::HandleSlotClicked(FName SlotName)
 {
-	Cue(TEXT("Click"));
 	const FString SlotStr = SlotName.ToString();
 
 	if (CurrentPage == EMenuPage::Continue)
@@ -1014,7 +1012,6 @@ void UDCMainMenuWidget::HandleSlotClicked(FName SlotName)
 
 void UDCMainMenuWidget::HandleConfirmOverwrite(FName Unused)
 {
-	Cue(TEXT("Click"));
 	if (!PendingOverwriteSlot.IsEmpty())
 	{
 		StartGameOnSlot(PendingOverwriteSlot, true);
@@ -1023,7 +1020,6 @@ void UDCMainMenuWidget::HandleConfirmOverwrite(FName Unused)
 
 void UDCMainMenuWidget::HandleCancelOverwrite(FName Unused)
 {
-	Cue(TEXT("Click"));
 	PendingOverwriteSlot.Empty();
 	OverwriteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -1064,7 +1060,6 @@ void UDCMainMenuWidget::StartGameOnSlot(const FString& SlotName, bool bNewGame)
 
 void UDCMainMenuWidget::HandleQuit(FName Unused)
 {
-	Cue(TEXT("Click"));
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
 

@@ -186,6 +186,7 @@ void UDCInventoryWidget::CycleTab(int32 Dir)
 		}
 	}
 	SelectedTab = Cast<UDCButton>(Tabs->GetChildAt((Index + Dir + Num) % Num))->Payload;
+	ADCAudioManager::PlayCueStatic(this, TEXT("TabSwitch"));
 	Refresh();
 }
 
@@ -252,6 +253,7 @@ void UDCInventoryWidget::OnTapeClicked(FName Row)
 {
 	if (!bPicker)
 	{
+		ADCAudioManager::PlayCueStatic(this, TEXT("FilmSelect"));
 		SelectedTape = Row;
 		for (UWidget* W : List->GetAllChildren())
 		{
@@ -513,15 +515,18 @@ void UDCFilmCraftingWidget::OnPicked(FName VHSRow)
 		if (Crafting->SlotRows[i].IsNone())
 		{
 			const bool bOk = Crafting->SetSlot(i, VHSRow);
+			ADCAudioManager::PlayCueStatic(this, bOk ? TEXT("FilmPlace") : TEXT("SlotFull"));
 			StatusText->SetText(bOk ? FText::GetEmpty() : FText::FromString(TEXT("No copies of that tape left")));
 			return;
 		}
 	}
+	ADCAudioManager::PlayCueStatic(this, TEXT("SlotFull"));
 	StatusText->SetText(FText::FromString(TEXT("All slots are full: remove a tape first")));
 }
 
 void UDCFilmCraftingWidget::OnClearClicked(FName SlotName)
 {
+	ADCAudioManager::PlayCueStatic(this, TEXT("FilmRemove"));
 	Crafting->ClearSlot(FCString::Atoi(*SlotName.ToString()));
 }
 
@@ -536,6 +541,7 @@ void UDCFilmCraftingWidget::OnConfirm(FName Unused)
 
 void UDCFilmCraftingWidget::OnDiscard(FName Unused)
 {
+	ADCAudioManager::PlayCueStatic(this, TEXT("FilmDiscard"));
 	Crafting->DiscardHeldFilm();
 }
 

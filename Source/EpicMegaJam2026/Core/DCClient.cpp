@@ -1,5 +1,7 @@
 #include "Core/DCClient.h"
+#include "Core/DCDoorSwing.h"
 #include "Core/DCGameMode.h"
+#include "Data/PDA_AudioConfig.h"
 #include "AIController.h"
 #include "DrawDebugHelpers.h"
 #include "Components/CapsuleComponent.h"
@@ -152,6 +154,7 @@ void ADCClient::Arrive()
 		}
 		break;
 	case EGoal::Exit:
+		ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("StoreDoorClose"), GetActorLocation());
 		Destroy();
 		break;
 	default:
@@ -210,6 +213,7 @@ void ADCClient::StartLeaving(bool bServed)
 		Counter->Release(this);
 	}
 	SetClientState(EClientState::Leaving);
+	UDCDoorSwing::Pulse(this, ExitLocation, 8.f); // held open while they walk to it
 	if (Director.IsValid())
 	{
 		Director->NotifyLeft(this, bServed);
@@ -233,6 +237,22 @@ void ADCClient::Tick(float DeltaSeconds)
 		DrawDebugString(GetWorld(), FVector(0.f, 0.f, 140.f), Text, this, FColor::Yellow, 0.f);
 	}
 #endif
+	const ADCAudioManager* AudioMgr = ADCAudioManager::Get(this);
+	const float FootstepInterval = (AudioMgr && AudioMgr->AudioConfig) ? AudioMgr->AudioConfig->FootstepIntervalSec : 0.48f;
+	if (GetVelocity().Size2D() > 15.f)
+	{
+		FootstepTimer += DeltaSeconds;
+		if (FootstepTimer >= FootstepInterval)
+		{
+			FootstepTimer = 0.f;
+			ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("Footsteps"), GetActorLocation());
+		}
+	}
+	else
+	{
+		FootstepTimer = FootstepInterval * 0.8f;
+	}
+
 	// The clock starts once the player says "Coming right up"
 	if (Runtime.State == EClientState::AtCounter && bOrderAcknowledged)
 	{
@@ -243,6 +263,7 @@ void ADCClient::Tick(float DeltaSeconds)
 		Runtime.PatienceLeft -= DeltaSeconds;
 		if (Runtime.PatienceLeft <= 0.f)
 		{
+			ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("ClientAngryLeave"), GetActorLocation());
 			if (Director.IsValid())
 			{
 				Director->ApplyLeavePenalty();

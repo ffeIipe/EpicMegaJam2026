@@ -96,6 +96,7 @@ void ADCInteractable::CheckNews(FName UnlockId)
 	{
 		return;
 	}
+	const bool bWasHasNews = bHasNews;
 	for (const FName& Id : GM->Config->UnlockTable->GetRowNames())
 	{
 		if (GM->Unlocks->CanBuyUnlock(Id) && !NotifiedUnlocks.Contains(Id))
@@ -104,6 +105,10 @@ void ADCInteractable::CheckNews(FName UnlockId)
 			bHasNews = true;
 			SetActorTickEnabled(true);
 		}
+	}
+	if (!bWasHasNews && bHasNews)
+	{
+		ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("ComputerNotification"), GetActorLocation());
 	}
 }
 

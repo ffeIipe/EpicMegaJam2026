@@ -109,6 +109,14 @@ void ADCPlayerController::BeginPlay()
 	TutorialStep = GM->Config->bShowTutorial ? ETutorialStep::WaitForClient : ETutorialStep::Inactive;
 	GM->ClientDirector->bHoldExtraClientsForTutorial = GM->Config->bShowTutorial;
 	TryStartIntro();
+	if (!bPlayingIntro && GM->AudioManager)
+	{
+		GM->AudioManager->SetZoneAmbience(CameraZone);
+		if (GM->DayNightCycle)
+		{
+			GM->AudioManager->SetPhaseMusic(GM->DayNightCycle->CurrentPhase);
+		}
+	}
 }
 
 void ADCPlayerController::SetupInputComponent()
@@ -134,6 +142,10 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 {
 	const UDCScreen* DCScreen = Cast<UDCScreen>(Screen);
 	SetPause(DCScreen && DCScreen->bPausesGame);
+	if (ReviewToastWidget && Cast<UDCFilmCraftingWidget>(Screen))
+	{
+		ReviewToastWidget->Hide(); // a toast still up would sit behind the combine screen
+	}
 	if (OrderPanelWidget)
 	{
 		// The combine screen shows the order itself, and the dialogue says the same thing as the panel
@@ -176,6 +188,7 @@ void ADCPlayerController::CloseScreen()
 {
 	if (UCommonActivatableWidget* Screen = RootLayout ? RootLayout->Stack->GetActiveWidget() : nullptr)
 	{
+		Cue(TEXT("ScreenClose"));
 		Screen->DeactivateWidget();
 	}
 }
@@ -189,6 +202,7 @@ void ADCPlayerController::TogglePause()
 	// Only reached in game mode: with a screen up, Esc is the CommonUI back action
 	if (RootLayout && !IsBlockedByUI())
 	{
+		Cue(TEXT("PauseOpen"));
 		PushScreen<UDCPauseWidget>(RootLayout, PauseWidgetClass);
 	}
 }
@@ -299,6 +313,10 @@ void ADCPlayerController::SetCameraZone(ECameraZone Zone)
 	if (CameraZone != Zone)
 	{
 		CameraZone = Zone;
+		if (const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr; GM && GM->AudioManager)
+		{
+			GM->AudioManager->SetZoneAmbience(Zone);
+		}
 		OnCameraZoneChanged.Broadcast(Zone);
 	}
 }
@@ -328,6 +346,7 @@ ULevelSequencePlayer* ADCPlayerController::GetSequencePlayer()
 
 void ADCPlayerController::BeginTransition(bool bForward)
 {
+	Cue(bForward ? TEXT("WarehouseDoorOpen") : TEXT("WarehouseDoorClose"));
 	SetCameraZone(bForward ? ECameraZone::ToBackRoom : ECameraZone::ToCounter);
 	if (ULevelSequencePlayer* Sequence = GetSequencePlayer())
 	{
@@ -446,6 +465,7 @@ void ADCPlayerController::TryStartIntro()
 
 	bPlayingIntro = true;
 	IntroSkipHoldElapsed = 0.f;
+	Cue(TEXT("IntroStart"));
 	IntroSequencePlayer->Play();
 }
 
@@ -485,6 +505,7 @@ void ADCPlayerController::TickIntro(float DeltaTime)
 	}
 	if (IntroSkipHoldElapsed >= HoldDuration)
 	{
+		Cue(TEXT("IntroSkip"));
 		FinishIntro();
 	}
 }
@@ -521,6 +542,14 @@ void ADCPlayerController::FinishIntro()
 	if (ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr)
 	{
 		GM->DayNightCycle->bRunning = true;
+		if (GM->AudioManager)
+		{
+			GM->AudioManager->SetZoneAmbience(CameraZone);
+			if (GM->DayNightCycle)
+			{
+				GM->AudioManager->SetPhaseMusic(GM->DayNightCycle->CurrentPhase);
+			}
+		}
 	}
 	RefreshTutorial();
 }
@@ -690,6 +719,7 @@ void ADCPlayerController::OnDialogueButton()
 		}
 		else
 		{
+			Cue(TEXT("OrderAccepted"));
 			Client->bOrderAcknowledged = true;
 			if (TutorialStep == ETutorialStep::DialogueOrder)
 			{
@@ -718,7 +748,10 @@ void ADCPlayerController::HandleReview(const FReview& Review)
 {
 	const UPDA_GameConfig* Cfg = GetWorld()->GetAuthGameMode<ADCGameMode>()->Config;
 	const int32* Stars = Cfg->ReviewStars.Find(Review.Reaction);
-	ReviewToastWidget->ShowReview(Review, Stars ? *Stars : 0, Cfg->ToastDurationSec);
+	if (!Cast<UDCFilmCraftingWidget>(RootLayout->Stack->GetActiveWidget())) // the combine screen covers the toast: skip it there
+	{
+		ReviewToastWidget->ShowReview(Review, Stars ? *Stars : 0, Cfg->ToastDurationSec);
+	}
 	Cue(*FString::Printf(TEXT("Review_%s"), *StaticEnum<EReaction>()->GetNameStringByValue((int64)Review.Reaction)));
 	if (Review.MoneyDelta < 0)
 	{
@@ -754,6 +787,10 @@ void ADCPlayerController::HandleMoneyChanged(int32 NewMoney, int32 Delta)
 void ADCPlayerController::HandlePhaseChanged(EPhase Phase, int32 DayIndex)
 {
 	Cue(Phase == EPhase::Day ? TEXT("DayStart") : TEXT("NightStart"));
+	if (const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr; GM && GM->AudioManager)
+	{
+		GM->AudioManager->SetPhaseMusic(Phase);
+	}
 }
 
 void ADCPlayerController::HandleUnlockPurchased(FName UnlockId)
@@ -914,7 +951,12 @@ void ADCPlayerController::DismissCompletedTutorial()
 
 void ADCPlayerController::SetTutorialStep(ETutorialStep NextStep)
 {
+	const bool bChanged = TutorialStep != NextStep;
 	TutorialStep = NextStep;
+	if (bChanged && NextStep != ETutorialStep::Inactive && NextStep != ETutorialStep::WaitForClient && NextStep != ETutorialStep::Complete)
+	{
+		Cue(TEXT("TutorialStep"));
+	}
 	RefreshTutorial();
 }
 
@@ -1101,6 +1143,7 @@ void ADCPlayerController::HandleDayClosed(const FDaySummary& Summary)
 		// Save slot bracket: keep slot metadata (money & day) updated at the end of each day
 		GI->SaveActiveSlotMetadata(Summary.MoneyNow, Summary.DayIndex);
 	}
+	Cue(TEXT("DaySummaryOpen"));
 	UDCDaySummaryWidget* Screen = PushScreen<UDCDaySummaryWidget>(RootLayout, DaySummaryWidgetClass);
 	Screen->OnOpenStore.AddUniqueDynamic(this, &ADCPlayerController::HandleOpenStore);
 	Screen->Show(Summary);
@@ -1108,6 +1151,7 @@ void ADCPlayerController::HandleDayClosed(const FDaySummary& Summary)
 
 void ADCPlayerController::HandleOpenStore()
 {
+	Cue(TEXT("OpenStore"));
 	CloseScreen();
 	GetWorld()->GetAuthGameMode<ADCGameMode>()->DayNightCycle->StartNextDay();
 }

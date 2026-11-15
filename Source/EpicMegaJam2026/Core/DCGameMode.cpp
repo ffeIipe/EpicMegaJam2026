@@ -17,6 +17,14 @@ ADCGameMode::ADCGameMode()
 void ADCGameMode::BeginPlay()
 {
 	Super::BeginPlay();
-	TSubclassOf<ADCAudioManager> Cls = AudioManagerClass ? AudioManagerClass : TSubclassOf<ADCAudioManager>(ADCAudioManager::StaticClass());
+	TSubclassOf<ADCAudioManager> Cls = AudioManagerClass;
+	if (!Cls)
+	{
+		Cls = LoadClass<ADCAudioManager>(nullptr, TEXT("/Game/DirectorsCut/Audio/BP_AudioManager.BP_AudioManager_C"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+	if (!Cls)
+	{
+		Cls = ADCAudioManager::StaticClass();
+	}
 	AudioManager = GetWorld()->SpawnActor<ADCAudioManager>(Cls);
 }

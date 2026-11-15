@@ -50,13 +50,13 @@ class EPICMEGAJAM2026_API UDCReviewToastWidget : public UUserWidget
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintCallable) void ShowReview(const FReview& Review, int32 Stars, float DurationSec);
+	void Hide();
 
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
-	void Hide();
 	float Pop = 0.f;
 	bool bPopGain = true;
 	UPROPERTY() TObjectPtr<UWidget> Panel;

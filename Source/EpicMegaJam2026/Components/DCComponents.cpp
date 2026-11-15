@@ -43,6 +43,11 @@ void UAC_Economy::AddMoney(int32 Delta)
 		bWon = true;
 		OnVictory.Broadcast();
 	}
+	if (Money < 0 && !bWon && !bGameIsOver) // a fine left the player in debt: instant defeat
+	{
+		bGameIsOver = true;
+		OnGameOver.Broadcast();
+	}
 }
 
 int32 UAC_Economy::GetRentForDay(int32 DayIndex) const
@@ -432,5 +437,6 @@ bool UAC_Inventory::BuyTape(FName Row, int32 Count)
 	}
 	AddTape(Row, Count); // new tapes appear instantly; floor boxes are cosmetic (TODO(art))
 	OnTapePurchased.Broadcast(Row, Count);
+	ADCAudioManager::PlayCueStatic(this, TEXT("TapePurchased"));
 	return true;
 }

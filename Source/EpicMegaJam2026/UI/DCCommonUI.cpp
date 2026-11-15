@@ -1,5 +1,6 @@
 #include "UI/DCCommonUI.h"
 #include "CommonUITypes.h"
+#include "Core/DCAudioManager.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
@@ -209,9 +210,16 @@ void UDCButton::NativeOnInitialized()
 	Content->AddChildToVerticalBox(Label)->SetHorizontalAlignment(HAlign_Center);
 }
 
+void UDCButton::NativeOnHovered()
+{
+	Super::NativeOnHovered();
+	ADCAudioManager::PlayCueStatic(this, TEXT("MenuHover"));
+}
+
 void UDCButton::NativeOnClicked()
 {
 	Super::NativeOnClicked();
+	ADCAudioManager::PlayCueStatic(this, TEXT("MenuClick"));
 	OnPayloadClicked.Broadcast(Payload);
 }
 

@@ -30,8 +30,11 @@ void ADCMainMenuGameMode::BeginPlay()
 	}
 	AudioManager = GetWorld()->SpawnActor<ADCAudioManager>(AudioCls);
 
-	// FMOD bracket: start main menu music/ambience once the audio data asset / BP_AudioManager is wired.
-	PlayCue(TEXT("MainMenuMusic"));
+	// Start looping main menu music from AudioConfig (stopped automatically on EndPlay when travelling).
+	if (AudioManager)
+	{
+		AudioManager->StartMainMenuAudio();
+	}
 }
 
 void ADCMainMenuPlayerController::BeginPlay()

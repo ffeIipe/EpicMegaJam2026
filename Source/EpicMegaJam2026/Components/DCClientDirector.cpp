@@ -2,6 +2,7 @@
 #include "Core/DCGameMode.h"
 #include "Engine/TargetPoint.h"
 #include "Core/DCClient.h"
+#include "Core/DCDoorSwing.h"
 #include "Core/BPFL_Scoring.h"
 #include "Data/DCCustomers.h"
 #include "Kismet/GameplayStatics.h"
@@ -364,6 +365,9 @@ ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow)
 	{
 		return nullptr;
 	}
+	ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("DoorbellRing"), Door->GetActorLocation());
+	ADCAudioManager::PlayCueAtLocationStatic(this, TEXT("StoreDoorOpen"), Door->GetActorLocation());
+	UDCDoorSwing::Pulse(this, Door->GetActorLocation());
 	ScriptedUsed += Scripted ? 1 : 0;
 	const float Browsing = FMath::RandRange(Cfg->BrowseTimeMinSec, Cfg->BrowseTimeMaxSec);
 	// Persona (section 5.6) overrides the archetype's mesh; no persona or no mesh keeps the archetype's

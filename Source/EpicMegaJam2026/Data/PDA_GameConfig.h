@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "DCTypes.h"
+#include "Data/PDA_AudioConfig.h"
 #include "PDA_GameConfig.generated.h"
 
 UCLASS(BlueprintType)
@@ -128,6 +129,9 @@ public:
 
 	// --- Lighting helper: SkyLight intensity as a fraction of the directional light's (TODO(DESIGN): art may want its own presets)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lighting") float SkyLightIntensityRatio = 0.1f;
+
+	// --- Audio
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio") TObjectPtr<UPDA_AudioConfig> AudioConfig;
 
 	// --- Menus
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") bool bShowMainMenu = true;

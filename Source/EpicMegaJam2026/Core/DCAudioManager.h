@@ -1,21 +1,67 @@
-// Audio hook (SystemsDesigns.md section 10). PlayCue is intentionally empty for now: the team will map each cue name
-// to an FMOD event in the Cues map and play it (override PlayCue in BP_AudioManager, or fill this function in).
+// Centralized FMOD audio manager: resolves cues from UPDA_AudioConfig (or the legacy Cues map) and plays 2D, 3D and looping events.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Data/DCTypes.h"
+#include "FMODBlueprintStatics.h"
 #include "DCAudioManager.generated.h"
 
 class UFMODEvent;
+class UPDA_AudioConfig;
 
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API ADCAudioManager : public AActor
 {
 	GENERATED_BODY()
-public:
-	// Cue name -> FMOD event. Assigned in the editor; no paths are hardcoded.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio") TMap<FName, TObjectPtr<UFMODEvent>> Cues;
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Audio") void PlayCue(FName Name);
-	virtual void PlayCue_Implementation(FName Name) {}
+public:
+	// Primary audio Data Asset; if unset, resolved from GameMode->Config, DA_AudioConfig asset paths, or a transient default.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TObjectPtr<UPDA_AudioConfig> AudioConfig;
+
+	// Legacy Cue name -> FMOD event override map. Checked before AudioConfig so BP_AudioManager overrides still win.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TMap<FName, TObjectPtr<UFMODEvent>> Cues;
+
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	UFUNCTION(BlueprintPure, Category = "Audio")
+	UFMODEvent* ResolveEvent(FName Name) const;
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Audio")
+	void PlayCue(FName Name);
+	virtual void PlayCue_Implementation(FName Name);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void PlayCueAtLocation(FName Name, FVector Location);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void SetZoneAmbience(ECameraZone Zone);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void SetPhaseMusic(EPhase Phase);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void StartMainMenuAudio();
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void StopAllLoops();
+
+	static ADCAudioManager* Get(const UObject* WorldContextObject);
+	static void PlayCueStatic(const UObject* WorldContextObject, FName Name);
+	static void PlayCueAtLocationStatic(const UObject* WorldContextObject, FName Name, FVector Location);
+
+private:
+	void EnsureAudioConfig();
+	void StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjectPtr<UFMODEvent>& CurrentEvent, UFMODEvent* TargetEvent);
+	void SetOptionalGlobalParameter(const char* Name, float Value) const;
+
+	FFMODEventInstance AmbienceInstance;
+	FFMODEventInstance LightBuzzInstance;
+	FFMODEventInstance MusicInstance;
+	TWeakObjectPtr<UFMODEvent> CurrentAmbienceEvent;
+	TWeakObjectPtr<UFMODEvent> CurrentLightBuzzEvent;
+	TWeakObjectPtr<UFMODEvent> CurrentMusicEvent;
 };

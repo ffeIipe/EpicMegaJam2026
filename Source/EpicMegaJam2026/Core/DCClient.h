@@ -86,6 +86,7 @@ private:
 	FVector ExitLocation = FVector::ZeroVector;
 	FVector GoalLocation = FVector::ZeroVector;
 	float BrowseTime = 3.f;
+	float FootstepTimer = 0.f;
 	EGoal Goal = EGoal::None;
 	FTimerHandle BrowseTimer;
 };

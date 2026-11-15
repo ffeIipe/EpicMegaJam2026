@@ -24,6 +24,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Audio") TObjectPtr<ADCAudioManager> AudioManager;
 	// Single entry point for every audio cue of the game
 	UFUNCTION(BlueprintCallable, Category = "Audio") void PlayCue(FName Name) const { if (AudioManager) AudioManager->PlayCue(Name); }
+	UFUNCTION(BlueprintCallable, Category = "Audio") void PlayCueAtLocation(FName Name, FVector Location) const { if (AudioManager) AudioManager->PlayCueAtLocation(Name, Location); }
 
 	// Assign DA_GameConfig on BP_DC_GameMode.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Config") TObjectPtr<UPDA_GameConfig> Config;

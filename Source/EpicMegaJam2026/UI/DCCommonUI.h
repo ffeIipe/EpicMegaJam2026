@@ -121,6 +121,7 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeOnHovered() override;
 	virtual void NativeOnClicked() override;
 	virtual void NativeOnCurrentTextStyleChanged() override;
 };
