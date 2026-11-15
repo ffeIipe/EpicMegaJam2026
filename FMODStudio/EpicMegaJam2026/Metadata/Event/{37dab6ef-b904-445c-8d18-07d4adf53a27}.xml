@@ -228,6 +228,9 @@
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{20802163-5cd1-4320-a2a1-64d311de2a3d}">
+		<property name="volume">
+			<value>3.5</value>
+		</property>
 		<relationship name="effectChain">
 			<destination>{c911fb00-d023-4f1a-a8ed-ffab5e1bddea}</destination>
 		</relationship>
@@ -1231,7 +1234,7 @@
 	</object>
 	<object class="MixerBusPanner" id="{474c7bd9-4288-4386-8dbb-6813602a9494}">
 		<property name="stereoPan">
-			<value>-74</value>
+			<value>-42</value>
 		</property>
 	</object>
 	<object class="FadeCurve" id="{39b78782-29f1-44c0-bd7b-619488e67baa}">
@@ -1288,7 +1291,7 @@
 	</object>
 	<object class="MixerBusPanner" id="{e963e24f-2ebc-4c48-8020-1952c2f75f2c}">
 		<property name="stereoPan">
-			<value>-52</value>
+			<value>-36</value>
 		</property>
 	</object>
 	<object class="FadeCurve" id="{e6fd50e6-885d-41a8-a1e9-d0120b76bb99}">

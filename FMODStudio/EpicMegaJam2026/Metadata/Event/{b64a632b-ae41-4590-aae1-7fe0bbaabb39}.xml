@@ -307,6 +307,9 @@
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{fcd8a9b8-4239-4a1a-902a-ae2a1a7b671a}">
+		<property name="volume">
+			<value>-2</value>
+		</property>
 		<relationship name="effectChain">
 			<destination>{56747baa-7789-4bbb-a7dc-8b9403712f84}</destination>
 		</relationship>
@@ -1235,7 +1238,7 @@
 	</object>
 	<object class="EventMixerGroup" id="{cba65572-1023-4ae8-b3ea-b9cf95404570}">
 		<property name="volume">
-			<value>-4</value>
+			<value>-5</value>
 		</property>
 		<property name="name">
 			<value>FullBase</value>
@@ -1577,7 +1580,7 @@
 	</object>
 	<object class="EventMixerGroup" id="{9d0cbb96-e966-479d-8404-692b647da947}">
 		<property name="volume">
-			<value>-4</value>
+			<value>-5</value>
 		</property>
 		<property name="name">
 			<value>DrumBase</value>
