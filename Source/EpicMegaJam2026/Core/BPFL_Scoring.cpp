@@ -74,9 +74,15 @@ EReaction UBPFL_Scoring::GetReaction(float ErrorRatio, const UPDA_GameConfig* Co
 	return EReaction::Hated;
 }
 
-int32 UBPFL_Scoring::ComputeRentalPrice(float PayMultiplier, const UPDA_GameConfig* Config)
+int32 UBPFL_Scoring::ComputeRentalPrice(float PayMultiplier, const FSkillVector& Target, const UPDA_GameConfig* Config)
 {
-	return FMath::RoundToInt(Config->BaseRentalPrice * PayMultiplier);
+	int32 Distinct = 0;
+	for (int32 i = 0; i < DCNumSkills; ++i)
+	{
+		Distinct += Target.Get((ESkill)i) > 0;
+	}
+	const float SkillMult = 1.f + Config->ExtraSkillPriceBonus * FMath::Max(0, Distinct - 1);
+	return FMath::RoundToInt(Config->BaseRentalPrice * PayMultiplier * SkillMult);
 }
 
 int32 UBPFL_Scoring::ComputeTip(EReaction Reaction, float Accuracy, float PayMultiplier, const UPDA_GameConfig* Config)

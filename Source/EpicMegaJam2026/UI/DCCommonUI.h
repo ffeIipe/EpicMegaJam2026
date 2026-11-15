@@ -19,6 +19,7 @@ class UDataTable;
 class UCommonActivatableWidgetStack;
 class UProgressBar;
 struct FSkillVector;
+struct FClientRuntime;
 
 // Saturated retro-store palette (menu mockup). Names are roles: Grey = body text, Beige = headings and buttons, Lime = accents.
 // SourceArt/UI/gen_ui_textures.js bakes the same values into the panel and title textures: change both together.
@@ -185,6 +186,8 @@ namespace DCUI
 	// Tape titles come from the table with a "★" the fonts can't draw: drop it
 	EPICMEGAJAM2026_API FString CleanTitle(const FText& Title);
 	EPICMEGAJAM2026_API TSubclassOf<UCommonTextStyle> SkillStyle(int32 SkillIndex);
+	// The client's order as stacked lines: the greeting in body text, each hint in the color of its skill. DisplayName prefixes the greeting.
+	EPICMEGAJAM2026_API void OrderLines(UWidgetTree* Tree, UPanelWidget* Box, const FClientRuntime& Client, float Wrap);
 	// One line per skill in its color: "Funny 3", or "Funny 3/10" with a cap; zeros are skipped when bHideZero
 	EPICMEGAJAM2026_API void SkillList(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap = 0, bool bHideZero = false);
 	// Compact inline wrap row of non-zero colored skills (e.g. "Funny 3  Scary 1") for VHS rows

@@ -96,6 +96,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 StartMoney = 50;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 MovieBudgetGoal = 400;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 BaseRentalPrice = 10;
+	// Rental price grows by this fraction for every distinct skill the order asks for beyond the first
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") float ExtraSkillPriceBonus = 0.25f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 ComplaintFine = 15;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") int32 RentIncreaseAfterLastDay = 40;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Economy") float ReviewDelaySec = 15.f;

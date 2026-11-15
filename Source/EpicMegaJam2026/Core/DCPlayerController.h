@@ -11,6 +11,7 @@ class UDCFilmCraftingWidget;
 class UDCDialogueWidget;
 class UDCOrderPanelWidget;
 class UDCHUDWidget;
+class UDCStatsWidget;
 class UDCReviewToastWidget;
 class UDCEndScreenWidget;
 class UDCDaySummaryWidget;
@@ -84,6 +85,8 @@ public:
 	UFUNCTION(BlueprintPure) ECameraZone GetCameraZone() const { return CameraZone; }
 	// Only at the counter, with no screen up
 	UFUNCTION(BlueprintPure) bool CanGoToBackRoom() const;
+	// A screen is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
+	bool IsBlockedByUI() const;
 	// Plays the camera sequence to the back room; the crafting panel opens when it ends. Closing the panel brings the camera back.
 	UFUNCTION(BlueprintCallable) void GoToBackRoom();
 	UFUNCTION(BlueprintPure) ETutorialStep GetTutorialStep() const { return TutorialStep; }
@@ -102,8 +105,6 @@ private:
 	void DebugSpawnTutorialClient();
 	void ToggleDebugAttributes();
 
-	// A screen is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
-	bool IsBlockedByUI() const;
 	void HandleScreenChanged(UCommonActivatableWidget* Screen);
 
 	// Camera zone: Counter -> ToBackRoom -> BackRoom -> ToCounter -> Counter
@@ -157,6 +158,7 @@ private:
 	FRotator LookRot = FRotator::ZeroRotator; // Mouse look without the shake on top
 	FVector2D LookRaw = FVector2D::ZeroVector; // Accumulated mouse offset (yaw, pitch) from CounterRot, before the soft limit
 	TWeakObjectPtr<ADCClient> DialogueClient;
+	TWeakObjectPtr<const ADCInteractable> HighlightedProp; // outlined while aimed at
 	ETutorialStep TutorialStep = ETutorialStep::Inactive;
 	bool bTutorialGenreBought = false;
 	bool bTutorialTapeAfterGenreBought = false;
@@ -176,6 +178,7 @@ private:
 	UPROPERTY() TObjectPtr<ULevelSequencePlayer> IntroSequencePlayer;
 	UPROPERTY() TObjectPtr<UDCOrderPanelWidget> OrderPanelWidget;
 	UPROPERTY() TObjectPtr<UDCHUDWidget> HUDWidget;
+	UPROPERTY() TObjectPtr<UDCStatsWidget> StatsWidget;
 	UPROPERTY() TObjectPtr<UDCReviewToastWidget> ReviewToastWidget;
 	UPROPERTY() TObjectPtr<UDCTutorialWidget> TutorialWidget;
 	UPROPERTY() TObjectPtr<UDCIntroSkipWidget> IntroSkipWidget;

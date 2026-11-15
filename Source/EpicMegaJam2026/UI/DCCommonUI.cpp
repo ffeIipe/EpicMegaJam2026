@@ -434,6 +434,25 @@ namespace DCUI
 		}
 	}
 
+	void OrderLines(UWidgetTree* Tree, UPanelWidget* Box, const FClientRuntime& Client, float Wrap)
+	{
+		Box->ClearChildren();
+		if (Client.OrderLines.IsEmpty()) // scripted or legacy orders without per-skill lines
+		{
+			Text(Tree, Box, Client.DisplayName.IsEmpty() ? Client.OrderText.ToString() : FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Client.OrderText.ToString()))->SetWrapTextAt(Wrap);
+			return;
+		}
+		for (const FOrderLine& Line : Client.OrderLines)
+		{
+			const bool bGreeting = Line.Skill < 0;
+			const FString Content = bGreeting && !Client.DisplayName.IsEmpty()
+				? FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Line.Text.ToString()) : Line.Text.ToString();
+			// Hint colors by skill are switched off (grey Scary read as disabled); to bring them back use SkillStyle(Line.Skill) for the hints
+			// Text(Tree, Box, Content, bGreeting ? TSubclassOf<UCommonTextStyle>(UDCText_Body::StaticClass()) : SkillStyle(Line.Skill))->SetWrapTextAt(Wrap);
+			Text(Tree, Box, Content, UDCText_Body::StaticClass())->SetWrapTextAt(Wrap);
+		}
+	}
+
 	void SkillList(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap, bool bHideZero)
 	{
 		for (int32 i = 0; i < DCNumSkills; ++i)

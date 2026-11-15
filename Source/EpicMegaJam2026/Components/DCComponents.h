@@ -143,13 +143,14 @@ private:
 	void GenerateOrder(const struct FClientArchetypeData& Arch, const struct FScriptedOrderData* Scripted, const struct FCustomerData*& OutPersona, FClientRuntime& Rt);
 	// 5.4: which skills the dialogue hints at, and how strongly
 	TArray<FHintedSkill> BuildHints(const FSkillVector& Target, int32 MaxHinted) const;
-	FText BuildOrderText(const TArray<FHintedSkill>& Hints, ESpawnPhase Phase);
+	FText BuildOrderText(const TArray<FHintedSkill>& Hints, ESpawnPhase Phase, TArray<FOrderLine>* OutLines = nullptr);
 
 	bool TrySpawnScheduled();
 	void ApplyReview(const FReview& Review);
 
 	struct FPendingReview { int32 Id = 0; FTimerHandle Handle; FReview Review; };
 	int32 NextReviewId = 0;
+	int32 ReviewStreak = 0; // consecutive Loved/Liked reviews
 
 	TSet<FName> UsedHintRows;
 	TMap<TWeakObjectPtr<class ADCClient>, FReview> PendingReviews;

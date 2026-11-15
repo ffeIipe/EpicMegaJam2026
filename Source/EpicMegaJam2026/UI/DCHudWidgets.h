@@ -25,6 +25,25 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
+	UPROPERTY() TObjectPtr<UWidget> Prompt;
+	UPROPERTY() TObjectPtr<UWidget> Crosshair;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptKeyText;
+	UPROPERTY() TObjectPtr<UWidget> BackRoomHint; // "[SPACE] Back room", only with the camera at the counter
+	UPROPERTY() TObjectPtr<UCommonTextBlock> BackRoomKeyText;
+};
+
+// WBP_Stats: money, goal, day / clock and rent, top right. A plain overlay above every screen so the numbers never disappear
+// (it must not be the activatable HUD: that one hands input back to the game and has to stay at the bottom of the stack).
+UCLASS(Blueprintable)
+class EPICMEGAJAM2026_API UDCStatsWidget : public UUserWidget
+{
+	GENERATED_BODY()
+protected:
+	virtual void NativeOnInitialized() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MoneyText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> GoalText;
 	UPROPERTY() TObjectPtr<UProgressBar> GoalBar;
@@ -32,16 +51,12 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> ClockText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> RentText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
-	UPROPERTY() TObjectPtr<UWidget> Prompt;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> PromptKeyText;
-	UPROPERTY() TObjectPtr<UWidget> BackRoomHint; // "[SPACE] Back room", only with the camera at the counter
-	UPROPERTY() TObjectPtr<UCommonTextBlock> BackRoomKeyText;
 	float DisplayedMoney = -1.f;
 	int32 LastMoney = -1;
 	float Punch = 0.f;      // 1 right after the money changes, decays to 0
 	bool bPunchGain = true;
 };
+
 
 // WBP_ReviewToast: ReelTalk.net notification
 UCLASS(Blueprintable)
@@ -62,6 +77,7 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> Panel;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> TitleText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> StarsText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> StreakText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> LineText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MoneyText;
 	FTimerHandle HideTimer;

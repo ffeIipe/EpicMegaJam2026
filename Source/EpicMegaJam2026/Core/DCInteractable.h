@@ -36,12 +36,16 @@ public:
 	// Computer: wobbles and sparkles while there is something new to buy; the player opening the screen clears it
 	void ClearNews();
 
+	// Aimed at: draws the prop into the custom-depth stencil that the outline post-process reads
+	void SetHighlighted(bool bOn) const;
+
 private:
 	UFUNCTION() void OnMoneyChanged(int32 NewMoney, int32 Delta);
 	UFUNCTION() void CheckNews(FName UnlockId);
 	void SetLabelText(const FText& Text) const;
 
 	bool bHasNews = false;
+	float ShakeLeft = 0.f; // cash register: shakes when it earns money
 	TSet<FName> NotifiedUnlocks; // buyable unlocks the player was already told about
 	FRotator BaseRotation;
 };

@@ -285,7 +285,7 @@ ErrorRatio = \frac{Miss}{\max(1,\ \sum_{s} Target[s])} \qquad Accuracy = \operat
 
 | Reacción (`E_Reaction`) | Condición (inicial) | Al entregar | Crítica online |
 | --- | --- | --- | --- |
-| `Loved` | `ErrorRatio ≤ LovedMaxError` (0.10) | Precio = `BaseRentalPrice` × multiplicador de nivel | Propina = `Accuracy` × `TipAtPerfect` × multiplicador de nivel, redondeada. +1 Criterio. |
+| `Loved` | `ErrorRatio ≤ LovedMaxError` (0.10) | Precio = `BaseRentalPrice` × multiplicador de nivel × (1 + `ExtraSkillPriceBonus` 0.25 por cada skill distinta del pedido después de la primera) | Propina = `Accuracy` × `TipAtPerfect` × multiplicador de nivel, redondeada. +1 Criterio. |
 | `Liked` | `≤ LikedMaxError` (0.35) | Precio | Propina con la misma fórmula. |
 | `Neutral` | `≤ NeutralMaxError` (0.65) | Precio | Sin propina. |
 | `Hated` | `> NeutralMaxError` | Precio | Multa = `ComplaintFine` × multiplicador de nivel. |

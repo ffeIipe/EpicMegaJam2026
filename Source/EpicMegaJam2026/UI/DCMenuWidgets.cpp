@@ -365,23 +365,55 @@ void UDCComputerWidget::OnMoneyChanged(int32 NewMoney, int32 Delta)
 	}
 }
 
+// A card of the computer lists: panel frame, colored tile, and a fill-width info column. Returns the info box; OutRow is the row to append things on the right.
+static UVerticalBox* AddCard(UWidgetTree* Tree, UVerticalBox* List, const FLinearColor& TileColor, UHorizontalBox** OutRow = nullptr)
+{
+	UCommonBorder* Card = DCUI::Border(Tree, List, UDCBorder_Panel::StaticClass(), FMargin(14.f, 12.f));
+	Cast<UVerticalBoxSlot>(Card->Slot)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	UHorizontalBox* H = Tree->ConstructWidget<UHorizontalBox>();
+	Card->SetContent(H);
+	USizeBox* TileSize = Tree->ConstructWidget<USizeBox>();
+	TileSize->SetWidthOverride(72.f);
+	TileSize->SetHeightOverride(72.f);
+	UImage* Tile = Tree->ConstructWidget<UImage>();
+	Tile->SetBrush(FSlateBrush());
+	Tile->SetColorAndOpacity(TileColor);
+	TileSize->AddChild(Tile);
+	UHorizontalBoxSlot* TileSlot = H->AddChildToHorizontalBox(TileSize);
+	TileSlot->SetVerticalAlignment(VAlign_Center);
+	TileSlot->SetPadding(FMargin(0.f, 0.f, 16.f, 0.f));
+	UVerticalBox* Info = Tree->ConstructWidget<UVerticalBox>();
+	UHorizontalBoxSlot* InfoSlot = H->AddChildToHorizontalBox(Info);
+	InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	InfoSlot->SetVerticalAlignment(VAlign_Center);
+	InfoSlot->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+	if (OutRow)
+	{
+		*OutRow = H;
+	}
+	return Info;
+}
+
 void UDCComputerWidget::BuildRent()
 {
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	const int32 Day = GM->DayNightCycle->DayIndex;
 	const int32 Rent = GM->Economy->GetRentForDay(Day);
 	const int32 Money = GM->Economy->Money;
-	DCUI::Text(WidgetTree, List, FString::Printf(TEXT("RENT FOR DAY %d: $%d"), Day, Rent), UDCText_Heading::StaticClass());
-	DCUI::Text(WidgetTree, List, TEXT("It is collected automatically when the night ends. If you can't cover it, you are evicted."))->SetWrapTextAt(640.f);
-	UCommonTextBlock* Verdict = DCUI::Text(WidgetTree, List, Money >= Rent
+	UVerticalBox* Now = AddCard(WidgetTree, List, Money >= Rent ? DCPalette::Lime : DCPalette::Red);
+	DCUI::Text(WidgetTree, Now, FString::Printf(TEXT("RENT FOR DAY %d: $%d"), Day, Rent), UDCText_Heading::StaticClass());
+	DCUI::Text(WidgetTree, Now, TEXT("It is collected automatically when the night ends. If you can't cover it, you are evicted."))->SetWrapTextAt(520.f);
+	DCUI::Text(WidgetTree, Now, Money >= Rent
 		? FString::Printf(TEXT("Covered: you have $%d, $%d to spare."), Money, Money - Rent)
 		: FString::Printf(TEXT("Short by $%d: you have $%d."), Rent - Money, Money),
 		Money >= Rent ? UDCText_Accent::StaticClass() : UDCText_Warn::StaticClass());
-	Verdict->SetMargin(FMargin(0.f, 8.f, 0.f, 16.f));
-	DCUI::Text(WidgetTree, List, TEXT("COMING UP"), UDCText_Heading::StaticClass());
+	DCUI::Text(WidgetTree, List, TEXT("COMING UP"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 6.f, 0.f, 8.f));
 	for (int32 Next = Day + 1; Next <= Day + 3; ++Next)
 	{
-		DCUI::Text(WidgetTree, List, FString::Printf(TEXT("Day %d: $%d"), Next, GM->Economy->GetRentForDay(Next)));
+		UHorizontalBox* Row = nullptr;
+		UVerticalBox* Info = AddCard(WidgetTree, List, DCPalette::Blue, &Row);
+		DCUI::Text(WidgetTree, Info, FString::Printf(TEXT("DAY %d"), Next), UDCText_Heading::StaticClass());
+		Row->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("$%d"), GM->Economy->GetRentForDay(Next)), UDCText_Caution::StaticClass()))->SetVerticalAlignment(VAlign_Center);
 	}
 }
 
@@ -397,12 +429,10 @@ void UDCComputerWidget::BuildReviews()
 	for (const FReview& R : History)
 	{
 		const int32* Stars = Config->ReviewStars.Find(R.Reaction);
-		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-		List->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 6.f));
-		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-		UHorizontalBoxSlot* InfoSlot = H->AddChildToHorizontalBox(Info);
-		InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		InfoSlot->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+		const FLinearColor Tile = R.Reaction == EReaction::Loved ? DCPalette::Lime : R.Reaction == EReaction::Liked ? DCPalette::Green
+			: R.Reaction == EReaction::Neutral ? DCPalette::Yellow : DCPalette::Red;
+		UHorizontalBox* H = nullptr;
+		UVerticalBox* Info = AddCard(WidgetTree, List, Tile, &H);
 		DCUI::Text(WidgetTree, Info, R.FilmTitle.ToString(), UDCText_Heading::StaticClass());
 		DCUI::Text(WidgetTree, Info, R.Line.ToString())->SetWrapTextAt(440.f);
 		if (!R.FeedbackLine.IsEmpty())
@@ -471,7 +501,6 @@ void UDCComputerWidget::BuildUnlocks(EUnlockType Type)
 		InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		InfoSlot->SetVerticalAlignment(VAlign_Center);
 		InfoSlot->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
-		DCUI::Text(WidgetTree, Info, Type == EUnlockType::Genre ? TEXT("GENRE") : Type == EUnlockType::Slot ? TEXT("COMBINE SLOT") : TEXT("STAR LICENSE"), UDCText_Tab::StaticClass());
 		DCUI::Text(WidgetTree, Info, Row->DisplayName.ToString().ToUpper(), UDCText_Heading::StaticClass());
 		DCUI::Text(WidgetTree, Info, Row->Description.ToString())->SetWrapTextAt(440.f);
 		TArray<FString> Needs;
@@ -635,14 +664,17 @@ void UDCTutorialWidget::ShowStep(const FText& StepHeader, const FText& Body, con
 	{
 		StepTitleText->SetText(StepHeader);
 	}
+	// Only the green line is shown: the explanatory body is dropped, and a step with no action line shows its body in green
 	if (HintText)
 	{
-		HintText->SetText(Body);
+		HintText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (ActionText)
 	{
-		ActionText->SetText(Action);
-		ActionText->SetVisibility(Action.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		const FText& Line = Action.IsEmpty() ? Body : Action;
+		ActionText->SetText(Line);
+		ActionText->SetMargin(FMargin(0.f));
+		ActionText->SetVisibility(Line.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 	if (SkipButton)
 	{

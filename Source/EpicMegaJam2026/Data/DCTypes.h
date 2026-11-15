@@ -133,6 +133,17 @@ struct FCreatedFilm
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FSkillVector SkillProfile;
 };
 
+// One line of a client's order: the greeting (Skill = -1) or the hint for one skill, so the UI can color it
+USTRUCT(BlueprintType)
+struct FOrderLine
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Text;
+	// ESkill index, -1 for the greeting
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Skill = -1;
+};
+
 USTRUCT(BlueprintType)
 struct FClientRuntime
 {
@@ -150,6 +161,8 @@ struct FClientRuntime
 	// Multiplies the tip: the persona's TipMult (section 5.6), 1 without a persona
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) float TipMult = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText OrderText;
+	// The same text split per line, with the skill each hint is about (colored in the UI)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) TArray<FOrderLine> OrderLines;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) float PatienceLeft = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) EClientState State = EClientState::Entering;
 };
@@ -168,6 +181,8 @@ struct FReview
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Line;
 	// Empty when the film was Loved
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText FeedbackLine;
+	// Consecutive good reviews, set when the review arrives; 0 until the streak reaches 2
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Streak = 0;
 };
 
 // ---------------------------------------------------------------- Data Table rows (11.3)

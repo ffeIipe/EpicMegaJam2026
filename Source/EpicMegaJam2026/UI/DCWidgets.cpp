@@ -319,8 +319,8 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	UVerticalBox* OrderV = WidgetTree->ConstructWidget<UVerticalBox>();
 	OrderBox->SetContent(OrderV);
 	DCUI::Text(WidgetTree, OrderV, TEXT("ORDER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
-	OrderText = DCUI::Text(WidgetTree, OrderV, TEXT(""));
-	OrderText->SetWrapTextAt(PickerWidth - 24.f);
+	OrderText = WidgetTree->ConstructWidget<UVerticalBox>();
+	OrderV->AddChild(OrderText);
 	OrderPatience = DCUI::Bar(WidgetTree, OrderV, PickerWidth - 24.f);
 	Picker->OnVHSPicked.AddDynamic(this, &UDCFilmCraftingWidget::OnPicked);
 	Inventory->OnInventoryChanged.AddDynamic(Picker, &UDCInventoryWidget::Refresh);
@@ -466,7 +466,7 @@ void UDCFilmCraftingWidget::Refresh()
 	if (Front && Front->IsAtFront())
 	{
 		const FClientRuntime& Rt = Front->Runtime;
-		OrderText->SetText(Rt.DisplayName.IsEmpty() ? Rt.OrderText : FText::Format(INVTEXT("{0}: {1}"), Rt.DisplayName, Rt.OrderText));
+		DCUI::OrderLines(WidgetTree, OrderText, Rt, PickerWidth - 24.f);
 		OrderPatience->SetPercent(Front->PatienceMax > 0.f ? Rt.PatienceLeft / Front->PatienceMax : 0.f);
 	}
 	// The order's size is public: one tape never reaches it, so the player knows a combination is needed
@@ -553,8 +553,8 @@ void UDCDialogueWidget::NativeOnInitialized()
 	// Wide strip along the bottom of the screen, between the key bar (left) and the cash box (right)
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, -48.f));
 	DCUI::Text(WidgetTree, V, TEXT("CUSTOMER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
-	LineText = DCUI::Text(WidgetTree, V, TEXT(""));
-	LineText->SetWrapTextAt(1400.f);
+	LineBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	V->AddChild(LineBox);
 	UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>();
 	UVerticalBoxSlot* ButtonSlot = V->AddChildToVerticalBox(Buttons);
 	ButtonSlot->SetHorizontalAlignment(HAlign_Right);
@@ -566,9 +566,17 @@ void UDCDialogueWidget::NativeOnInitialized()
 	Cast<UHorizontalBoxSlot>(Button->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 }
 
-void UDCDialogueWidget::Show(const FText& Line, const FText& ButtonLabel, bool bCanReject)
+void UDCDialogueWidget::Show(const FText& Line, const FText& ButtonLabel, bool bCanReject, const FClientRuntime* Order)
 {
-	LineText->SetText(Line);
+	if (Order)
+	{
+		DCUI::OrderLines(WidgetTree, LineBox, *Order, 1400.f);
+	}
+	else
+	{
+		LineBox->ClearChildren();
+		DCUI::Text(WidgetTree, LineBox, Line.ToString())->SetWrapTextAt(1400.f);
+	}
 	Button->Label->SetText(ButtonLabel);
 	RejectButton->SetVisibility(bCanReject ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
@@ -582,8 +590,8 @@ void UDCOrderPanelWidget::NativeOnInitialized()
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.f, 0.f), FVector2D::ZeroVector, FVector2D(24.f, 24.f), &Panel);
 	PanelRoot = Panel;
 	DCUI::Text(WidgetTree, V, TEXT("ORDER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 6.f));
-	OrderText = DCUI::Text(WidgetTree, V, TEXT(""));
-	OrderText->SetWrapTextAt(360.f);
+	OrderText = WidgetTree->ConstructWidget<UVerticalBox>();
+	V->AddChild(OrderText);
 	PatienceBar = DCUI::Bar(WidgetTree, V, 360.f);
 	PanelRoot->SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -592,13 +600,17 @@ void UDCOrderPanelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	const ADCClient* Front = Director ? Director->GetFrontClient() : nullptr;
-	if (!Front || !Front->IsAtFront())
+	if (!Front || !Front->IsAtFront() || !Front->bOrderAcknowledged) // the order is pinned only once the player has taken it
 	{
 		PanelRoot->SetVisibility(ESlateVisibility::Collapsed);
 		return;
 	}
 	PanelRoot->SetVisibility(ESlateVisibility::HitTestInvisible);
 	const FClientRuntime& Rt = Front->Runtime;
-	OrderText->SetText(Rt.DisplayName.IsEmpty() ? Rt.OrderText : FText::Format(INVTEXT("{0}: {1}"), Rt.DisplayName, Rt.OrderText));
+	if (ShownClient.Get() != Front)
+	{
+		ShownClient = Front;
+		DCUI::OrderLines(WidgetTree, OrderText, Rt, 360.f);
+	}
 	PatienceBar->SetPercent(Front->PatienceMax > 0.f ? Front->Runtime.PatienceLeft / Front->PatienceMax : 0.f);
 }

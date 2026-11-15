@@ -41,6 +41,9 @@ void ADCInteractable::BeginPlay()
 {
 	Super::BeginPlay();
 	BaseRotation = GetActorRotation();
+	// The money and the prop names live in the HUD now: no floating labels (the component stays so placed actors don't change)
+	LabelWidget->SetVisibility(false);
+	LabelWidget->SetHiddenInGame(true);
 	if (InteractType == EInteractType::Computer)
 	{
 		if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
@@ -86,6 +89,11 @@ void ADCInteractable::OnMoneyChanged(int32 NewMoney, int32 Delta)
 		{
 			Widget->PunchMoney(Delta);
 		}
+		if (Delta > 0)
+		{
+			ShakeLeft = 0.5f;
+			SetActorTickEnabled(true);
+		}
 	}
 }
 
@@ -120,14 +128,33 @@ void ADCInteractable::ClearNews()
 	SetLabelText(GetLabel());
 }
 
+void ADCInteractable::SetHighlighted(bool bOn) const
+{
+	Mesh->SetCustomDepthStencilValue(1);
+	Mesh->SetRenderCustomDepth(bOn);
+}
+
 void ADCInteractable::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (!bHasNews)
+	const float T = GetWorld()->GetTimeSeconds();
+	if (ShakeLeft > 0.f)
 	{
+		ShakeLeft = FMath::Max(0.f, ShakeLeft - DeltaTime);
+		const float Fade = ShakeLeft / 0.5f;
+		SetActorRotation(BaseRotation + FRotator(Fade * FMath::Sin(T * 55.f) * 2.f, 0.f, Fade * FMath::Sin(T * 47.f) * 4.f));
+		if (ShakeLeft <= 0.f)
+		{
+			SetActorRotation(BaseRotation);
+			SetActorTickEnabled(false);
+		}
 		return;
 	}
-	const float T = GetWorld()->GetTimeSeconds();
+	if (!bHasNews)
+	{
+		SetActorTickEnabled(false);
+		return;
+	}
 	// A 0.7 s shake every 2.2 s, fading in and out, so it reads as "hey" and not as a glitch
 	const float Phase = FMath::Fmod(T, 2.2f);
 	const float Envelope = Phase < 0.7f ? FMath::Sin(Phase / 0.7f * PI) : 0.f;

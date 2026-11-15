@@ -77,6 +77,7 @@ void ADCPlayerController::BeginPlay()
 	const ESlateVisibility PassThrough = ESlateVisibility::SelfHitTestInvisible;
 
 	HUDWidget = MakeWidget<UDCHUDWidget>(this, HUDWidgetClass, 0, PassThrough);
+	StatsWidget = MakeWidget<UDCStatsWidget>(this, nullptr, 5, PassThrough); // above the screens so the numbers are always visible
 	OrderPanelWidget = MakeWidget<UDCOrderPanelWidget>(this, OrderPanelWidgetClass, 1, ESlateVisibility::HitTestInvisible);
 	OrderPanelWidget->Setup(GM->ClientDirector);
 	ReviewToastWidget = MakeWidget<UDCReviewToastWidget>(this, ReviewToastWidgetClass, 3, PassThrough);
@@ -212,6 +213,25 @@ void ADCPlayerController::TogglePause()
 void ADCPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	const ADCInteractable* Aimed = nullptr;
+	if (!bPlayingIntro && !bFallbackTransition && !DialogueClient.IsValid() && CameraZone == ECameraZone::Counter && !IsBlockedByUI())
+	{
+		ADCClient* AimedClient;
+		TraceTarget(AimedClient, Aimed);
+	}
+	if (Aimed != HighlightedProp.Get())
+	{
+		if (HighlightedProp.IsValid())
+		{
+			HighlightedProp->SetHighlighted(false);
+		}
+		if (Aimed)
+		{
+			Aimed->SetHighlighted(true);
+		}
+		HighlightedProp = Aimed;
+	}
 
 	if (bPlayingIntro)
 	{
@@ -459,6 +479,7 @@ void ADCPlayerController::TryStartIntro()
 	IntroSequencePlayer->OnFinished.AddDynamic(this, &ADCPlayerController::FinishIntro);
 	GM->DayNightCycle->bRunning = false;
 	if (HUDWidget) HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (StatsWidget) StatsWidget->SetVisibility(ESlateVisibility::Collapsed);
 	if (OrderPanelWidget) OrderPanelWidget->SetVisibility(ESlateVisibility::Collapsed);
 	if (TutorialWidget) TutorialWidget->SetVisibility(ESlateVisibility::Collapsed);
 	IntroSkipWidget = MakeWidget<UDCIntroSkipWidget>(this, IntroSkipWidgetClass, 6, ESlateVisibility::HitTestInvisible);
@@ -531,6 +552,7 @@ void ADCPlayerController::FinishIntro()
 		IntroSkipWidget = nullptr;
 	}
 	if (HUDWidget) HUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (StatsWidget) StatsWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	if (OrderPanelWidget) OrderPanelWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (TutorialWidget) TutorialWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	SetControlRotation(LookRot);
@@ -569,6 +591,7 @@ void ADCPlayerController::TraceTarget(ADCClient*& OutClient, const ADCInteractab
 	const FVector End = Start + PlayerCameraManager->GetCameraRotation().Vector() * GM->Config->InteractRange;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(GetPawn()); // the camera sits inside the player's own capsule
+	Params.bTraceComplex = true; // props with swapped meshes may have no simple collision
 	FHitResult Hit;
 
 	// Clients (pawns): only the one at the front of the queue can be served
@@ -679,7 +702,7 @@ void ADCPlayerController::OpenDialogue(ADCClient* Client)
 	Dialogue->OnButton.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueButton); // pooled screens come back already bound
 	Dialogue->OnReject.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueReject);
 	Dialogue->Show(bDeliver ? FText::FromString(FString::Printf(TEXT("\"%s\""), *GM->FilmCrafting->HeldFilms[0].Title.ToString())) : Client->Runtime.OrderText,
-		FText::FromString(bDeliver ? TEXT("Here you go") : TEXT("Coming right up")), bCanReject);
+		FText::FromString(bDeliver ? TEXT("Here you go") : TEXT("Coming right up")), bCanReject, bDeliver ? nullptr : &Client->Runtime);
 	DialogueClient = Client;
 	RefreshTutorial();
 	Cue(TEXT("DialogueOpen"));

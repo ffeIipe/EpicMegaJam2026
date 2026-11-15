@@ -141,10 +141,15 @@ TArray<FHintedSkill> UAC_ClientDirector::BuildHints(const FSkillVector& Target, 
 }
 
 // Greeting plus one line per hinted skill (never naming the skill), no line repeated within the day
-FText UAC_ClientDirector::BuildOrderText(const TArray<FHintedSkill>& Hints, ESpawnPhase Phase)
+FText UAC_ClientDirector::BuildOrderText(const TArray<FHintedSkill>& Hints, ESpawnPhase Phase, TArray<FOrderLine>* OutLines)
 {
 	const UPDA_GameConfig* Cfg = GetGM(this)->Config;
 	FString Out = PickLine(Cfg->GreetingTable, Phase == ESpawnPhase::Night ? ESpawnPhase::Night : ESpawnPhase::Day).ToString();
+	if (OutLines)
+	{
+		OutLines->Reset();
+		OutLines->Add({ FText::FromString(Out), -1 });
+	}
 	for (const FHintedSkill& Hint : Hints)
 	{
 		TArray<FName> Fresh, All;
@@ -167,11 +172,20 @@ FText UAC_ClientDirector::BuildOrderText(const TArray<FHintedSkill>& Hints, ESpa
 		if (Pool.Num() == 0)
 		{
 			Out += TEXT(" TODO(DESIGN): hint line"); // no line written for this skill and level yet
+			if (OutLines)
+			{
+				OutLines->Add({ FText::FromString(TEXT("TODO(DESIGN): hint line")), (int32)Hint.Skill });
+			}
 			continue;
 		}
 		const FName Pick = Pool[FMath::RandRange(0, Pool.Num() - 1)];
 		UsedHintRows.Add(Pick);
-		Out += TEXT(" ") + Cfg->HintLineTable->FindRow<FHintLineData>(Pick, TEXT("Hint"))->Text.ToString();
+		const FText HintText = Cfg->HintLineTable->FindRow<FHintLineData>(Pick, TEXT("Hint"))->Text;
+		Out += TEXT(" ") + HintText.ToString();
+		if (OutLines)
+		{
+			OutLines->Add({ HintText, (int32)Hint.Skill });
+		}
 	}
 	// TODO(DESIGN): closing phrase has no data source in the doc
 	return FText::FromString(Out);
@@ -302,7 +316,7 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 			Rt.bFullyHinted = false;
 		}
 	}
-	Rt.OrderText = BuildOrderText(Rt.HintedSkills, Arch.SpawnPhase);
+	Rt.OrderText = BuildOrderText(Rt.HintedSkills, Arch.SpawnPhase, &Rt.OrderLines);
 }
 
 ADCClient* UAC_ClientDirector::SpawnClient(FName ArchetypeRow)
@@ -459,7 +473,7 @@ bool UAC_ClientDirector::DeliverFilm(ADCClient* Client)
 		R.FeedbackLine = UBPFL_Scoring::PickFeedbackLine(Cfg->FeedbackLineTable, FeedbackSkill, FeedbackDirection); // shown only in the review (6.3)
 	}
 
-	GM->Economy->AddMoney(UBPFL_Scoring::ComputeRentalPrice(Mult, Cfg));
+	GM->Economy->AddMoney(UBPFL_Scoring::ComputeRentalPrice(Mult, Client->Runtime.Target, Cfg));
 	++Stats.ClientsServed;
 	switch (R.Reaction)
 	{
@@ -479,8 +493,12 @@ bool UAC_ClientDirector::DeliverFilm(ADCClient* Client)
 
 // ---------------------------------------------------------------- Day schedule, closing, reviews
 
-void UAC_ClientDirector::ApplyReview(const FReview& Review)
+void UAC_ClientDirector::ApplyReview(const FReview& InReview)
 {
+	// Streak counts in arrival order (reviews are delayed); it shows from the 2nd good review on
+	ReviewStreak = (InReview.Reaction == EReaction::Loved || InReview.Reaction == EReaction::Liked) ? ReviewStreak + 1 : 0;
+	FReview Review = InReview;
+	Review.Streak = ReviewStreak >= 2 ? ReviewStreak : 0;
 	GetGM(this)->Economy->AddMoney(Review.MoneyDelta); // tip or fine arrives with the online review
 	ReviewHistory.Insert(Review, 0);
 	if (ReviewHistory.Num() > MaxReviewHistory)
@@ -580,6 +598,12 @@ void UAC_ClientDirector::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 		{
 			break; // one pulled client per tick; the count is re-evaluated once it exists
 		}
+	}
+	// Schedule used up: keep the store busy until the phase ends (the schedule only sets the pace)
+	if (NextSpawn >= SpawnTimes.Num() && !bHoldExtraClientsForTutorial
+		&& ActiveClientCount() < Cfg->MinActiveClients && PhaseTime - LastSpawnTime >= Cfg->MinSpawnGapSec && TrySpawnScheduled())
+	{
+		LastSpawnTime = PhaseTime;
 	}
 }
 

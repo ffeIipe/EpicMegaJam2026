@@ -47,18 +47,6 @@ TOptional<FUIInputConfig> UDCHUDWidget::GetDesiredInputConfig() const
 void UDCHUDWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	// Money box and day info, top right
-	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(1.f, 0.f), FVector2D(1.f, 0.f), FVector2D(-24.f, 24.f));
-	MoneyText = DCUI::Text(WidgetTree, V, TEXT("$0"), UDCText_Title::StaticClass());
-	MoneyText->SetRenderTransformPivot(FVector2D(1.f, 0.5f));
-	GoalBar = DCUI::Bar(WidgetTree, V, 260.f);
-	Cast<UVerticalBoxSlot>(GoalBar->GetParent()->Slot)->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
-	GoalText = DCUI::Text(WidgetTree, V, TEXT(""));
-	DayText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Accent::StaticClass());
-	ClockText = DCUI::Text(WidgetTree, V, TEXT(""));
-	RentText = DCUI::Text(WidgetTree, V, TEXT(""));
-	HeldText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Accent::StaticClass());
-
 	// Back-room hint, bottom right. The mouse is captured in game mode, so it's a hint for the key rather than a clickable button.
 	UCommonBorder* HintBorder = nullptr;
 	UVerticalBox* HintBox = DCUI::Panel(WidgetTree, FAnchors(1.f, 1.f), FVector2D(1.f, 1.f), FVector2D(-24.f, -24.f), &HintBorder);
@@ -94,6 +82,7 @@ void UDCHUDWidget::NativeOnInitialized()
 	TextSlot->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
 	TextSlot->SetVerticalAlignment(VAlign_Center);
 	Prompt = PromptPlate;
+	Crosshair = Center;
 	for (UWidget* W : Center->GetAllChildren())
 	{
 		Cast<UVerticalBoxSlot>(W->Slot)->SetHorizontalAlignment(HAlign_Center);
@@ -101,6 +90,51 @@ void UDCHUDWidget::NativeOnInitialized()
 }
 
 void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+	if (!GM || !GM->Config)
+	{
+		return;
+	}
+	const ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer());
+	const FText PromptLabel = PC ? PC->GetInteractPrompt() : FText::GetEmpty();
+	PromptText->SetText(PromptLabel);
+	PromptKeyText->SetText(UDCSettings::Get()->Interact.GetDisplayName(false).ToUpper());
+	Prompt->SetVisibility(PromptLabel.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	BackRoomKeyText->SetText(UDCSettings::Get()->BackRoom.GetDisplayName(false).ToUpper());
+	BackRoomHint->SetVisibility(PC && PC->CanGoToBackRoom() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	Crosshair->SetVisibility(PC && PC->IsBlockedByUI() ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); // the HUD sits above the screens
+}
+
+// ---------------------------------------------------------------- Stats strip
+
+void UDCStatsWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	// Money and goal on the left, day / clock / rent on the right. Kept short so it clears the top of the wide centered screens.
+	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(1.f, 0.f), FVector2D(1.f, 0.f), FVector2D(-24.f, 16.f));
+	UHorizontalBox* Strip = WidgetTree->ConstructWidget<UHorizontalBox>();
+	V->AddChild(Strip);
+	UVerticalBox* MoneyBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	Strip->AddChildToHorizontalBox(MoneyBox)->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+	MoneyText = DCUI::Text(WidgetTree, MoneyBox, TEXT("$0"), UDCText_Title::StaticClass());
+	MoneyText->SetRenderTransformPivot(FVector2D(0.f, 0.5f));
+	GoalBar = DCUI::Bar(WidgetTree, MoneyBox, 220.f);
+	Cast<UVerticalBoxSlot>(GoalBar->GetParent()->Slot)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
+	GoalText = DCUI::Text(WidgetTree, MoneyBox, TEXT(""), UDCText_Tab::StaticClass());
+	UVerticalBox* InfoBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	Strip->AddChildToHorizontalBox(InfoBox)->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBox* DayRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	InfoBox->AddChild(DayRow);
+	DayText = DCUI::Text(WidgetTree, DayRow, TEXT(""), UDCText_Accent::StaticClass());
+	ClockText = DCUI::Text(WidgetTree, DayRow, TEXT(""));
+	Cast<UHorizontalBoxSlot>(ClockText->Slot)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
+	RentText = DCUI::Text(WidgetTree, InfoBox, TEXT(""));
+	HeldText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Accent::StaticClass());
+}
+
+void UDCStatsWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
@@ -137,17 +171,11 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	ClockText->SetText(GM->DayNightCycle->bTutorialPaused
 		? FText::Format(INVTEXT("{0} (Tutorial)"), GM->DayNightCycle->GetClockText())
 		: GM->DayNightCycle->GetClockText());
-	RentText->SetText(FText::FromString(FString::Printf(TEXT("Rent tonight: $%d"), GM->Economy->GetRentForDay(GM->DayNightCycle->DayIndex))));
+	const int32 DueMinutes = FMath::RoundToInt(GM->Config->ClockNightEndHour * 60.f) % (24 * 60); // rent is collected when the night ends
+	RentText->SetText(FText::FromString(FString::Printf(TEXT("Rent $%d due %02d:%02d"), GM->Economy->GetRentForDay(GM->DayNightCycle->DayIndex), DueMinutes / 60, DueMinutes % 60)));
 	HeldText->SetText(GM->FilmCrafting->HeldFilms.Num() > 0
 		? FText::FromString(FString::Printf(TEXT("In hand: %s"), *GM->FilmCrafting->HeldFilms[0].Title.ToString()))
 		: FText::GetEmpty());
-	const ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer());
-	const FText PromptLabel = PC ? PC->GetInteractPrompt() : FText::GetEmpty();
-	PromptText->SetText(PromptLabel);
-	PromptKeyText->SetText(UDCSettings::Get()->Interact.GetDisplayName(false).ToUpper());
-	Prompt->SetVisibility(PromptLabel.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
-	BackRoomKeyText->SetText(UDCSettings::Get()->BackRoom.GetDisplayName(false).ToUpper());
-	BackRoomHint->SetVisibility(PC && PC->CanGoToBackRoom() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
 // ---------------------------------------------------------------- Review toast
@@ -161,6 +189,8 @@ void UDCReviewToastWidget::NativeOnInitialized()
 	DCUI::Text(WidgetTree, V, TEXT("ReelTalk.net"), UDCText_Heading::StaticClass());
 	TitleText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Accent::StaticClass());
 	StarsText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Stars::StaticClass());
+	StreakText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Title::StaticClass());
+	StreakText->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	LineText = DCUI::Text(WidgetTree, V, TEXT(""));
 	LineText->SetWrapTextAt(520.f);
 	MoneyText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Heading::StaticClass());
@@ -174,6 +204,8 @@ void UDCReviewToastWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	Pop = FMath::Max(0.f, Pop - InDeltaTime * 2.f);
 	// Bounce in: a good review pops up with a growing swell, a bad one slams down and shakes
 	ApplyPunch(Panel, Pop * 0.7f, bPopGain, GetWorld()->GetTimeSeconds());
+	// The streak slams in much bigger than the panel and settles
+	ApplyPunch(StreakText, Pop * Pop * 2.f, true, GetWorld()->GetTimeSeconds());
 }
 
 void UDCReviewToastWidget::Hide()
@@ -185,6 +217,8 @@ void UDCReviewToastWidget::ShowReview(const FReview& Review, int32 Stars, float 
 {
 	TitleText->SetText(Review.FilmTitle);
 	StarsText->SetText(FText::FromString(DCUI::Stars(Stars)));
+	StreakText->SetText(FText::FromString(Review.Streak >= 2 ? FString::Printf(TEXT("x%d"), Review.Streak) : FString()));
+	StreakText->SetVisibility(Review.Streak >= 2 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	LineText->SetText(Review.FeedbackLine.IsEmpty() ? Review.Line : FText::Format(INVTEXT("{0}\n{1}"), Review.Line, Review.FeedbackLine));
 	MoneyText->SetText(FText::FromString(Review.MoneyDelta == 0 ? FString() : FString::Printf(TEXT("%+d"), Review.MoneyDelta)));
 	MoneyText->SetColorAndOpacity(FSlateColor(Review.MoneyDelta < 0 ? DCPalette::Red : DCPalette::Lime));

@@ -97,7 +97,7 @@ private:
 	UPROPERTY() TObjectPtr<UVerticalBox> ProfileText;
 	// Poor / Okay / Good / Great vs. what the front client asked for (hints only, never the hidden target)
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MatchText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> OrderText;
+	UPROPERTY() TObjectPtr<UVerticalBox> OrderText;
 	UPROPERTY() TObjectPtr<UProgressBar> OrderPatience;
 	// "Order size: N points   Your film: M"
 	UPROPERTY() TObjectPtr<UCommonTextBlock> PointsText;
@@ -122,7 +122,8 @@ public:
 	UPROPERTY(BlueprintAssignable) FOnDialogueButton OnButton;
 	UPROPERTY(BlueprintAssignable) FOnDialogueButton OnReject;
 	// bCanReject shows the "No, sorry" button (only when taking the order, not when delivering)
-	UFUNCTION(BlueprintCallable) void Show(const FText& Line, const FText& ButtonLabel, bool bCanReject = false);
+	// Order = the client's runtime when taking an order (hints colored by skill); null shows Line as plain text (delivery)
+	void Show(const FText& Line, const FText& ButtonLabel, bool bCanReject = false, const struct FClientRuntime* Order = nullptr);
 
 protected:
 	virtual void NativeOnInitialized() override;
@@ -130,7 +131,7 @@ protected:
 private:
 	UFUNCTION() void HandleButton(FName Unused) { OnButton.Broadcast(); }
 	UFUNCTION() void HandleReject(FName Unused) { OnReject.Broadcast(); }
-	UPROPERTY() TObjectPtr<UCommonTextBlock> LineText;
+	UPROPERTY() TObjectPtr<UVerticalBox> LineBox;
 	UPROPERTY() TObjectPtr<UDCButton> Button;
 	UPROPERTY() TObjectPtr<UDCButton> RejectButton;
 };
@@ -149,7 +150,8 @@ protected:
 
 private:
 	UPROPERTY() TObjectPtr<UAC_ClientDirector> Director;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> OrderText;
+	UPROPERTY() TObjectPtr<UVerticalBox> OrderText;
+	TWeakObjectPtr<const class ADCClient> ShownClient; // the order is rebuilt only when the front client changes
 	UPROPERTY() TObjectPtr<UProgressBar> PatienceBar;
 	UPROPERTY() TObjectPtr<UWidget> PanelRoot;
 };

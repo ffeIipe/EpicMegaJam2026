@@ -44,9 +44,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Scoring")
 	static EReaction GetReaction(float ErrorRatio, const UPDA_GameConfig* Config);
 
-	// 6.2: price paid on delivery = BaseRentalPrice x level multiplier
+	// 6.2: price paid on delivery = BaseRentalPrice x level multiplier x (1 + ExtraSkillPriceBonus per distinct skill beyond the first in the order)
 	UFUNCTION(BlueprintPure, Category = "Scoring")
-	static int32 ComputeRentalPrice(float PayMultiplier, const UPDA_GameConfig* Config);
+	static int32 ComputeRentalPrice(float PayMultiplier, const FSkillVector& Target, const UPDA_GameConfig* Config);
 
 	// 6.2: Loved/Liked tip = round(Accuracy x TipAtPerfect x level multiplier). 0 for other reactions.
 	UFUNCTION(BlueprintPure, Category = "Scoring")

@@ -26,15 +26,15 @@ bool FDCScoringExamplesTest::RunTest(const FString& Parameters)
 		TestEqual(N + TEXT(" miss"), UBPFL_Scoring::ComputeMiss(Profile, Target), ExpMiss);
 		TestEqual(N + TEXT(" error ratio"), Ratio, ExpRatio, 0.001f);
 		TestTrue(N + TEXT(" reaction"), R == ExpReaction);
-		TestEqual(N + TEXT(" price"), UBPFL_Scoring::ComputeRentalPrice(Mult, Cfg), ExpPrice);
+		TestEqual(N + TEXT(" price"), UBPFL_Scoring::ComputeRentalPrice(Mult, Target, Cfg), ExpPrice);
 		TestEqual(N + TEXT(" tip"), UBPFL_Scoring::ComputeTip(R, UBPFL_Scoring::ComputeAccuracy(Ratio), Mult, Cfg), ExpTip);
 		TestEqual(N + TEXT(" fine"), UBPFL_Scoring::ComputeFine(R, Mult, Cfg), ExpFine);
 	};
 
 	Run(TEXT("Case1"), 1.0f, SV(3), SV(3), 0, 0.f, EReaction::Loved, 10, 12, 0);
-	Run(TEXT("Case2"), 1.0f, SV(3, 3), SV(3, 2), 1, 0.167f, EReaction::Liked, 10, 10, 0);
+	Run(TEXT("Case2"), 1.0f, SV(3, 3), SV(3, 2), 1, 0.167f, EReaction::Liked, 13, 10, 0);
 	Run(TEXT("Case3"), 1.0f, SV(3), SV(0, 3), 6, 1.5f, EReaction::Hated, 10, 0, 15);
-	Run(TEXT("Case4"), 1.5f, SV(5, 0, 2, 0, 1), SV(5, 0, 1, 0, 1), 1, 0.125f, EReaction::Liked, 15, 16, 0);
+	Run(TEXT("Case4"), 1.5f, SV(5, 0, 2, 0, 1), SV(5, 0, 1, 0, 1), 1, 0.125f, EReaction::Liked, 23, 16, 0);
 	Run(TEXT("Case5"), 1.0f, SV(3), SV(3, 0, 0, 3), 3, 0.75f, EReaction::Hated, 10, 0, 15);
 
 	// Case 6: four Funny 3 tapes cap at SkillCap

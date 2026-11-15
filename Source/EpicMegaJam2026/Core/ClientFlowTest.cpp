@@ -76,8 +76,9 @@ public:
 			}
 			Test->TestTrue(N + TEXT("confirm"), GM->FilmCrafting->ConfirmFilm(FText::GetEmpty()));
 			MoneyBefore = GM->Economy->Money;
+			ExpectedPrice = UBPFL_Scoring::ComputeRentalPrice(1.f, T, GM->Config);
 			Test->TestTrue(N + TEXT("deliver"), GM->ClientDirector->DeliverFilm(Client));
-			Test->TestEqual(N + TEXT("base price paid"), GM->Economy->Money, MoneyBefore + GM->Config->BaseRentalPrice);
+			Test->TestEqual(N + TEXT("base price paid"), GM->Economy->Money, MoneyBefore + ExpectedPrice);
 			Test->TestEqual(N + TEXT("film out of the hand"), GM->FilmCrafting->HeldFilms.Num(), 0);
 			// Exact match: Loved, tip = TipAtPerfect x persona TipMult, arriving with the review
 			ExpectedTip = UBPFL_Scoring::ComputeTip(EReaction::Loved, 1.f, Client->Runtime.TipMult, GM->Config);
@@ -85,8 +86,8 @@ public:
 			return false;
 		}
 		case 2: // wait for the delayed review to pay the tip
-			if (ExpectedTip > 0 && GM->Economy->Money == MoneyBefore + GM->Config->BaseRentalPrice) return false;
-			Test->TestEqual(TEXT("money after review"), GM->Economy->Money, MoneyBefore + GM->Config->BaseRentalPrice + ExpectedTip);
+			if (ExpectedTip > 0 && GM->Economy->Money == MoneyBefore + ExpectedPrice) return false;
+			Test->TestEqual(TEXT("money after review"), GM->Economy->Money, MoneyBefore + ExpectedPrice + ExpectedTip);
 			++Order;
 			Stage = 0;
 			return false;
@@ -111,6 +112,7 @@ private:
 	ADCClient* Client = nullptr;
 	int32 MoneyBefore = 0;
 	int32 ExpectedTip = 0;
+	int32 ExpectedPrice = 0;
 };
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDCClientFlowTest, "DirectorsCut.Flow.ClientDelivery",
