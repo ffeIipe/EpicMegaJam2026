@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{0805682f-96e5-4344-97e3-18080c14431f}">
+		<property name="assetPath">
+			<value>_SFX_WinMoney.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>2.6255833333333332</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{263de8c8-4ef4-4517-9687-449a77577a81}</destination>
+		</relationship>
+	</object>
+</objects>

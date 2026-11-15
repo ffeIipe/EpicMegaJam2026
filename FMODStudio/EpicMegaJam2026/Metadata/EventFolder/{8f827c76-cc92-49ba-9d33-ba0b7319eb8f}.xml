@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <objects serializationModel="Studio.02.03.00">
-	<object class="EventFolder" id="{2fe97bf9-d2ff-4bcd-ae61-667f15542d96}">
+	<object class="EventFolder" id="{8f827c76-cc92-49ba-9d33-ba0b7319eb8f}">
 		<property name="name">
-			<value>DEPREC-ERASE</value>
+			<value>MUS</value>
 		</property>
 		<relationship name="folder">
-			<destination>{e7ac13e8-537e-4f61-8103-3e03458296cb}</destination>
+			<destination>{9a36fb78-04ab-4f6a-83a3-a1ebbce2c45d}</destination>
 		</relationship>
 	</object>
 </objects>
