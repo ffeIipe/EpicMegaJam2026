@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{f61f5471-9f3f-459b-91de-f67f8079efc2}">
+		<property name="assetPath">
+			<value>NP02 0240 Urban day traffic people horns.wav</value>
+		</property>
+		<property name="isStreaming">
+			<value>true</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>139.73289583333334</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{263de8c8-4ef4-4517-9687-449a77577a81}</destination>
+		</relationship>
+	</object>
+</objects>
