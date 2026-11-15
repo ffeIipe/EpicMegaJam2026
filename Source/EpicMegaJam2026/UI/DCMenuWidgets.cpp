@@ -3,6 +3,7 @@
 #include "Components/DCComponents.h"
 #include "Core/DCGameInstance.h"
 #include "Core/DCGameMode.h"
+#include "Core/DCPlayerController.h"
 #include "Core/DCMainMenuMode.h"
 #include "Core/DCSettings.h"
 #include "Data/PDA_GameConfig.h"
@@ -16,6 +17,7 @@
 #include "Components/ScrollBox.h"
 #include "Input/CommonUIInputTypes.h"
 #include "Components/SizeBox.h"
+#include "Components/Slider.h"
 #include "Components/Spacer.h"
 #include "Containers/Ticker.h"
 #include "FileMediaSource.h"
@@ -84,6 +86,7 @@ void UDCSupplierWidget::NativeOnInitialized()
 	Unlocks->OnUnlockPurchased.AddDynamic(this, &UDCSupplierWidget::OnUnlockPurchased);
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("PrevTab"), false, FSimpleDelegate::CreateUObject(this, &UDCSupplierWidget::CycleTab, -1)));
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), false, FSimpleDelegate::CreateUObject(this, &UDCSupplierWidget::CycleTab, 1)));
+	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("Warehouse"), false, FSimpleDelegate::CreateLambda([this]() { if (ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer())) { PC->GoToBackRoomFromScreen(); } })));
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
 	DCUI::Header(WidgetTree, V, TEXT("SUPPLIER"), TEXT("Tapes for sale, one copy at a time"));
@@ -273,6 +276,7 @@ void UDCComputerWidget::NativeOnInitialized()
 	Unlocks->OnUnlockPurchased.AddDynamic(this, &UDCComputerWidget::OnUnlockPurchased);
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("PrevTab"), false, FSimpleDelegate::CreateUObject(this, &UDCComputerWidget::CycleTab, -1)));
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), false, FSimpleDelegate::CreateUObject(this, &UDCComputerWidget::CycleTab, 1)));
+	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("Warehouse"), false, FSimpleDelegate::CreateLambda([this]() { if (ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer())) { PC->GoToBackRoomFromScreen(); } })));
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
 	DCUI::Header(WidgetTree, V, TEXT("COMPUTER"), TEXT("Upgrade the store, check the rent and read your reviews"));
@@ -785,6 +789,13 @@ void UDCMainMenuWidget::NativeOnInitialized()
 	MenuButton(WidgetTree, OverwriteConfirmBox, TEXT("CANCEL"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCancelOverwrite);
 	OverwriteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
 
+	DeleteConfirmBox = WidgetTree->ConstructWidget<UVerticalBox>();
+	SlotsPage->AddChildToVerticalBox(DeleteConfirmBox)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
+	DeleteConfirmText = DCUI::Text(WidgetTree, DeleteConfirmBox, TEXT("DELETE THIS SAVE SLOT?"), UDCText_Caution::StaticClass());
+	MenuButton(WidgetTree, DeleteConfirmBox, TEXT("CONFIRM DELETE"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleConfirmDelete);
+	MenuButton(WidgetTree, DeleteConfirmBox, TEXT("CANCEL"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCancelDelete);
+	DeleteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
+
 	MenuButton(WidgetTree, SlotsPage, TEXT("BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
 
 	// --- Credits sub-page
@@ -951,9 +962,14 @@ void UDCMainMenuWidget::ShowPage(EMenuPage Page)
 {
 	CurrentPage = Page;
 	PendingOverwriteSlot.Empty();
+	PendingDeleteSlot.Empty();
 	if (OverwriteConfirmBox)
 	{
 		OverwriteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (DeleteConfirmBox)
+	{
+		DeleteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (Page != EMenuPage::Options && Settings)
 	{
@@ -992,20 +1008,39 @@ void UDCMainMenuWidget::RefreshSlots(bool bForNewGame)
 		FString Label;
 		if (SlotSummary.bExists)
 		{
-			const FString DateStr = SlotSummary.CreatedAt.ToString(TEXT("%Y-%m-%d %H:%M"));
-			Label = FString::Printf(TEXT("SLOT %d  |  %s  |  $%d"), SlotSummary.SlotIndex + 1, *DateStr, SlotSummary.Money);
+			const FDateTime Timestamp = SlotSummary.LastSavedAt.GetTicks() > 0 ? SlotSummary.LastSavedAt : SlotSummary.CreatedAt;
+			const FString DateStr = Timestamp.ToString(TEXT("%Y-%m-%d %H:%M"));
+			Label = FString::Printf(TEXT("SLOT %d  |  DAY %d  |  $%d  |  %s"), SlotSummary.SlotIndex + 1, SlotSummary.DayIndex, SlotSummary.Money, *DateStr);
 		}
 		else
 		{
 			Label = FString::Printf(TEXT("SLOT %d  |  EMPTY"), SlotSummary.SlotIndex + 1);
 		}
 
-		UDCButton* Btn = MenuButton(WidgetTree, SlotsList, *Label, UDCButton_Menu::StaticClass());
-		Btn->Payload = FName(*SlotSummary.SlotName);
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+		SlotsList->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+
+		UDCButton* Btn = DCUI::Button(WidgetTree, Row, *Label, FName(*SlotSummary.SlotName), UDCButton_Menu::StaticClass());
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleSlotClicked);
+		if (UHorizontalBoxSlot* BtnSlot = Cast<UHorizontalBoxSlot>(Btn->Slot))
+		{
+			BtnSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			BtnSlot->SetVerticalAlignment(VAlign_Center);
+		}
 		if (!bForNewGame && !SlotSummary.bExists)
 		{
 			Btn->SetIsEnabled(false);
+		}
+
+		if (SlotSummary.bExists)
+		{
+			UDCButton* DelBtn = DCUI::Button(WidgetTree, Row, TEXT("DELETE"), FName(*SlotSummary.SlotName), UDCButton_Menu::StaticClass());
+			DelBtn->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleDeleteSlotClicked);
+			if (UHorizontalBoxSlot* DelSlot = Cast<UHorizontalBoxSlot>(DelBtn->Slot))
+			{
+				DelSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+				DelSlot->SetVerticalAlignment(VAlign_Center);
+			}
 		}
 	}
 }
@@ -1037,6 +1072,12 @@ void UDCMainMenuWidget::HandleBackToMain(FName Unused)
 
 void UDCMainMenuWidget::HandleSlotClicked(FName SlotName)
 {
+	PendingDeleteSlot.Empty();
+	if (DeleteConfirmBox)
+	{
+		DeleteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	const FString SlotStr = SlotName.ToString();
 
 	if (CurrentPage == EMenuPage::Continue)
@@ -1068,6 +1109,40 @@ void UDCMainMenuWidget::HandleCancelOverwrite(FName Unused)
 {
 	PendingOverwriteSlot.Empty();
 	OverwriteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UDCMainMenuWidget::HandleDeleteSlotClicked(FName SlotName)
+{
+	PendingOverwriteSlot.Empty();
+	if (OverwriteConfirmBox)
+	{
+		OverwriteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	PendingDeleteSlot = SlotName.ToString();
+	DeleteConfirmText->SetText(FText::FromString(FString::Printf(TEXT("DELETE %s?"), *PendingDeleteSlot.ToUpper())));
+	DeleteConfirmBox->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UDCMainMenuWidget::HandleConfirmDelete(FName Unused)
+{
+	if (!PendingDeleteSlot.IsEmpty())
+	{
+		if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+		{
+			GI->DeleteSaveSlot(PendingDeleteSlot);
+		}
+		PendingDeleteSlot.Empty();
+	}
+	DeleteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
+	RefreshMainButtons();
+	RefreshSlots(CurrentPage == EMenuPage::NewGame);
+}
+
+void UDCMainMenuWidget::HandleCancelDelete(FName Unused)
+{
+	PendingDeleteSlot.Empty();
+	DeleteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void UDCMainMenuWidget::StartGameOnSlot(const FString& SlotName, bool bNewGame)
@@ -1163,38 +1238,41 @@ namespace
 void UDCSettingsWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+	USizeBox* RootBox = WidgetTree->ConstructWidget<USizeBox>();
+	RootBox->SetMinDesiredWidth(640.f);
+	WidgetTree->RootWidget = RootBox;
 	UVerticalBox* V = WidgetTree->ConstructWidget<UVerticalBox>();
-	WidgetTree->RootWidget = V;
-	auto AddRow = [this, V](const FString& Label)
+	RootBox->AddChild(V);
+	DCUI::Text(WidgetTree, V, TEXT("OPTIONS"), UDCText_Heading::StaticClass());
+	UHorizontalBox* TabRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	V->AddChildToVerticalBox(TabRow)->SetPadding(FMargin(0.f, 8.f, 0.f, 10.f));
+
+	// Row with the label filling the left side, so whatever follows is pushed against the right edge
+	auto AddRow = [this](UVerticalBox* Page, const FString& Label)
 	{
 		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-		V->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 4.f));
-		USizeBox* LabelBox = WidgetTree->ConstructWidget<USizeBox>();
-		LabelBox->SetMinDesiredWidth(300.f);
-		LabelBox->AddChild(DCUI::Text(WidgetTree, nullptr, Label));
-		H->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
+		Page->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 4.f));
+		UHorizontalBoxSlot* LabelSlot = H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, Label));
+		LabelSlot->SetVerticalAlignment(VAlign_Center);
+		LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		return H;
 	};
-
-	DCUI::Text(WidgetTree, V, TEXT("CONTROLS"), UDCText_Heading::StaticClass());
-	for (int32 i = 0; i < (int32)EDCAction::Count; ++i)
+	auto AddPage = [this, V, TabRow](const TCHAR* Title)
 	{
-		UHorizontalBox* H = AddRow(UDCSettings::ActionLabel((EDCAction)i));
-		UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, TEXT(""), FName(*FString::FromInt(i)));
-		USizeBox* BtnBox = WidgetTree->ConstructWidget<USizeBox>();
-		BtnBox->SetMinDesiredWidth(240.f);
-		BtnBox->AddChild(Btn);
-		H->AddChildToHorizontalBox(BtnBox);
-		Btn->OnPayloadClicked.AddDynamic(this, &UDCSettingsWidget::HandleRebind);
-		KeyButtons.Add(Btn);
-	}
-
-	UCommonTextBlock* Header = DCUI::Text(WidgetTree, V, TEXT("SETTINGS"), UDCText_Heading::StaticClass());
-	Header->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
+		UVerticalBox* Page = WidgetTree->ConstructWidget<UVerticalBox>();
+		V->AddChildToVerticalBox(Page);
+		const int32 Index = Pages.Add(Page);
+		UDCButton* Tab = DCUI::Button(WidgetTree, TabRow, Title, FName(*FString::FromInt(Index)), UDCButton_Tab::StaticClass());
+		Tab->SetIsSelectable(true);
+		Tab->OnPayloadClicked.AddDynamic(this, &UDCSettingsWidget::HandleTab);
+		Cast<UHorizontalBoxSlot>(Tab->Slot)->SetPadding(FMargin(0.f, 0.f, 2.f, 0.f));
+		TabButtons.Add(Tab);
+		return Page;
+	};
 	// Value-plus-arrows control: [◀] value [▶] (Press Start 2P has the glyphs)
-	auto AddStepper = [this, &AddRow](const TCHAR* Label, FName Down, FName Up)
+	auto AddStepper = [this, &AddRow](UVerticalBox* Page, const TCHAR* Label, FName Down, FName Up)
 	{
-		UHorizontalBox* H = AddRow(Label);
+		UHorizontalBox* H = AddRow(Page, Label);
 		UDCButton* Left = DCUI::Button(WidgetTree, H, TEXT("◀"), Down);
 		UCommonTextBlock* Value = DCUI::Text(WidgetTree, nullptr, TEXT(""), UDCText_Heading::StaticClass());
 		Value->SetJustification(ETextJustify::Center);
@@ -1209,17 +1287,74 @@ void UDCSettingsWidget::NativeOnInitialized()
 		Right->OnPayloadClicked.AddDynamic(this, &UDCSettingsWidget::HandleStep);
 		return Value;
 	};
-	VolumeText = AddStepper(TEXT("Volume"), "VolDown", "VolUp");
-	SensitivityText = AddStepper(TEXT("Mouse sensitivity"), "SensDown", "SensUp");
+	// Slider plus a percent readout; the slider's size box is the row's slot
+	auto AddSlider = [this, &AddRow](UVerticalBox* Page, const TCHAR* Label, FName Id)
+	{
+		UHorizontalBox* H = AddRow(Page, Label);
+		USlider* Slider = DCUI::Slider(WidgetTree, H, 240.f);
+		Cast<UHorizontalBoxSlot>(Slider->GetParent()->Slot)->SetVerticalAlignment(VAlign_Center);
+		UCommonTextBlock* Value = DCUI::Text(WidgetTree, nullptr, TEXT(""), UDCText_Heading::StaticClass());
+		Value->SetJustification(ETextJustify::Right);
+		USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>();
+		ValueBox->SetMinDesiredWidth(110.f);
+		ValueBox->AddChild(Value);
+		UHorizontalBoxSlot* ValueSlot = H->AddChildToHorizontalBox(ValueBox);
+		ValueSlot->SetVerticalAlignment(VAlign_Center);
+		ValueSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+		VolumeSliders.Add(Id, Slider);
+		VolumeTexts.Add(Id, Value);
+		return Slider;
+	};
 
-	UCommonTextBlock* GfxHeader = DCUI::Text(WidgetTree, V, TEXT("GRAPHICS"), UDCText_Heading::StaticClass());
-	GfxHeader->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
-	QualityText = AddStepper(TEXT("Quality"), "QualDown", "QualUp");
-	LumenText = AddStepper(TEXT("Lumen (GI + reflections)"), "LumenDown", "LumenUp");
-	FpsText = AddStepper(TEXT("Frame rate cap"), "FpsDown", "FpsUp");
-	VSyncText = AddStepper(TEXT("VSync"), "VSyncDown", "VSyncUp");
-	ResScaleText = AddStepper(TEXT("Resolution scale"), "ResDown", "ResUp");
-	FullscreenText = AddStepper(TEXT("Fullscreen"), "FullDown", "FullUp");
+	UVerticalBox* Controls = AddPage(TEXT("CONTROLS"));
+	for (int32 i = 0; i < (int32)EDCAction::Count; ++i)
+	{
+		UHorizontalBox* H = AddRow(Controls, UDCSettings::ActionLabel((EDCAction)i));
+		UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, TEXT(""), FName(*FString::FromInt(i)));
+		USizeBox* BtnBox = WidgetTree->ConstructWidget<USizeBox>();
+		BtnBox->SetMinDesiredWidth(240.f);
+		BtnBox->AddChild(Btn);
+		H->AddChildToHorizontalBox(BtnBox);
+		Btn->OnPayloadClicked.AddDynamic(this, &UDCSettingsWidget::HandleRebind);
+		KeyButtons.Add(Btn);
+	}
+	SensitivityText = AddStepper(Controls, TEXT("Mouse sensitivity"), "SensDown", "SensUp");
+
+	UVerticalBox* Audio = AddPage(TEXT("AUDIO"));
+	AddSlider(Audio, TEXT("Master"), "Master")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleMasterVolume);
+	AddSlider(Audio, TEXT("SFX"), "Sfx")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleSfxVolume);
+	AddSlider(Audio, TEXT("Music"), "Music")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleMusicVolume);
+
+	UVerticalBox* Graphics = AddPage(TEXT("GRAPHICS"));
+	QualityText = AddStepper(Graphics, TEXT("Quality"), "QualDown", "QualUp");
+	LumenText = AddStepper(Graphics, TEXT("Lumen (GI + reflections)"), "LumenDown", "LumenUp");
+	FpsText = AddStepper(Graphics, TEXT("Frame rate cap"), "FpsDown", "FpsUp");
+	VSyncText = AddStepper(Graphics, TEXT("VSync"), "VSyncDown", "VSyncUp");
+	ResScaleText = AddStepper(Graphics, TEXT("Resolution scale"), "ResDown", "ResUp");
+	FullscreenText = AddStepper(Graphics, TEXT("Fullscreen"), "FullDown", "FullUp");
+	ShowTab(0);
+	Refresh();
+}
+
+void UDCSettingsWidget::ShowTab(int32 Index)
+{
+	CancelCapture();
+	for (int32 i = 0; i < Pages.Num(); ++i)
+	{
+		Pages[i]->SetVisibility(i == Index ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		i == Index ? TabButtons[i]->SetIsSelected(true, false) : TabButtons[i]->ClearSelection();
+	}
+}
+
+void UDCSettingsWidget::HandleTab(FName Index)
+{
+	ShowTab(FCString::Atoi(*Index.ToString()));
+}
+
+void UDCSettingsWidget::SetVolume(float& Field, float Value)
+{
+	Field = FMath::Clamp(FMath::RoundToFloat(Value * 20.f) / 20.f, 0.f, 1.f);
+	UDCSettings::Get()->Save();
 	Refresh();
 }
 
@@ -1230,7 +1365,12 @@ void UDCSettingsWidget::Refresh()
 	{
 		KeyButtons[i]->Label->SetText(i == CapturingAction ? FText::FromString(TEXT("PRESS A KEY...")) : S->Key((EDCAction)i).GetDisplayName());
 	}
-	VolumeText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(S->MasterVolume * 100.f))));
+	const TPair<FName, float> Volumes[] = {{"Master", S->MasterVolume}, {"Sfx", S->SfxVolume}, {"Music", S->MusicVolume}};
+	for (const TPair<FName, float>& Vol : Volumes)
+	{
+		VolumeSliders[Vol.Key]->SetValue(Vol.Value);
+		VolumeTexts[Vol.Key]->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Vol.Value * 100.f))));
+	}
 	SensitivityText->SetText(FText::FromString(FString::Printf(TEXT("%.1fx"), S->MouseSensitivityScale)));
 	QualityText->SetText(FText::FromString(QualityNames[FMath::Clamp(S->Quality, 0, 3)]));
 	LumenText->SetText(FText::FromString(S->bLumen ? TEXT("ON") : TEXT("OFF")));
@@ -1245,11 +1385,7 @@ void UDCSettingsWidget::HandleStep(FName Id)
 	UDCSettings* S = UDCSettings::Get();
 	const bool bUp = Id.ToString().EndsWith(TEXT("Up"));
 	const float Dir = bUp ? 0.1f : -0.1f;
-	if (Id == "VolUp" || Id == "VolDown")
-	{
-		StepValue(S->MasterVolume, Dir, 0.f, 1.f);
-	}
-	else if (Id == "SensUp" || Id == "SensDown")
+	if (Id == "SensUp" || Id == "SensDown")
 	{
 		StepValue(S->MouseSensitivityScale, Dir, 0.1f, 3.f);
 	}
@@ -1341,7 +1477,7 @@ void UDCSettingsWidget::CancelCapture()
 		Capture.Reset();
 	}
 	CapturingAction = INDEX_NONE;
-	if (VolumeText)
+	if (SensitivityText)
 	{
 		Refresh();
 	}
@@ -1410,12 +1546,6 @@ void UDCPauseWidget::HandleMainMenu(FName Unused)
 {
 	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
 	{
-		if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
-		{
-			// Save slot bracket: persist account balance & day before leaving gameplay
-			GI->SaveActiveSlotMetadata(GM->Economy ? GM->Economy->Money : 0, GM->DayNightCycle ? GM->DayNightCycle->DayIndex : 1);
-			GI->CaptureGameModeToActiveSave(GM);
-		}
 		GI->TravelToMainMenu();
 		return;
 	}

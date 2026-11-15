@@ -664,3 +664,10 @@ void UAC_ClientDirector::CloseStore()
 		ApplyReview(P.Review);
 	}
 }
+
+void UAC_ClientDirector::RestoreSavedState(const TArray<FReview>& InHistory, int32 InStreak, int32 InScriptedUsed)
+{
+	ReviewHistory = InHistory;
+	ReviewStreak = InStreak;
+	ScriptedUsed = InScriptedUsed;
+}

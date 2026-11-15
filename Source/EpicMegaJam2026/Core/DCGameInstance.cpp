@@ -1,4 +1,6 @@
 #include "Core/DCGameInstance.h"
+#include "Core/DCGameMode.h"
+#include "Components/DCComponents.h"
 #include "Kismet/GameplayStatics.h"
 
 FString UDCGameInstance::SlotNameForIndex(int32 SlotIndex)
@@ -71,11 +73,61 @@ bool UDCGameInstance::SelectSaveSlot(const FString& SlotName)
 	return true;
 }
 
-void UDCGameInstance::SaveActiveSlotMetadata(int32 CurrentMoney, int32 CurrentDay)
+bool UDCGameInstance::DeleteSaveSlot(const FString& SlotName)
+{
+	if (SlotName.IsEmpty())
+	{
+		return false;
+	}
+	const bool bDeleted = UGameplayStatics::DoesSaveGameExist(SlotName, SaveUserIndex)
+		? UGameplayStatics::DeleteGameInSlot(SlotName, SaveUserIndex)
+		: false;
+	if (ActiveSlotName == SlotName)
+	{
+		ActiveSlotName.Empty();
+	}
+	return bDeleted;
+}
+
+void UDCGameInstance::ResetActiveSaveSlotToDayOne(int32 StartingMoney)
 {
 	if (ActiveSlotName.IsEmpty())
 	{
 		return;
+	}
+	FDateTime OldCreatedAt = FDateTime::Now();
+	bool bOldIntroPlayed = false;
+	bool bOldTutorialCompleted = false;
+	if (UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
+	{
+		if (const UDCSaveGame* Existing = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(ActiveSlotName, SaveUserIndex)))
+		{
+			OldCreatedAt = Existing->CreatedAt;
+			bOldIntroPlayed = Existing->bIntroPlayed;
+			bOldTutorialCompleted = Existing->bTutorialCompleted;
+		}
+	}
+	UDCSaveGame* Save = Cast<UDCSaveGame>(UGameplayStatics::CreateSaveGameObject(UDCSaveGame::StaticClass()));
+	if (!Save)
+	{
+		return;
+	}
+	Save->SlotName = ActiveSlotName;
+	Save->CreatedAt = OldCreatedAt;
+	Save->LastSavedAt = FDateTime::Now();
+	Save->Money = StartingMoney;
+	Save->DayIndex = 1;
+	Save->bIntroPlayed = bOldIntroPlayed;
+	Save->bTutorialCompleted = bOldTutorialCompleted;
+	Save->bHasSavedGameplayState = false;
+	UGameplayStatics::SaveGameToSlot(Save, ActiveSlotName, SaveUserIndex);
+}
+
+UDCSaveGame* UDCGameInstance::LoadOrCreateActiveSave() const
+{
+	if (ActiveSlotName.IsEmpty())
+	{
+		return nullptr;
 	}
 	UDCSaveGame* Save = nullptr;
 	if (UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
@@ -85,12 +137,21 @@ void UDCGameInstance::SaveActiveSlotMetadata(int32 CurrentMoney, int32 CurrentDa
 	if (!Save)
 	{
 		Save = Cast<UDCSaveGame>(UGameplayStatics::CreateSaveGameObject(UDCSaveGame::StaticClass()));
-		if (!Save)
+		if (Save)
 		{
-			return;
+			Save->SlotName = ActiveSlotName;
+			Save->CreatedAt = FDateTime::Now();
 		}
-		Save->SlotName = ActiveSlotName;
-		Save->CreatedAt = FDateTime::Now();
+	}
+	return Save;
+}
+
+void UDCGameInstance::SaveActiveSlotMetadata(int32 CurrentMoney, int32 CurrentDay)
+{
+	UDCSaveGame* Save = LoadOrCreateActiveSave();
+	if (!Save)
+	{
+		return;
 	}
 	Save->LastSavedAt = FDateTime::Now();
 	Save->Money = CurrentMoney;
@@ -121,24 +182,146 @@ void UDCGameInstance::MarkIntroPlayed()
 		bIntroPlayedWithoutSlot = true;
 		return;
 	}
-	UDCSaveGame* Save = nullptr;
-	if (UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
-	{
-		Save = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(ActiveSlotName, SaveUserIndex));
-	}
+	UDCSaveGame* Save = LoadOrCreateActiveSave();
 	if (!Save)
 	{
-		Save = Cast<UDCSaveGame>(UGameplayStatics::CreateSaveGameObject(UDCSaveGame::StaticClass()));
-		if (!Save)
-		{
-			return;
-		}
-		Save->SlotName = ActiveSlotName;
-		Save->CreatedAt = FDateTime::Now();
+		return;
 	}
 	Save->LastSavedAt = FDateTime::Now();
 	Save->bIntroPlayed = true;
 	UGameplayStatics::SaveGameToSlot(Save, ActiveSlotName, SaveUserIndex);
+}
+
+bool UDCGameInstance::ShouldRunTutorial() const
+{
+	if (ActiveSlotName.IsEmpty())
+	{
+		return !bTutorialCompletedWithoutSlot;
+	}
+	if (UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
+	{
+		if (const UDCSaveGame* Save = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(ActiveSlotName, SaveUserIndex)))
+		{
+			return !Save->bTutorialCompleted;
+		}
+	}
+	return true;
+}
+
+void UDCGameInstance::MarkTutorialCompleted()
+{
+	if (ActiveSlotName.IsEmpty())
+	{
+		bTutorialCompletedWithoutSlot = true;
+		return;
+	}
+	UDCSaveGame* Save = LoadOrCreateActiveSave();
+	if (!Save)
+	{
+		return;
+	}
+	Save->LastSavedAt = FDateTime::Now();
+	Save->bTutorialCompleted = true;
+	UGameplayStatics::SaveGameToSlot(Save, ActiveSlotName, SaveUserIndex);
+}
+
+void UDCGameInstance::CaptureGameModeToActiveSave(const ADCGameMode* GameMode, int32 OverrideDayIndex)
+{
+	if (!GameMode || ActiveSlotName.IsEmpty())
+	{
+		return;
+	}
+	UDCSaveGame* Save = LoadOrCreateActiveSave();
+	if (!Save)
+	{
+		return;
+	}
+	Save->bHasSavedGameplayState = true;
+	Save->LastSavedAt = FDateTime::Now();
+	Save->Money = GameMode->Economy ? GameMode->Economy->Money : Save->Money;
+	Save->Criterio = GameMode->Economy ? GameMode->Economy->Criterio : 0;
+	const int32 RawDay = OverrideDayIndex > 0 ? OverrideDayIndex : (GameMode->DayNightCycle ? GameMode->DayNightCycle->DayIndex : 1);
+	Save->DayIndex = FMath::Max(1, RawDay);
+
+	if (GameMode->Unlocks)
+	{
+		Save->UnlockedStarTier = GameMode->Unlocks->UnlockedStarTier;
+		Save->UnlockedGenres = GameMode->Unlocks->UnlockedGenres.Array();
+		Save->OwnedUnlocks = GameMode->Unlocks->OwnedUnlocks.Array();
+	}
+	if (GameMode->Inventory)
+	{
+		Save->InventoryStock = GameMode->Inventory->Stock;
+	}
+	if (GameMode->FilmCrafting)
+	{
+		Save->UnlockedSlots = GameMode->FilmCrafting->UnlockedSlots;
+		Save->CraftedFilms = GameMode->FilmCrafting->CraftedFilms;
+		Save->HeldFilms = GameMode->FilmCrafting->HeldFilms;
+		Save->FilmsCreated = GameMode->FilmCrafting->GetFilmsCreated();
+		Save->UsedTitles = GameMode->FilmCrafting->GetUsedTitles().Array();
+	}
+	if (GameMode->ClientDirector)
+	{
+		Save->ReviewHistory = GameMode->ClientDirector->ReviewHistory;
+		Save->ReviewStreak = GameMode->ClientDirector->GetReviewStreak();
+		Save->ScriptedUsed = GameMode->ClientDirector->GetScriptedUsed();
+	}
+
+	UGameplayStatics::SaveGameToSlot(Save, ActiveSlotName, SaveUserIndex);
+}
+
+void UDCGameInstance::ApplyActiveSaveToGameMode(ADCGameMode* GameMode)
+{
+	if (!GameMode || ActiveSlotName.IsEmpty() || !UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
+	{
+		return;
+	}
+	const UDCSaveGame* Save = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(ActiveSlotName, SaveUserIndex));
+	if (!Save)
+	{
+		return;
+	}
+	if (!Save->bHasSavedGameplayState)
+	{
+		// First entry into MAP_Rewind for a new/reset slot: snapshot the clean Day 1 defaults initialized by GameMode BeginPlay.
+		CaptureGameModeToActiveSave(GameMode, 1);
+		return;
+	}
+
+	if (GameMode->Economy)
+	{
+		GameMode->Economy->Money = Save->Money;
+		GameMode->Economy->Criterio = Save->Criterio;
+		GameMode->Economy->DayEarned = 0;
+		GameMode->Economy->bGameIsOver = false;
+		GameMode->Economy->bWon = false;
+		GameMode->Economy->OnMoneyChanged.Broadcast(GameMode->Economy->Money, 0);
+	}
+	if (GameMode->Unlocks)
+	{
+		GameMode->Unlocks->UnlockedStarTier = Save->UnlockedStarTier;
+		GameMode->Unlocks->UnlockedGenres = TSet<EGenre>(Save->UnlockedGenres);
+		GameMode->Unlocks->OwnedUnlocks = TSet<FName>(Save->OwnedUnlocks);
+	}
+	if (GameMode->Inventory)
+	{
+		GameMode->Inventory->Stock = Save->InventoryStock;
+		GameMode->Inventory->OnInventoryChanged.Broadcast();
+	}
+	if (GameMode->FilmCrafting)
+	{
+		GameMode->FilmCrafting->RestoreSavedState(Save->UnlockedSlots, Save->CraftedFilms, Save->HeldFilms, Save->FilmsCreated, Save->UsedTitles);
+	}
+	if (GameMode->ClientDirector)
+	{
+		GameMode->ClientDirector->CloseStore();
+		GameMode->ClientDirector->RestoreSavedState(Save->ReviewHistory, Save->ReviewStreak, Save->ScriptedUsed);
+	}
+	if (GameMode->DayNightCycle)
+	{
+		GameMode->DayNightCycle->StartDay(FMath::Max(1, Save->DayIndex));
+	}
 }
 
 void UDCGameInstance::TravelToGameplay()

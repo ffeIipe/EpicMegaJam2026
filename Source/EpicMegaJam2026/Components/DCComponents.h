@@ -128,6 +128,9 @@ public:
 	UFUNCTION(BlueprintCallable) void ResetDayLines() { UsedHintRows.Empty(); }
 	// The next client gets DT_ScriptedOrders row 1 again (tests use it: the schedule may have spawned one before they start).
 	UFUNCTION(BlueprintCallable) void ResetScriptedOrders() { ScriptedUsed = 0; }
+	int32 GetReviewStreak() const { return ReviewStreak; }
+	int32 GetScriptedUsed() const { return ScriptedUsed; }
+	void RestoreSavedState(const TArray<FReview>& InHistory, int32 InStreak, int32 InScriptedUsed);
 
 	void ApplyLeavePenalty();
 	void NotifyReachedCounter(class ADCClient* Client);
@@ -270,6 +273,9 @@ public:
 	UFUNCTION(BlueprintCallable) bool EquipFilm(int32 Index);
 	// The film leaves the hand at delivery; it stays in CraftedFilms.
 	void ConsumeHeldFilm();
+	int32 GetFilmsCreated() const { return FilmsCreated; }
+	const TSet<FString>& GetUsedTitles() const { return UsedTitles; }
+	void RestoreSavedState(int32 InUnlockedSlots, const TArray<FCreatedFilm>& InCraftedFilms, const TArray<FCreatedFilm>& InHeldFilms, int32 InFilmsCreated, const TArray<FString>& InUsedTitles);
 
 private:
 	int32 FilmsCreated = 0;

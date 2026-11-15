@@ -58,10 +58,15 @@ void UDCSettings::Apply() const
 	}
 	if (FMOD::Studio::System* System = IFMODStudioModule::Get().GetStudioSystem(EFMODSystemContext::Runtime))
 	{
-		FMOD::Studio::Bus* Master = nullptr;
-		if (System->getBus("bus:/", &Master) == FMOD_OK)
+		// Buses missing from the banks are skipped
+		const TPair<const char*, float> Buses[] = {{"bus:/", MasterVolume}, {"bus:/SFX", SfxVolume}, {"bus:/Music", MusicVolume}};
+		for (const TPair<const char*, float>& B : Buses)
 		{
-			Master->setVolume(MasterVolume);
+			FMOD::Studio::Bus* Bus = nullptr;
+			if (System->getBus(B.Key, &Bus) == FMOD_OK)
+			{
+				Bus->setVolume(B.Value);
+			}
 		}
 	}
 }

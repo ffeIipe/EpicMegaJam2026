@@ -19,6 +19,8 @@ public:
 	// Multiplies PDA_GameConfig.MouseSensitivity
 	UPROPERTY(Config) float MouseSensitivityScale = 1.f;
 	UPROPERTY(Config) float MasterVolume = 1.f;
+	UPROPERTY(Config) float SfxVolume = 1.f;   // FMOD bus:/SFX
+	UPROPERTY(Config) float MusicVolume = 1.f; // FMOD bus:/Music
 	// Graphics: 0 Low .. 3 Ultra (engine scalability level), Lumen GI/reflections on/off, frame cap (0 = unlimited), VSync
 	UPROPERTY(Config) int32 Quality = 3;
 	UPROPERTY(Config) bool bLumen = true;
