@@ -185,7 +185,7 @@ Cada cliente trae un **pedido**: un objetivo oculto en las 5 skills (`Target`, u
 | 4★ (Cinephile) | 3 a 4 | 3 a 4 | 4 | 3.0 | 40 |
 | 5★ (Auteur) | 4 a 5 | 4 a 5 | 5 | 4.0 | 20 |
 
-Todos los valores son iniciales. **Un nivel solo aparece si `Tier ≤ UnlockedStarTier`** (la licencia de estrellas del jugador, sección 7.1). Reemplaza a las categorías Casual / Enthusiast / Cinephile del diseño anterior.
+Todos los valores son iniciales. **El nivel de los clientes generados lo fija `UnlockedSlots`** (sección 4.4): `Tier = UnlockedSlots - 1` (2 slots = 1★, 3 = 2★, 4 = 3★) y con todos los slots (`MaxSlots`) = 5★. Al comprar un slot dejan de aparecer los clientes del nivel anterior, así que el pedido solo crece (más cintas, más skills, más pago). `RecipeTapesMin/Max` y `SpawnWeight` de la tabla ya no se usan: el tamaño de la receta es de `UnlockedSlots - 1` a `UnlockedSlots` cintas (mínimo 2). Las estrellas de las cintas siguen limitadas por `UnlockedStarTier` (sección 7.1). Reemplaza a las categorías Casual / Enthusiast / Cinephile del diseño anterior.
 
 ### 5.2 Generación del pedido
 
@@ -193,8 +193,8 @@ Al spawnear, `AC_ClientDirector` arma el cliente así:
 
 1. Elige un arquetipo visual de `DT_ClientArchetypes` según `SpawnWeight` y la fase.
 2. **Pedidos scripteados:** los primeros clientes de la partida usan las filas de `DT_ScriptedOrders` en orden (sección 5.4). Si hay una fila para este cliente, se usa su `Target` y su arquetipo y se saltan los pasos siguientes.
-3. Elige un nivel según `SpawnWeight` de `DT_ClientTiers`, entre los niveles con `Tier ≤ UnlockedStarTier`.
-4. Arma una **receta**: sortea `n` cintas con `n` entre `RecipeTapesMin` y `RecipeTapesMax` del nivel, **nunca menos de 2** (todo pedido exige una combinación, que es la mecánica principal) y **sin pasar de `UnlockedSlots`**. Cada cinta sale de las filas de `DT_VHS` con género desbloqueado, estrellas dentro del rango del nivel y `Rating ≤ UnlockedStarTier`. Si el arquetipo tiene `AllowedGenres` no vacío, las cintas salen de esos géneros (si la intersección con los desbloqueados queda vacía, de cualquier género desbloqueado). Se prefieren cintas distintas; se permite repetir si el grupo es chico.
+3. El nivel sale de `UnlockedSlots` (sección 5.1).
+4. Arma una **receta**: sortea `n` cintas con `n` entre `UnlockedSlots - 1` y `UnlockedSlots`, **nunca menos de 2** (todo pedido exige una combinación, que es la mecánica principal). Cada cinta sale de las filas de `DT_VHS` con género desbloqueado, estrellas dentro del rango del nivel y `Rating ≤ UnlockedStarTier`. Si el arquetipo tiene `AllowedGenres` no vacío, las cintas salen de esos géneros (si la intersección con los desbloqueados queda vacía, de cualquier género desbloqueado). Se prefieren cintas distintas; se permite repetir si el grupo es chico.
 5. `Target` = el perfil de esa receta, con la misma fórmula del perfil de película (suma por skill, tope `SkillCap`).
 
 **Por qué así:** el objetivo siempre se puede alcanzar exactamente con cintas que el proveedor vende, y su magnitud queda ajustada sola al nivel del cliente (mismo mecanismo que escala los pedidos con las estrellas y con los slots). No hay que balancear una escala aparte.

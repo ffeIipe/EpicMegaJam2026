@@ -103,6 +103,10 @@ private:
 	// Poor / Okay / Good / Great vs. what the front client asked for (hints only, never the hidden target)
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MatchText;
 	UPROPERTY() TObjectPtr<UVerticalBox> OrderText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> OrderHeading; // "ORDER  ★ 3 Enthusiast"
+	UPROPERTY() TObjectPtr<UVerticalBox> CraftedOrderText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedOrderHeading;
+	UPROPERTY() TObjectPtr<UProgressBar> CraftedOrderPatience;
 	UPROPERTY() TObjectPtr<UProgressBar> OrderPatience;
 	// "Order size: N points   Your film: M"
 	UPROPERTY() TObjectPtr<UCommonTextBlock> PointsText;
@@ -148,6 +152,7 @@ private:
 	UFUNCTION() void HandleButton(FName Unused) { OnButton.Broadcast(); }
 	UFUNCTION() void HandleReject(FName Unused) { OnReject.Broadcast(); }
 	UPROPERTY() TObjectPtr<UVerticalBox> LineBox;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> HeadingText;
 	UPROPERTY() TObjectPtr<UDCButton> Button;
 	UPROPERTY() TObjectPtr<UDCButton> RejectButton;
 };
@@ -168,6 +173,7 @@ private:
 	UPROPERTY() TObjectPtr<UAC_ClientDirector> Director;
 	UPROPERTY() TObjectPtr<UVerticalBox> OrderText;
 	TWeakObjectPtr<const class ADCClient> ShownClient; // the order is rebuilt only when the front client changes
+	UPROPERTY() TObjectPtr<UCommonTextBlock> HeadingText;
 	UPROPERTY() TObjectPtr<UProgressBar> PatienceBar;
 	UPROPERTY() TObjectPtr<UWidget> PanelRoot;
 };

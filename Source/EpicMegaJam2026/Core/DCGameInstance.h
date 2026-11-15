@@ -16,6 +16,9 @@ public:
 	static constexpr int32 MaxSaveSlots = 3;
 	static constexpr int32 SaveUserIndex = 0;
 
+	virtual void Init() override;
+	virtual void Shutdown() override;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Save") FString ActiveSlotName;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Levels") FName MainMenuLevelName = FName(TEXT("/Game/_MainGame/Level/MAP_MainMenu"));
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Levels") FName GameplayLevelName = FName(TEXT("/Game/_MainGame/Level/MAP_Rewind"));

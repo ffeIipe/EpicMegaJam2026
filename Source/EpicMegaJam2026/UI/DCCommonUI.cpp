@@ -19,6 +19,7 @@
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
 #include "Data/DCTypes.h"
+#include "Data/PDA_GameConfig.h"
 
 using DCUI::Box;
 
@@ -338,6 +339,8 @@ namespace DCUI
 		Btn->Payload = Payload;
 		Btn->SetStyle(Style);
 		Btn->Label->SetText(FText::FromString(Label));
+		// Mouse only: a focused button would be pressed again by Space (buy again, add the tape again) instead of the Space shortcuts
+		Btn->SetIsFocusable(false);
 		if (Parent)
 		{
 			Parent->AddChild(Btn);
@@ -356,9 +359,9 @@ namespace DCUI
 		UCanvasPanelSlot* S = Canvas->AddChildToCanvas(Stack);
 		S->SetAnchors(Anchors);
 		S->SetAlignment(Alignment);
-		// Centered screens sit a bit above the middle so they don't run under the key-hint bar at the bottom (UDCRootLayout)
+		// Centered screens sit a little above the middle, between the stats strip (top right) and the key-hint bar (bottom left)
 		const bool bCentered = Anchors.Minimum.Equals(FVector2D(0.5f, 0.5f));
-		S->SetPosition(bCentered ? Position - FVector2D(0.f, 50.f) : Position);
+		S->SetPosition(bCentered ? Position - FVector2D(0.f, 20.f) : Position);
 		S->SetAutoSize(true);
 		UVerticalBox* V = Tree->ConstructWidget<UVerticalBox>();
 		B->SetContent(V);
@@ -436,6 +439,23 @@ namespace DCUI
 		return FString::Printf(TEXT("★ %d"), FMath::Clamp(Rating, 0, 5)); // one star + the number, e.g. "★ 4"
 	}
 
+	FString ClientTierLabel(const UPDA_GameConfig* Config, int32 Tier)
+	{
+		FString Name;
+		if (Config && Config->ClientTierTable)
+		{
+			for (const TPair<FName, uint8*>& P : Config->ClientTierTable->GetRowMap())
+			{
+				const FClientTierData* Row = reinterpret_cast<const FClientTierData*>(P.Value);
+				if (Row->Tier == Tier)
+				{
+					Name = Row->DebugName.ToString();
+				}
+			}
+		}
+		return Name.IsEmpty() ? Stars(Tier) : FString::Printf(TEXT("%s %s"), *Stars(Tier), *Name);
+	}
+
 	void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills)
 	{
 		UCommonBorder* Box = Border(Tree, nullptr, UDCBorder_Panel::StaticClass(), FMargin(12.f));
@@ -470,9 +490,11 @@ namespace DCUI
 	void OrderLines(UWidgetTree* Tree, UPanelWidget* Box, const FClientRuntime& Client, float Wrap)
 	{
 		Box->ClearChildren();
+		// Wrap <= 0 wraps to the width the box has (the order block of the crafted films view is as wide as its column)
+		auto Wrapped = [Wrap](UCommonTextBlock* T) { if (Wrap > 0.f) { T->SetWrapTextAt(Wrap); } else { T->SetAutoWrapText(true); } return T; };
 		if (Client.OrderLines.IsEmpty()) // scripted or legacy orders without per-skill lines
 		{
-			Text(Tree, Box, Client.DisplayName.IsEmpty() ? Client.OrderText.ToString() : FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Client.OrderText.ToString()))->SetWrapTextAt(Wrap);
+			Wrapped(Text(Tree, Box, Client.DisplayName.IsEmpty() ? Client.OrderText.ToString() : FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Client.OrderText.ToString())));
 			return;
 		}
 		for (const FOrderLine& Line : Client.OrderLines)
@@ -482,7 +504,7 @@ namespace DCUI
 				? FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Line.Text.ToString()) : Line.Text.ToString();
 			// Hint colors by skill are switched off (grey Scary read as disabled); to bring them back use SkillStyle(Line.Skill) for the hints
 			// Text(Tree, Box, Content, bGreeting ? TSubclassOf<UCommonTextStyle>(UDCText_Body::StaticClass()) : SkillStyle(Line.Skill))->SetWrapTextAt(Wrap);
-			Text(Tree, Box, Content, UDCText_Body::StaticClass())->SetWrapTextAt(Wrap);
+			Wrapped(Text(Tree, Box, Content, UDCText_Body::StaticClass()));
 		}
 	}
 

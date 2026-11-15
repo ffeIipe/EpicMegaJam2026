@@ -125,7 +125,7 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	UCommonBorder* ListPanel = DCUI::Border(WidgetTree, Body, UDCBorder_Inset::StaticClass(), FMargin(10.f));
 	USizeBox* ListSize = WidgetTree->ConstructWidget<USizeBox>();
 	ListSize->SetWidthOverride(ListW);
-	ListSize->SetHeightOverride(440.f);
+	ListSize->SetHeightOverride(bPicker ? 280.f : 440.f); // the combine screen has to fit in 1080p with the order block under the list
 	ListPanel->SetContent(ListSize);
 	UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
 	ListSize->AddChild(Scroll);
@@ -151,7 +151,7 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	DetailTitle->SetWrapTextAt(428.f);
 	UHorizontalBox* Info = WidgetTree->ConstructWidget<UHorizontalBox>();
 	D->AddChildToVerticalBox(Info)->SetPadding(FMargin(0.f, 14.f));
-	DetailCover = AddCover(WidgetTree, Info, FVector2D(150.f, 214.f));
+	DetailCover = AddCover(WidgetTree, Info, FVector2D(135.f, 240.f));
 	UVerticalBox* Facts = WidgetTree->ConstructWidget<UVerticalBox>();
 	Info->AddChildToHorizontalBox(Facts)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 	DCUI::Text(WidgetTree, Facts, TEXT("Rating:"));
@@ -234,8 +234,9 @@ void UDCInventoryWidget::Refresh()
 		Btn->Label->RemoveFromParent();
 		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Btn->Content->AddChild(H);
-		SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), &Tape, Config);
+		SetCover(AddCover(WidgetTree, H, FVector2D(36.f, 64.f)), &Tape, Config);
 		UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
+		Btn->Label->SetAutoWrapText(true);
 		Text->AddChildToVerticalBox(Btn->Label)->SetHorizontalAlignment(HAlign_Left);
 		DCUI::InlineSkills(WidgetTree, Text, Tape.Skills);
 		UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
@@ -325,6 +326,24 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 		Tab->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnViewClicked);
 		ViewTabButtons.Add(Tab);
 	}
+	// The client's order (title with level, hint lines, patience bar) in an inset box; both views of the screen have one
+	auto AddOrderBlock = [this](UVerticalBox* Parent, TObjectPtr<UCommonTextBlock>& Heading, TObjectPtr<UVerticalBox>& Text, TObjectPtr<UProgressBar>& Bar, bool bFill)
+	{
+		UCommonBorder* Box = DCUI::Border(WidgetTree, Parent, UDCBorder_Inset::StaticClass(), FMargin(12.f, 8.f));
+		Cast<UVerticalBoxSlot>(Box->Slot)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+		UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>();
+		Box->SetContent(Content);
+		Heading = DCUI::Text(WidgetTree, Content, TEXT("ORDER"), UDCText_Heading::StaticClass());
+		Heading->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
+		Text = WidgetTree->ConstructWidget<UVerticalBox>();
+		Content->AddChild(Text);
+		Bar = DCUI::Bar(WidgetTree, Content, PickerWidth - 24.f);
+		if (bFill) // as wide as the box: its column has no fixed width
+		{
+			Cast<USizeBox>(Bar->GetParent())->ClearWidthOverride();
+			Cast<UVerticalBoxSlot>(Bar->GetParent()->Slot)->SetHorizontalAlignment(HAlign_Fill);
+		}
+	};
 	// Both views share one overlay: the hidden one keeps its layout space, so the library is exactly as big as the combine view
 	UOverlay* Views = WidgetTree->ConstructWidget<UOverlay>();
 	V->AddChild(Views);
@@ -338,12 +357,15 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	LibrarySlot->SetHorizontalAlignment(HAlign_Fill);
 	LibrarySlot->SetVerticalAlignment(VAlign_Fill);
 	CraftedBody = Library;
-	UCommonBorder* CraftedPanel = DCUI::Border(WidgetTree, Library, UDCBorder_Inset::StaticClass(), FMargin(10.f));
-	Cast<UHorizontalBoxSlot>(CraftedPanel->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UVerticalBox* CraftedLeft = WidgetTree->ConstructWidget<UVerticalBox>();
+	Cast<UHorizontalBoxSlot>(Library->AddChildToHorizontalBox(CraftedLeft))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UCommonBorder* CraftedPanel = DCUI::Border(WidgetTree, CraftedLeft, UDCBorder_Inset::StaticClass(), FMargin(10.f));
+	Cast<UVerticalBoxSlot>(CraftedPanel->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	UScrollBox* CraftedScroll = WidgetTree->ConstructWidget<UScrollBox>();
 	CraftedPanel->SetContent(CraftedScroll);
 	CraftedList = WidgetTree->ConstructWidget<UVerticalBox>();
 	CraftedScroll->AddChild(CraftedList);
+	AddOrderBlock(CraftedLeft, CraftedOrderHeading, CraftedOrderText, CraftedOrderPatience, true); // the order stays in view while browsing the films
 	UCommonBorder* CraftedDetailPanel = DCUI::Border(WidgetTree, Library, UDCBorder_Inset::StaticClass(), FMargin(16.f));
 	Cast<UHorizontalBoxSlot>(CraftedDetailPanel->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 	USizeBox* CraftedDetailSize = WidgetTree->ConstructWidget<USizeBox>();
@@ -373,14 +395,7 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	Left->AddChild(Picker);
 	Picker->Setup(Inventory, Config, true, Crafting);
 	// The floating order panel is hidden while this screen is up (ADCPlayerController::HandleScreenChanged): the order is read here, under the list
-	UCommonBorder* OrderBox = DCUI::Border(WidgetTree, Left, UDCBorder_Inset::StaticClass(), FMargin(12.f, 8.f));
-	Cast<UVerticalBoxSlot>(OrderBox->Slot)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
-	UVerticalBox* OrderV = WidgetTree->ConstructWidget<UVerticalBox>();
-	OrderBox->SetContent(OrderV);
-	DCUI::Text(WidgetTree, OrderV, TEXT("ORDER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
-	OrderText = WidgetTree->ConstructWidget<UVerticalBox>();
-	OrderV->AddChild(OrderText);
-	OrderPatience = DCUI::Bar(WidgetTree, OrderV, PickerWidth - 24.f);
+	AddOrderBlock(Left, OrderHeading, OrderText, OrderPatience, false);
 	Picker->OnVHSPicked.AddDynamic(this, &UDCFilmCraftingWidget::OnPicked);
 	Inventory->OnInventoryChanged.AddDynamic(Picker, &UDCInventoryWidget::Refresh);
 	Crafting->OnFilmStateChanged.AddDynamic(this, &UDCFilmCraftingWidget::OnFilmStateChanged);
@@ -558,6 +573,7 @@ void UDCFilmCraftingWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
 	if (Front && Front->IsAtFront() && Front->PatienceMax > 0.f)
 	{
 		OrderPatience->SetPercent(Front->Runtime.PatienceLeft / Front->PatienceMax);
+		CraftedOrderPatience->SetPercent(Front->Runtime.PatienceLeft / Front->PatienceMax);
 	}
 }
 
@@ -607,8 +623,9 @@ void UDCFilmCraftingWidget::Refresh()
 					++Filled;
 				}
 			}
-			SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), bFirst ? &First : nullptr, Config);
+			SetCover(AddCover(WidgetTree, H, FVector2D(36.f, 64.f)), bFirst ? &First : nullptr, Config);
 			UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
+			Btn->Label->SetAutoWrapText(true);
 			Text->AddChildToVerticalBox(Btn->Label)->SetHorizontalAlignment(HAlign_Left);
 			DCUI::InlineSkills(WidgetTree, Text, Film.SkillProfile);
 			UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
@@ -640,7 +657,11 @@ void UDCFilmCraftingWidget::Refresh()
 	{
 		const FClientRuntime& Rt = Front->Runtime;
 		DCUI::OrderLines(WidgetTree, OrderText, Rt, PickerWidth - 24.f);
+		OrderHeading->SetText(FText::FromString(TEXT("ORDER   ") + DCUI::ClientTierLabel(Config, Rt.Tier)));
 		OrderPatience->SetPercent(Front->PatienceMax > 0.f ? Rt.PatienceLeft / Front->PatienceMax : 0.f);
+		DCUI::OrderLines(WidgetTree, CraftedOrderText, Rt, 0.f);
+		CraftedOrderHeading->SetText(OrderHeading->GetText());
+		CraftedOrderPatience->SetPercent(Front->PatienceMax > 0.f ? Rt.PatienceLeft / Front->PatienceMax : 0.f);
 	}
 	// The order's size is public: one tape never reaches it, so the player knows a combination is needed
 	PointsText->SetText(FText::FromString(Front && Front->IsAtFront()
@@ -730,7 +751,8 @@ void UDCDialogueWidget::NativeOnInitialized()
 	Super::NativeOnInitialized();
 	// Wide strip along the bottom of the screen, between the key bar (left) and the cash box (right)
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, -48.f));
-	DCUI::Text(WidgetTree, V, TEXT("CUSTOMER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
+	HeadingText = DCUI::Text(WidgetTree, V, TEXT("CUSTOMER"), UDCText_Heading::StaticClass());
+	HeadingText->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
 	LineBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(LineBox);
 	UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -749,10 +771,12 @@ void UDCDialogueWidget::Show(const FText& Line, const FText& ButtonLabel, bool b
 	if (Order)
 	{
 		DCUI::OrderLines(WidgetTree, LineBox, *Order, 1400.f);
+		HeadingText->SetText(FText::FromString(TEXT("CUSTOMER   ") + DCUI::ClientTierLabel(GetWorld()->GetAuthGameMode<ADCGameMode>()->Config, Order->Tier)));
 	}
 	else
 	{
 		LineBox->ClearChildren();
+		HeadingText->SetText(FText::FromString(TEXT("CUSTOMER")));
 		DCUI::Text(WidgetTree, LineBox, Line.ToString())->SetWrapTextAt(1400.f);
 	}
 	Button->Label->SetText(ButtonLabel);
@@ -767,7 +791,8 @@ void UDCOrderPanelWidget::NativeOnInitialized()
 	UCommonBorder* Panel = nullptr;
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.f, 0.f), FVector2D::ZeroVector, FVector2D(24.f, 24.f), &Panel);
 	PanelRoot = Panel;
-	DCUI::Text(WidgetTree, V, TEXT("ORDER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 6.f));
+	HeadingText = DCUI::Text(WidgetTree, V, TEXT("ORDER"), UDCText_Heading::StaticClass());
+	HeadingText->SetMargin(FMargin(0.f, 0.f, 0.f, 6.f));
 	OrderText = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(OrderText);
 	PatienceBar = DCUI::Bar(WidgetTree, V, 360.f);
@@ -789,6 +814,7 @@ void UDCOrderPanelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 	{
 		ShownClient = Front;
 		DCUI::OrderLines(WidgetTree, OrderText, Rt, 360.f);
+		HeadingText->SetText(FText::FromString(TEXT("ORDER   ") + DCUI::ClientTierLabel(GetWorld()->GetAuthGameMode<ADCGameMode>()->Config, Rt.Tier)));
 	}
 	PatienceBar->SetPercent(Front->PatienceMax > 0.f ? Front->Runtime.PatienceLeft / Front->PatienceMax : 0.f);
 }

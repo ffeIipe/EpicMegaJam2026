@@ -183,6 +183,7 @@ private:
 	UPROPERTY() TObjectPtr<UDCOrderPanelWidget> OrderPanelWidget;
 	UPROPERTY() TObjectPtr<UDCHUDWidget> HUDWidget;
 	UPROPERTY() TObjectPtr<UDCStatsWidget> StatsWidget;
+	bool bDialogueDelivering = false; // the open dialogue is the delivery of the film in hand: the order panel stays up there
 	UPROPERTY() TObjectPtr<UDCReviewToastWidget> ReviewToastWidget;
 	UPROPERTY() TObjectPtr<UDCTutorialWidget> TutorialWidget;
 	UPROPERTY() TObjectPtr<UDCIntroSkipWidget> IntroSkipWidget;

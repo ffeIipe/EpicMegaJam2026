@@ -184,6 +184,8 @@ namespace DCUI
 	// Title bar of a screen (blue plate, display font), with an optional subtitle under it
 	EPICMEGAJAM2026_API void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle = FString());
 	EPICMEGAJAM2026_API FString Stars(int32 Rating);
+	// "★ 3 Enthusiast": the client level as stars plus its DT_ClientTiers name
+	EPICMEGAJAM2026_API FString ClientTierLabel(const class UPDA_GameConfig* Config, int32 Tier);
 	// Hover tooltip on Target listing the skills that are not zero (section 4.1)
 	EPICMEGAJAM2026_API void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills);
 	// Tape titles come from the table with a "★" the fonts can't draw: drop it

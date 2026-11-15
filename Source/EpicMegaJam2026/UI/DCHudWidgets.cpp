@@ -120,9 +120,13 @@ void UDCStatsWidget::NativeOnInitialized()
 	Strip->AddChildToHorizontalBox(MoneyBox)->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
 	MoneyText = DCUI::Text(WidgetTree, MoneyBox, TEXT("$0"), UDCText_Title::StaticClass());
 	MoneyText->SetRenderTransformPivot(FVector2D(0.f, 0.5f));
-	GoalBar = DCUI::Bar(WidgetTree, MoneyBox, 220.f);
-	Cast<UVerticalBoxSlot>(GoalBar->GetParent()->Slot)->SetPadding(FMargin(0.f, 6.f, 0.f, 2.f));
-	GoalText = DCUI::Text(WidgetTree, MoneyBox, TEXT(""), UDCText_Tab::StaticClass());
+	UHorizontalBox* GoalRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	MoneyBox->AddChildToVerticalBox(GoalRow)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	GoalBar = DCUI::Bar(WidgetTree, GoalRow, 130.f);
+	Cast<UHorizontalBoxSlot>(GoalBar->GetParent()->Slot)->SetVerticalAlignment(VAlign_Center);
+	GoalText = DCUI::Text(WidgetTree, GoalRow, TEXT(""), UDCText_Tab::StaticClass());
+	Cast<UHorizontalBoxSlot>(GoalText->Slot)->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+	Cast<UHorizontalBoxSlot>(GoalText->Slot)->SetVerticalAlignment(VAlign_Center);
 	UVerticalBox* InfoBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	Strip->AddChildToHorizontalBox(InfoBox)->SetVerticalAlignment(VAlign_Center);
 	UHorizontalBox* DayRow = WidgetTree->ConstructWidget<UHorizontalBox>();

@@ -111,7 +111,7 @@ void ADCPlayerController::BeginPlay()
 	TutorialStep = bRunTutorial ? ETutorialStep::WaitForClient : ETutorialStep::Inactive;
 	GM->ClientDirector->bHoldExtraClientsForTutorial = bRunTutorial;
 	TryStartIntro();
-	if (!bPlayingIntro && GM->AudioManager)
+	if (GM->AudioManager)
 	{
 		GM->AudioManager->SetZoneAmbience(CameraZone);
 		if (GM->DayNightCycle)
@@ -144,6 +144,11 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 {
 	const UDCScreen* DCScreen = Cast<UDCScreen>(Screen);
 	SetPause(DCScreen && DCScreen->bPausesGame);
+	const bool bPauseOrDialogue = Cast<UDCPauseWidget>(Screen) != nullptr || Cast<UDCDialogueWidget>(Screen) != nullptr;
+	if (const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr; GM && GM->AudioManager)
+	{
+		GM->AudioManager->SetPauseOrDialogueActive(bPauseOrDialogue);
+	}
 	if (ReviewToastWidget && Cast<UDCFilmCraftingWidget>(Screen))
 	{
 		ReviewToastWidget->Hide(); // a toast still up would sit behind the combine screen
@@ -151,7 +156,7 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 	if (OrderPanelWidget)
 	{
 		// The combine screen shows the order itself, and the dialogue says the same thing as the panel
-		const bool bShowsOrder = Cast<UDCFilmCraftingWidget>(Screen) || Cast<UDCDialogueWidget>(Screen);
+		const bool bShowsOrder = Cast<UDCFilmCraftingWidget>(Screen) || (Cast<UDCDialogueWidget>(Screen) && !bDialogueDelivering);
 		OrderPanelWidget->SetVisibility(bShowsOrder ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 	if (!Cast<UDCDialogueWidget>(Screen))
@@ -697,6 +702,7 @@ void ADCPlayerController::OpenDialogue(ADCClient* Client)
 		TutorialStep = ETutorialStep::DialogueOrder;
 	}
 	const bool bCanReject = !bDeliver && TutorialStep != ETutorialStep::DialogueOrder;
+	bDialogueDelivering = bDeliver; // read by HandleScreenChanged while the screen is pushed
 	UDCDialogueWidget* Dialogue = PushScreen<UDCDialogueWidget>(RootLayout, DialogueWidgetClass);
 	Dialogue->OnButton.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueButton); // pooled screens come back already bound
 	Dialogue->OnReject.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueReject);
