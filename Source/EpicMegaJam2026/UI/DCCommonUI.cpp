@@ -11,6 +11,7 @@
 #include "Components/Overlay.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
+#include "Components/Slider.h"
 #include "Components/OverlaySlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -93,6 +94,12 @@ UDCText_SkillBrave::UDCText_SkillBrave() { SetText(this, false, 32, DCPalette::S
 UDCText_SkillThoughtful::UDCText_SkillThoughtful() { SetText(this, false, 32, DCPalette::SkillThoughtful); }
 UDCText_SkillRomantic::UDCText_SkillRomantic() { SetText(this, false, 32, DCPalette::SkillRomantic); }
 UDCText_Stars::UDCText_Stars() { SetText(this, true, 16, DCPalette::Yellow); }
+UDCText_Crosshair::UDCText_Crosshair()
+{
+	SetText(this, true, 32, DCPalette::Beige);
+	Font.OutlineSettings.OutlineSize = 3;
+	Font.OutlineSettings.OutlineColor = FLinearColor::Black;
+}
 UDCText_Button::UDCText_Button() { SetText(this, true, 16, DCPalette::Beige); }
 UDCText_MenuButton::UDCText_MenuButton() { SetText(this, true, 16, FLinearColor::White, true); }
 UDCText_MenuButtonDisabled::UDCText_MenuButtonDisabled() { SetText(this, true, 16, FLinearColor(1.f, 1.f, 1.f, 0.45f), true); }
@@ -158,7 +165,10 @@ UDCUIInputData::UDCUIInputData()
 	Actions = CreateDefaultSubobject<UDataTable>(TEXT("Actions"));
 	Actions->RowStruct = FCommonInputActionDataBase::StaticStruct();
 	Add("Confirm", TEXT("Select"), EKeys::Enter, EKeys::Gamepad_FaceButton_Bottom, TEXT("ENTER"));
-	Add("Back", TEXT("Back"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Right, TEXT("SPACE"));
+	Add("Back", TEXT("Back"), EKeys::Escape, EKeys::Gamepad_FaceButton_Right, TEXT("ESC"));
+	// Space: shown as "ESC / SPACE" on the combine screen (its own back action), and as the warehouse shortcut on the computer and the register
+	Add("BackSpace", TEXT("Back"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Top, TEXT("ESC / SPACE"));
+	Add("Warehouse", TEXT("Warehouse"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Left, TEXT("SPACE"));
 	Add("PrevTab", TEXT("Previous category"), EKeys::Left, EKeys::Gamepad_LeftShoulder, TEXT("◀"));
 	// Its hint stands for both directions: PrevTab is registered hidden from the bar
 	Add("NextTab", TEXT("Change category"), EKeys::Right, EKeys::Gamepad_RightShoulder, TEXT("◀ ▶"));
@@ -396,6 +406,29 @@ namespace DCUI
 		Size->AddChild(B);
 		Parent->AddChild(Size);
 		return B;
+	}
+
+	USlider* Slider(UWidgetTree* Tree, UPanelWidget* Parent, float Width)
+	{
+		USizeBox* Size = Tree->ConstructWidget<USizeBox>();
+		Size->SetWidthOverride(Width);
+		USlider* S = Tree->ConstructWidget<USlider>();
+		S->SetStepSize(0.05f);
+		const FSlateBrush Bar = Box(DCPalette::Navy, DCPalette::Blue, 2.f, 3.f);
+		// A rounded box brush has no size of its own, so the thumb needs an explicit one or it is not drawn
+		const FVector2f ThumbSize(18.f, 30.f);
+		FSlateBrush Thumb = Box(DCPalette::Lime, DCPalette::Beige, 2.f, 3.f);
+		Thumb.ImageSize = ThumbSize;
+		FSlateBrush ThumbHover = Box(DCPalette::Yellow, DCPalette::Beige, 2.f, 3.f);
+		ThumbHover.ImageSize = ThumbSize;
+		FSliderStyle Style;
+		Style.SetNormalBarImage(Bar).SetHoveredBarImage(Bar).SetDisabledBarImage(Bar);
+		Style.SetNormalThumbImage(Thumb).SetHoveredThumbImage(ThumbHover).SetDisabledThumbImage(Thumb);
+		Style.SetBarThickness(14.f);
+		S->SetWidgetStyle(Style);
+		Size->AddChild(S);
+		Parent->AddChild(Size);
+		return S;
 	}
 
 	FString Stars(int32 Rating)

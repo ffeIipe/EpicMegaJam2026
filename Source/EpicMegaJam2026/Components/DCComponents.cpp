@@ -399,6 +399,18 @@ void UAC_FilmCrafting::ConsumeHeldFilm()
 	}
 }
 
+void UAC_FilmCrafting::RestoreSavedState(int32 InUnlockedSlots, const TArray<FCreatedFilm>& InCraftedFilms, const TArray<FCreatedFilm>& InHeldFilms, int32 InFilmsCreated, const TArray<FString>& InUsedTitles)
+{
+	const UPDA_GameConfig* Cfg = GetConfig(this);
+	UnlockedSlots = FMath::Clamp(InUnlockedSlots, 1, Cfg ? FMath::Max(Cfg->MaxSlots, 1) : 5);
+	SlotRows.Init(NAME_None, UnlockedSlots);
+	CraftedFilms = InCraftedFilms;
+	HeldFilms = InHeldFilms;
+	FilmsCreated = InFilmsCreated;
+	UsedTitles = TSet<FString>(InUsedTitles);
+	OnFilmStateChanged.Broadcast();
+}
+
 // ---------------------------------------------------------------- Supplier
 
 int32 UAC_Inventory::GetTapePrice(FName Row) const

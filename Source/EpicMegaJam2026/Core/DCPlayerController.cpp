@@ -102,13 +102,14 @@ void ADCPlayerController::BeginPlay()
 	GM->DayNightCycle->OnPhaseChanged.AddDynamic(this, &ADCPlayerController::HandlePhaseChanged);
 
 	// Main menu now runs in its own level (MAP_MainMenu); apply any active save slot when entering MAP_Rewind.
-	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr;
+	if (GI)
 	{
-		// TODO(SAVE): ApplyActiveSaveToGameMode(GM) when full save serialization is implemented.
 		GI->ApplyActiveSaveToGameMode(GM);
 	}
-	TutorialStep = GM->Config->bShowTutorial ? ETutorialStep::WaitForClient : ETutorialStep::Inactive;
-	GM->ClientDirector->bHoldExtraClientsForTutorial = GM->Config->bShowTutorial;
+	const bool bRunTutorial = GM->Config->bShowTutorial && GM->DayNightCycle->DayIndex == 1 && (!GI || GI->ShouldRunTutorial());
+	TutorialStep = bRunTutorial ? ETutorialStep::WaitForClient : ETutorialStep::Inactive;
+	GM->ClientDirector->bHoldExtraClientsForTutorial = bRunTutorial;
 	TryStartIntro();
 	if (!bPlayingIntro && GM->AudioManager)
 	{
@@ -930,6 +931,10 @@ void ADCPlayerController::SkipTutorial()
 	{
 		return;
 	}
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	{
+		GI->MarkTutorialCompleted();
+	}
 	GetWorldTimerManager().ClearTimer(TutorialCompleteHideTimer);
 	EndTutorialPause();
 	TutorialStep = ETutorialStep::Complete;
@@ -950,6 +955,10 @@ void ADCPlayerController::EndTutorialPause()
 
 void ADCPlayerController::CompleteTutorial()
 {
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	{
+		GI->MarkTutorialCompleted();
+	}
 	EndTutorialPause();
 	TutorialStep = ETutorialStep::Complete;
 	Cue(TEXT("TutorialComplete"));
@@ -1165,8 +1174,11 @@ void ADCPlayerController::HandleDayClosed(const FDaySummary& Summary)
 	}
 	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
 	{
-		// Save slot bracket: keep slot metadata (money & day) updated at the end of each day
-		GI->SaveActiveSlotMetadata(Summary.MoneyNow, Summary.DayIndex);
+		GI->MarkTutorialCompleted();
+		if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
+		{
+			GI->CaptureGameModeToActiveSave(GM, Summary.DayIndex + 1);
+		}
 	}
 	Cue(TEXT("DaySummaryOpen"));
 	UDCDaySummaryWidget* Screen = PushScreen<UDCDaySummaryWidget>(RootLayout, DaySummaryWidgetClass);
@@ -1232,4 +1244,20 @@ void ADCPlayerController::DebugSpawnTutorialClient()
 void ADCPlayerController::ToggleDebugAttributes()
 {
 	ADCClient::bShowDebugAttributes = !ADCClient::bShowDebugAttributes; // F1: attributes and weights over each client
+}
+
+void ADCPlayerController::GoToBackRoomFromScreen()
+{
+	CloseScreen();
+	GoToBackRoom();
+}
+
+bool ADCPlayerController::ShowsBackRoomHint() const
+{
+	if (CameraZone != ECameraZone::Counter || !RootLayout)
+	{
+		return false;
+	}
+	const UCommonActivatableWidget* Screen = RootLayout->Stack->GetActiveWidget();
+	return !Screen || Cast<UDCComputerWidget>(Screen) || Cast<UDCSupplierWidget>(Screen);
 }

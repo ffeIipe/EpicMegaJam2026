@@ -96,6 +96,12 @@ void ADCClient::ApplyMesh(USkeletalMesh* InMesh)
 	GetMesh()->SetSkeletalMesh(InMesh);
 	// The NPC rigs follow Mixamo (facing +Y), which is what lets Mixamo clips play on them unchanged
 	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+	// Rigs don't all have their origin at the feet: put the bottom of the bounds on the capsule floor so nobody floats
+	const FBoxSphereBounds Bounds = InMesh->GetBounds();
+	const float FeetZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * GetMesh()->GetRelativeScale3D().Z;
+	FVector MeshLoc = GetMesh()->GetRelativeLocation();
+	MeshLoc.Z = -GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - FeetZ;
+	GetMesh()->SetRelativeLocation(MeshLoc);
 	if (const TSubclassOf<UAnimInstance>* Anim = AnimBySkeleton.Find(InMesh->GetSkeleton()))
 	{
 		GetMesh()->SetAnimInstanceClass(*Anim);

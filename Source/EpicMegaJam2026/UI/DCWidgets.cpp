@@ -2,6 +2,7 @@
 #include "Components/DCComponents.h"
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
+#include "Core/DCPlayerController.h"
 #include "Core/BPFL_Scoring.h"
 #include "Data/PDA_GameConfig.h"
 #include "Blueprint/WidgetTree.h"
@@ -297,6 +298,15 @@ void UDCInventoryWidget::ShowDetail(FName Row)
 void UDCFilmCraftingWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+	// Esc (the default back) and Space both return to the counter; one hint on the bar says so: "ESC / SPACE Back"
+	bIsBackActionDisplayedInActionBar = false;
+	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("BackSpace"), true, FSimpleDelegate::CreateLambda([this]()
+	{
+		if (ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer()))
+		{
+			PC->CloseScreen();
+		}
+	})));
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	Inventory = GM->Inventory;
 	Crafting = GM->FilmCrafting;

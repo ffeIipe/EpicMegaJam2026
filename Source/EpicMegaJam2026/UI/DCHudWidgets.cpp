@@ -66,9 +66,9 @@ void UDCHUDWidget::NativeOnInitialized()
 	UCanvasPanelSlot* CS = Cast<UCanvasPanel>(WidgetTree->RootWidget)->AddChildToCanvas(Center);
 	CS->SetAnchors(FAnchors(0.5f, 0.5f));
 	CS->SetAlignment(FVector2D(0.5f, 0.f));
-	CS->SetPosition(FVector2D(0.f, -8.f)); // puts the "+" glyph on the screen center
+	CS->SetPosition(FVector2D(4.f, -27.f)); // puts the dot of the "." glyph (low and a little left in its cell) on the screen center
 	CS->SetAutoSize(true);
-	DCUI::Text(WidgetTree, Center, TEXT("+"), UDCText_Heading::StaticClass());
+	DCUI::Text(WidgetTree, Center, TEXT("."), UDCText_Crosshair::StaticClass());
 	UCommonBorder* PromptPlate = DCUI::Border(WidgetTree, Center, UDCBorder_Panel::StaticClass(), FMargin(14.f, 10.f));
 	Cast<UVerticalBoxSlot>(PromptPlate->Slot)->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
 	UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -103,7 +103,7 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	PromptKeyText->SetText(UDCSettings::Get()->Interact.GetDisplayName(false).ToUpper());
 	Prompt->SetVisibility(PromptLabel.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	BackRoomKeyText->SetText(UDCSettings::Get()->BackRoom.GetDisplayName(false).ToUpper());
-	BackRoomHint->SetVisibility(PC && PC->CanGoToBackRoom() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	BackRoomHint->SetVisibility(PC && PC->ShowsBackRoomHint() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	Crosshair->SetVisibility(PC && PC->IsBlockedByUI() ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible); // the HUD sits above the screens
 }
 
@@ -257,6 +257,15 @@ void UDCEndScreenWidget::Show(int32 DayReached)
 
 void UDCEndScreenWidget::OnRestart(FName Unused)
 {
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	{
+		int32 StartMoney = 50;
+		if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>(); GM && GM->Config)
+		{
+			StartMoney = GM->Config->StartMoney;
+		}
+		GI->ResetActiveSaveSlotToDayOne(StartMoney);
+	}
 	UGameplayStatics::SetGamePaused(this, false);
 	UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this)));
 }

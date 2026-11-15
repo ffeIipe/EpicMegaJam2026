@@ -18,6 +18,7 @@ class UVerticalBox;
 class UDataTable;
 class UCommonActivatableWidgetStack;
 class UProgressBar;
+class USlider;
 struct FSkillVector;
 struct FClientRuntime;
 
@@ -54,6 +55,8 @@ UCLASS() class EPICMEGAJAM2026_API UDCText_Caution : public UCommonTextStyle { G
 UCLASS() class EPICMEGAJAM2026_API UDCText_Warn : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Warn(); };
 // Stars and arrow glyphs only exist in the display font
 UCLASS() class EPICMEGAJAM2026_API UDCText_Stars : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Stars(); };
+// The crosshair dot: display font with a black outline so it reads over any background
+UCLASS() class EPICMEGAJAM2026_API UDCText_Crosshair : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Crosshair(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_Button : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Button(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_MenuButton : public UCommonTextStyle { GENERATED_BODY() public: UDCText_MenuButton(); };
 UCLASS() class EPICMEGAJAM2026_API UDCText_MenuButtonDisabled : public UCommonTextStyle { GENERATED_BODY() public: UDCText_MenuButtonDisabled(); };
@@ -195,4 +198,6 @@ namespace DCUI
 	EPICMEGAJAM2026_API FSlateBrush Box(const FLinearColor& Fill, const FLinearColor& Outline, float OutlineWidth = 2.f, float Radius = 4.f);
 	// Patience/goal bar in the palette
 	EPICMEGAJAM2026_API UProgressBar* Bar(UWidgetTree* Tree, UPanelWidget* Parent, float Width);
+	// 0..1 slider in the same colors as Bar; the returned slider sits inside a size box added to Parent
+	EPICMEGAJAM2026_API USlider* Slider(UWidgetTree* Tree, UPanelWidget* Parent, float Width);
 }

@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "Data/DCTypes.h"
 #include "DCSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -32,6 +33,27 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 Money = 50;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 DayIndex = 1;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") bool bIntroPlayed = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") bool bHasSavedGameplayState = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") bool bTutorialCompleted = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 Criterio = 0;
 
-	// TODO(SAVE): Full gameplay state fields go here when implementing complete save/load for the demo.
+	// Unlocks (UAC_Unlocks)
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 UnlockedStarTier = 1;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TArray<EGenre> UnlockedGenres;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TArray<FName> OwnedUnlocks;
+
+	// Inventory (UAC_Inventory)
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TMap<FName, int32> InventoryStock;
+
+	// Film Crafting (UAC_FilmCrafting)
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 UnlockedSlots = 2;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TArray<FCreatedFilm> CraftedFilms;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TArray<FCreatedFilm> HeldFilms;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 FilmsCreated = 0;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TArray<FString> UsedTitles;
+
+	// Client Director (UAC_ClientDirector)
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") TArray<FReview> ReviewHistory;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 ReviewStreak = 0;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 ScriptedUsed = 0;
 };

@@ -87,8 +87,12 @@ public:
 	UFUNCTION(BlueprintPure) bool CanGoToBackRoom() const;
 	// A screen is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
 	bool IsBlockedByUI() const;
+	// The "SPACE Back room" hint of the HUD: at the counter with nothing up, or over the computer / the register (Space works there too)
+	bool ShowsBackRoomHint() const;
 	// Plays the camera sequence to the back room; the crafting panel opens when it ends. Closing the panel brings the camera back.
 	UFUNCTION(BlueprintCallable) void GoToBackRoom();
+	// From a screen (computer, register): closes it and goes to the warehouse
+	void GoToBackRoomFromScreen();
 	UFUNCTION(BlueprintPure) ETutorialStep GetTutorialStep() const { return TutorialStep; }
 	UFUNCTION(BlueprintPure) bool IsTutorialActive() const { return TutorialStep != ETutorialStep::Inactive && TutorialStep != ETutorialStep::Complete; }
 	UFUNCTION(BlueprintPure) bool IsPlayingIntro() const { return bPlayingIntro; }

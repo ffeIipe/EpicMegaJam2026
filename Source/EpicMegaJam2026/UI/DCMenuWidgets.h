@@ -5,11 +5,13 @@
 #include "InputCoreTypes.h"
 #include "UI/DCCommonUI.h"
 #include "Data/DCTypes.h"
+#include "Core/DCSettings.h"
 #include "DCMenuWidgets.generated.h"
 
 class UVerticalBox;
 class UHorizontalBox;
 class UScrollBox;
+class USlider;
 class UCanvasPanelSlot;
 class UImage;
 class UMediaPlayer;
@@ -211,9 +213,13 @@ private:
 	UFUNCTION() void HandleSlotClicked(FName SlotName);
 	UFUNCTION() void HandleConfirmOverwrite(FName Unused);
 	UFUNCTION() void HandleCancelOverwrite(FName Unused);
+	UFUNCTION() void HandleDeleteSlotClicked(FName SlotName);
+	UFUNCTION() void HandleConfirmDelete(FName Unused);
+	UFUNCTION() void HandleCancelDelete(FName Unused);
 
 	EMenuPage CurrentPage = EMenuPage::Main;
 	FString PendingOverwriteSlot;
+	FString PendingDeleteSlot;
 
 	UPROPERTY() TObjectPtr<UImage> VideoImage;
 	UPROPERTY() TObjectPtr<UCommonBorder> PanelBorder;
@@ -224,6 +230,8 @@ private:
 	UPROPERTY() TObjectPtr<UVerticalBox> SlotsList;
 	UPROPERTY() TObjectPtr<UVerticalBox> OverwriteConfirmBox;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> OverwriteConfirmText;
+	UPROPERTY() TObjectPtr<UVerticalBox> DeleteConfirmBox;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> DeleteConfirmText;
 	UPROPERTY() TObjectPtr<UVerticalBox> CreditsPage;
 	UPROPERTY() TObjectPtr<UVerticalBox> OptionsPage;
 	UPROPERTY() TObjectPtr<UDCSettingsWidget> Settings;
@@ -246,11 +254,20 @@ protected:
 private:
 	UFUNCTION() void HandleRebind(FName ActionIndex);
 	UFUNCTION() void HandleStep(FName Id);
+	UFUNCTION() void HandleTab(FName Index);
+	UFUNCTION() void HandleMasterVolume(float Value) { SetVolume(UDCSettings::Get()->MasterVolume, Value); }
+	UFUNCTION() void HandleSfxVolume(float Value) { SetVolume(UDCSettings::Get()->SfxVolume, Value); }
+	UFUNCTION() void HandleMusicVolume(float Value) { SetVolume(UDCSettings::Get()->MusicVolume, Value); }
+	void SetVolume(float& Field, float Value);
+	void ShowTab(int32 Index);
 	void FinishCapture(const FKey& Key);
 	void Refresh();
 
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> KeyButtons; // indexed by EDCAction
-	UPROPERTY() TObjectPtr<UCommonTextBlock> VolumeText;
+	UPROPERTY() TArray<TObjectPtr<UVerticalBox>> Pages; // one per tab
+	UPROPERTY() TArray<TObjectPtr<UDCButton>> TabButtons;
+	UPROPERTY() TMap<FName, TObjectPtr<USlider>> VolumeSliders; // Master, Sfx, Music
+	UPROPERTY() TMap<FName, TObjectPtr<UCommonTextBlock>> VolumeTexts;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> SensitivityText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> QualityText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> LumenText;

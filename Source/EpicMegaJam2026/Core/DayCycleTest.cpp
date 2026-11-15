@@ -4,6 +4,8 @@
 #include "Misc/AutomationTest.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Core/DCGameInstance.h"
 #include "Core/DCGameMode.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -23,7 +25,7 @@ namespace
 		return nullptr;
 	}
 
-	enum class EScenario { CloseAndNextDay, RentDefeat, SupplierBuy };
+	enum class EScenario { CloseAndNextDay, RentDefeat, SupplierBuy, SaveCheckpoint };
 
 	class FDCCycleCommand : public IAutomationLatentCommand
 	{
@@ -41,6 +43,105 @@ namespace
 			if (!GM) return false;
 			UAC_DayNightCycle* DN = GM->DayNightCycle;
 			UAC_Economy* E = GM->Economy;
+
+			if (Scenario == EScenario::SaveCheckpoint)
+			{
+				UDCGameInstance* GI = GM->GetGameInstance<UDCGameInstance>();
+				if (!GI)
+				{
+					Test->AddError(TEXT("Missing UDCGameInstance"));
+					return true;
+				}
+				const FString PrevSlot = GI->ActiveSlotName;
+				const FString TestSlot = TEXT("Slot_AutoTest");
+				GI->DeleteSaveSlot(TestSlot);
+
+				GM->Config->MovieBudgetGoal = 1000000;
+				GI->CreateNewSaveSlot(TestSlot, GM->Config->StartMoney);
+				GI->MarkIntroPlayed();
+				GI->MarkTutorialCompleted();
+
+				GM->Economy->AddMoney(500);
+				GM->Economy->AddCriterio(3);
+				Test->TestTrue(TEXT("buy Romance"), GM->Unlocks->BuyUnlock("Genre_Romance"));
+				Test->TestTrue(TEXT("buy Slot_3"), GM->Unlocks->BuyUnlock("Slot_3"));
+				Test->TestTrue(TEXT("buy Stars_2"), GM->Unlocks->BuyUnlock("Stars_2"));
+				Test->TestTrue(TEXT("buy Romance tape"), GM->Inventory->BuyTape("VHS_Romance_1_01", 2));
+				Test->TestTrue(TEXT("slot 0 comedy"), GM->FilmCrafting->SetSlot(0, "VHS_Comedy_1_01"));
+				Test->TestTrue(TEXT("slot 1 romance"), GM->FilmCrafting->SetSlot(1, "VHS_Romance_1_01"));
+				Test->TestTrue(TEXT("confirm film"), GM->FilmCrafting->ConfirmFilm(FText::FromString(TEXT("Test Save Cut"))));
+
+				FReview MockReview;
+				MockReview.FilmTitle = FText::FromString(TEXT("Mock Review Film"));
+				MockReview.Reaction = EReaction::Loved;
+				MockReview.MoneyDelta = 12;
+				MockReview.Streak = 2;
+				GM->ClientDirector->RestoreSavedState({ MockReview }, 2, 3);
+
+				const int32 ExpectedMoney = GM->Economy->Money;
+				const int32 ExpectedRomanceCount = GM->Inventory->GetCount("VHS_Romance_1_01");
+				GI->CaptureGameModeToActiveSave(GM, 2);
+
+				// Clobber live runtime state before restoring from the saved checkpoint
+				GM->Economy->Money = 0;
+				GM->Economy->Criterio = 0;
+				GM->Unlocks->UnlockedStarTier = 1;
+				GM->Unlocks->UnlockedGenres.Empty();
+				GM->Unlocks->OwnedUnlocks.Empty();
+				GM->Inventory->Stock.Empty();
+				GM->FilmCrafting->RestoreSavedState(2, {}, {}, 0, {});
+				GM->ClientDirector->RestoreSavedState({}, 0, 0);
+				GM->DayNightCycle->StartDay(1);
+
+				GI->ApplyActiveSaveToGameMode(GM);
+
+				Test->TestEqual(TEXT("restored day 2"), GM->DayNightCycle->DayIndex, 2);
+				Test->TestEqual(TEXT("restored money"), GM->Economy->Money, ExpectedMoney);
+				Test->TestEqual(TEXT("restored criterio"), GM->Economy->Criterio, 3);
+				Test->TestEqual(TEXT("restored day earned reset"), GM->Economy->DayEarned, 0);
+				Test->TestTrue(TEXT("restored romance genre"), GM->Unlocks->IsGenreUnlocked(EGenre::Romance));
+				Test->TestTrue(TEXT("restored Slot_3 unlock"), GM->Unlocks->IsOwned("Slot_3"));
+				Test->TestEqual(TEXT("restored star tier"), GM->Unlocks->UnlockedStarTier, 2);
+				Test->TestEqual(TEXT("restored romance tape stock"), GM->Inventory->GetCount("VHS_Romance_1_01"), ExpectedRomanceCount);
+				Test->TestEqual(TEXT("restored crafting slots"), GM->FilmCrafting->UnlockedSlots, 3);
+				Test->TestEqual(TEXT("restored empty uncombined slots"), GM->FilmCrafting->GetFilledSlots(), 0);
+				Test->TestEqual(TEXT("restored crafted films count"), GM->FilmCrafting->CraftedFilms.Num(), 1);
+				if (GM->FilmCrafting->CraftedFilms.Num() == 1)
+				{
+					Test->TestEqual(TEXT("restored crafted film title"), GM->FilmCrafting->CraftedFilms[0].Title.ToString(), FString(TEXT("Test Save Cut")));
+				}
+				Test->TestEqual(TEXT("restored held films count"), GM->FilmCrafting->HeldFilms.Num(), 1);
+				Test->TestEqual(TEXT("restored films created count"), GM->FilmCrafting->GetFilmsCreated(), 1);
+				Test->TestTrue(TEXT("restored used titles"), GM->FilmCrafting->GetUsedTitles().Contains(TEXT("Test Save Cut")));
+				Test->TestEqual(TEXT("restored review history"), GM->ClientDirector->ReviewHistory.Num(), 1);
+				if (GM->ClientDirector->ReviewHistory.Num() == 1)
+				{
+					Test->TestEqual(TEXT("restored review title"), GM->ClientDirector->ReviewHistory[0].FilmTitle.ToString(), FString(TEXT("Mock Review Film")));
+				}
+				Test->TestEqual(TEXT("restored review streak"), GM->ClientDirector->GetReviewStreak(), 2);
+				Test->TestEqual(TEXT("restored scripted used"), GM->ClientDirector->GetScriptedUsed(), 3);
+				Test->TestFalse(TEXT("intro remains marked played"), GI->ShouldPlayIntro());
+				Test->TestFalse(TEXT("tutorial remains marked completed"), GI->ShouldRunTutorial());
+
+				// Verify ResetActiveSaveSlotToDayOne resets gameplay to Day 1 while preserving intro/tutorial flags
+				GI->ResetActiveSaveSlotToDayOne(GM->Config->StartMoney);
+				Test->TestFalse(TEXT("reset preserves intro played"), GI->ShouldPlayIntro());
+				Test->TestFalse(TEXT("reset preserves tutorial completed"), GI->ShouldRunTutorial());
+				const UDCSaveGame* ResetSave = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(TestSlot, UDCGameInstance::SaveUserIndex));
+				Test->TestNotNull(TEXT("reset save exists"), ResetSave);
+				if (ResetSave)
+				{
+					Test->TestEqual(TEXT("reset day index"), ResetSave->DayIndex, 1);
+					Test->TestEqual(TEXT("reset money"), ResetSave->Money, GM->Config->StartMoney);
+					Test->TestFalse(TEXT("reset clears gameplay snapshot flag"), ResetSave->bHasSavedGameplayState);
+				}
+
+				Test->TestTrue(TEXT("delete test slot"), GI->DeleteSaveSlot(TestSlot));
+				Test->TestFalse(TEXT("deleted slot no longer exists"), UGameplayStatics::DoesSaveGameExist(TestSlot, UDCGameInstance::SaveUserIndex));
+				Test->TestTrue(TEXT("active slot cleared when deleted"), GI->ActiveSlotName.IsEmpty());
+				GI->ActiveSlotName = PrevSlot;
+				return true;
+			}
 
 			if (Scenario == EScenario::SupplierBuy)
 			{
@@ -156,6 +257,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDCSupplierTest, "DirectorsCut.Supplier.Buy",
 bool FDCSupplierTest::RunTest(const FString& Parameters)
 {
 	ADD_LATENT_AUTOMATION_COMMAND(FDCCycleCommand(this, EScenario::SupplierBuy));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDCSaveCheckpointTest, "DirectorsCut.Save.CheckpointAndRestore",
+	EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+bool FDCSaveCheckpointTest::RunTest(const FString& Parameters)
+{
+	ADD_LATENT_AUTOMATION_COMMAND(FDCCycleCommand(this, EScenario::SaveCheckpoint));
 	return true;
 }
 

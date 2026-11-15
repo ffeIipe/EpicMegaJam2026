@@ -26,19 +26,25 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Save") UDCSaveGame* CreateNewSaveSlot(const FString& SlotName, int32 StartingMoney = 50);
 	UFUNCTION(BlueprintCallable, Category = "Save") bool SelectSaveSlot(const FString& SlotName);
+	UFUNCTION(BlueprintCallable, Category = "Save") bool DeleteSaveSlot(const FString& SlotName);
+	UFUNCTION(BlueprintCallable, Category = "Save") void ResetActiveSaveSlotToDayOne(int32 StartingMoney = 50);
 	// Lightweight bracket to persist creation date + account money until the full save system is implemented.
 	UFUNCTION(BlueprintCallable, Category = "Save") void SaveActiveSlotMetadata(int32 CurrentMoney, int32 CurrentDay);
 	UFUNCTION(BlueprintPure, Category = "Save") bool ShouldPlayIntro() const;
 	UFUNCTION(BlueprintCallable, Category = "Save") void MarkIntroPlayed();
+	UFUNCTION(BlueprintPure, Category = "Save") bool ShouldRunTutorial() const;
+	UFUNCTION(BlueprintCallable, Category = "Save") void MarkTutorialCompleted();
 
 private:
+	UDCSaveGame* LoadOrCreateActiveSave() const;
+
 	bool bIntroPlayedWithoutSlot = false;
+	bool bTutorialCompletedWithoutSlot = false;
 
 public:
 
-	// TODO(SAVE): Implement full world serialization/deserialization once demo gameplay systems are finalized.
-	UFUNCTION(BlueprintCallable, Category = "Save") void ApplyActiveSaveToGameMode(ADCGameMode* GameMode) {}
-	UFUNCTION(BlueprintCallable, Category = "Save") void CaptureGameModeToActiveSave(const ADCGameMode* GameMode) {}
+	UFUNCTION(BlueprintCallable, Category = "Save") void ApplyActiveSaveToGameMode(ADCGameMode* GameMode);
+	UFUNCTION(BlueprintCallable, Category = "Save") void CaptureGameModeToActiveSave(const ADCGameMode* GameMode, int32 OverrideDayIndex = -1);
 
 	UFUNCTION(BlueprintCallable, Category = "Levels") void TravelToGameplay();
 	UFUNCTION(BlueprintCallable, Category = "Levels") void TravelToMainMenu();
