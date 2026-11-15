@@ -27,4 +27,9 @@ void ADCGameMode::BeginPlay()
 		Cls = ADCAudioManager::StaticClass();
 	}
 	AudioManager = GetWorld()->SpawnActor<ADCAudioManager>(Cls);
+	if (AudioManager)
+	{
+		AudioManager->SetZoneAmbience(ECameraZone::Counter);
+		AudioManager->SetPhaseMusic(DayNightCycle ? DayNightCycle->CurrentPhase : EPhase::Day);
+	}
 }

@@ -12,12 +12,13 @@
 
 namespace
 {
-	using FAudioEventMember = TObjectPtr<UFMODEvent> UPDA_AudioConfig::*;
+	using FAudioEventMember = FDCAudioCue UPDA_AudioConfig::*;
 
 	struct FDefaultEventEntry
 	{
 		FAudioEventMember Member;
 		const TCHAR* AssetPath;
+		const TCHAR* FallbackAssetPath = nullptr;
 	};
 
 	const FDefaultEventEntry DefaultEventEntries[] = {
@@ -29,6 +30,7 @@ namespace
 		{ &UPDA_AudioConfig::CounterAmbience, TEXT("/Game/FMOD/Events/AMB/CounterAmb.CounterAmb") },
 		{ &UPDA_AudioConfig::WarehouseAmbience, TEXT("/Game/FMOD/Events/AMB/WarehouseAmb.WarehouseAmb") },
 		{ &UPDA_AudioConfig::LightBuzz, TEXT("/Game/FMOD/Events/SFX/ENV/LightBuzz.LightBuzz") },
+		{ &UPDA_AudioConfig::PauseOrDialogue, TEXT("/Game/FMOD/Snapshots/PauseOrDialogue.PauseOrDialogue"), TEXT("/Game/FMOD/Events/PauseOrDialogue.PauseOrDialogue") },
 		// Environment & Doors / Interactables
 		{ &UPDA_AudioConfig::DoorbellRing, TEXT("/Game/FMOD/Events/SFX/ENV/DoorbellRing.DoorbellRing") },
 		{ &UPDA_AudioConfig::StoreDoorOpen, TEXT("/Game/FMOD/Events/SFX/ENV/StoreDoorOpen.StoreDoorOpen") },
@@ -65,6 +67,9 @@ namespace
 		{ &UPDA_AudioConfig::Notification, TEXT("/Game/FMOD/Events/UI/Notification.Notification") },
 	};
 
+	FFMODEventInstance GPersistentMusicInstance;
+	TWeakObjectPtr<UFMODEvent> GPersistentMusicEvent;
+
 	void StopEventInstance(FFMODEventInstance& Inst)
 	{
 		if (UFMODBlueprintStatics::EventInstanceIsValid(Inst))
@@ -74,13 +79,28 @@ namespace
 		Inst.Instance = nullptr;
 	}
 
+	UPDA_AudioConfig* LoadDefaultAudioConfigAsset()
+	{
+		if (UPDA_AudioConfig* Cfg = LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Audio/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			return Cfg;
+		}
+		return LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Data/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+
 	void PopulateMissingDefaultEvents(UPDA_AudioConfig& Cfg)
 	{
 		for (const FDefaultEventEntry& Entry : DefaultEventEntries)
 		{
-			if (!(Cfg.*Entry.Member))
+			FDCAudioCue& Cue = Cfg.*Entry.Member;
+			if (!Cue.IsValid())
 			{
-				Cfg.*Entry.Member = LoadObject<UFMODEvent>(nullptr, Entry.AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+				UFMODEvent* Loaded = LoadObject<UFMODEvent>(nullptr, Entry.AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+				if (!Loaded && Entry.FallbackAssetPath)
+				{
+					Loaded = LoadObject<UFMODEvent>(nullptr, Entry.FallbackAssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+				}
+				Cue.Event = Loaded;
 			}
 		}
 	}
@@ -100,6 +120,7 @@ namespace
 			M.Add(TEXT("WarehouseAmbience"), &UPDA_AudioConfig::WarehouseAmbience);
 			M.Add(TEXT("WarehouseAmb"), &UPDA_AudioConfig::WarehouseAmbience);
 			M.Add(TEXT("LightBuzz"), &UPDA_AudioConfig::LightBuzz);
+			M.Add(TEXT("PauseOrDialogue"), &UPDA_AudioConfig::PauseOrDialogue);
 			// Environment & Doors / Interactables
 			M.Add(TEXT("DoorbellRing"), &UPDA_AudioConfig::DoorbellRing);
 			M.Add(TEXT("StoreDoorOpen"), &UPDA_AudioConfig::StoreDoorOpen);
@@ -208,7 +229,7 @@ void UPDA_AudioConfig::PostLoad()
 	PopulateMissingDefaultEvents(*this);
 }
 
-UFMODEvent* UPDA_AudioConfig::ResolveCue(FName Name) const
+const FDCAudioCue* UPDA_AudioConfig::FindCue(FName Name) const
 {
 	if (Name.IsNone())
 	{
@@ -216,19 +237,38 @@ UFMODEvent* UPDA_AudioConfig::ResolveCue(FName Name) const
 	}
 	if (const FAudioEventMember* Member = GetCueLookup().Find(Name))
 	{
-		if (UFMODEvent* Event = (this->*(*Member)).Get())
+		const FDCAudioCue& Cue = this->*(*Member);
+		if (Cue.IsValid())
 		{
-			return Event;
+			return &Cue;
 		}
 	}
 	if (const FAudioEventMember* Fallback = GetFallbackCueLookup().Find(Name))
 	{
-		if (UFMODEvent* Event = (this->*(*Fallback)).Get())
+		const FDCAudioCue& Cue = this->*(*Fallback);
+		if (Cue.IsValid())
 		{
-			return Event;
+			return &Cue;
 		}
 	}
-	return CustomCues.FindRef(Name);
+	return CustomCues.Find(Name);
+}
+
+bool UPDA_AudioConfig::ResolveCueConfig(FName Name, FDCAudioCue& OutCue) const
+{
+	if (const FDCAudioCue* Found = FindCue(Name))
+	{
+		OutCue = *Found;
+		return OutCue.IsValid();
+	}
+	OutCue = FDCAudioCue();
+	return false;
+}
+
+UFMODEvent* UPDA_AudioConfig::ResolveCue(FName Name) const
+{
+	const FDCAudioCue* Found = FindCue(Name);
+	return Found ? Found->Get() : nullptr;
 }
 
 void ADCAudioManager::BeginPlay()
@@ -240,6 +280,10 @@ void ADCAudioManager::BeginPlay()
 void ADCAudioManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopAllLoops();
+	if (EndPlayReason == EEndPlayReason::Quit || EndPlayReason == EEndPlayReason::EndPlayInEditor)
+	{
+		StopPersistentMusic();
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -267,11 +311,7 @@ void ADCAudioManager::EnsureAudioConfig()
 	}
 	if (!AudioConfig)
 	{
-		AudioConfig = LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Audio/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-	}
-	if (!AudioConfig)
-	{
-		AudioConfig = LoadObject<UPDA_AudioConfig>(nullptr, TEXT("/Game/DirectorsCut/Data/DA_AudioConfig.DA_AudioConfig"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		AudioConfig = LoadDefaultAudioConfigAsset();
 	}
 	if (!AudioConfig)
 	{
@@ -281,6 +321,11 @@ void ADCAudioManager::EnsureAudioConfig()
 	{
 		PopulateMissingDefaultEvents(*AudioConfig);
 	}
+}
+
+const FDCAudioCue* ADCAudioManager::ResolveCueStruct(FName Name) const
+{
+	return AudioConfig ? AudioConfig->FindCue(Name) : nullptr;
 }
 
 UFMODEvent* ADCAudioManager::ResolveEvent(FName Name) const
@@ -301,13 +346,45 @@ UFMODEvent* ADCAudioManager::ResolveEvent(FName Name) const
 
 void ADCAudioManager::PlayCue_Implementation(FName Name)
 {
+	PlayCueInternal(Name, false, FVector::ZeroVector, nullptr);
+}
+
+void ADCAudioManager::PlayCueWithParameters(FName Name, const TMap<FName, float>& Parameters)
+{
+	PlayCueInternal(Name, false, FVector::ZeroVector, &Parameters);
+}
+
+void ADCAudioManager::PlayCueAtLocation(FName Name, FVector Location)
+{
+	PlayCueInternal(Name, true, Location, nullptr);
+}
+
+void ADCAudioManager::PlayCueAtLocationWithParameters(FName Name, FVector Location, const TMap<FName, float>& Parameters)
+{
+	PlayCueInternal(Name, true, Location, &Parameters);
+}
+
+void ADCAudioManager::PlayCueInternal(FName Name, bool bAtLocation, FVector Location, const TMap<FName, float>* ExtraParameters)
+{
 	EnsureAudioConfig();
+	const FDCAudioCue* CueCfg = ResolveCueStruct(Name);
+
 	if (Name == TEXT("TurnOnComputer"))
 	{
 		StopEventInstance(ComputerInstance);
 		if (UFMODEvent* Event = ResolveEvent(Name))
 		{
-			ComputerInstance = UFMODBlueprintStatics::PlayEvent2D(this, Event, false);
+			ComputerInstance = bAtLocation
+				? UFMODBlueprintStatics::PlayEventAtLocation(this, Event, FTransform(Location), false)
+				: UFMODBlueprintStatics::PlayEvent2D(this, Event, false);
+			if (CueCfg)
+			{
+				ApplyParametersToInstance(ComputerInstance, CueCfg->Parameters);
+			}
+			if (ExtraParameters)
+			{
+				ApplyParametersToInstance(ComputerInstance, *ExtraParameters);
+			}
 			if (ComputerInstance.Instance)
 			{
 				ComputerInstance.Instance->start();
@@ -315,53 +392,94 @@ void ADCAudioManager::PlayCue_Implementation(FName Name)
 		}
 		return;
 	}
+
 	if (Name == TEXT("TurnOffComputer"))
 	{
 		StopEventInstance(ComputerInstance);
-		if (UFMODEvent* Event = ResolveEvent(Name))
+	}
+
+	UFMODEvent* Event = ResolveEvent(Name);
+	if (!Event)
+	{
+		return;
+	}
+
+	const bool bHasParams = (CueCfg && !CueCfg->Parameters.IsEmpty()) || (ExtraParameters && !ExtraParameters->IsEmpty());
+	if (!bHasParams)
+	{
+		if (bAtLocation)
+		{
+			UFMODBlueprintStatics::PlayEventAtLocation(this, Event, FTransform(Location), true);
+		}
+		else
 		{
 			UFMODBlueprintStatics::PlayEvent2D(this, Event, true);
 		}
 		return;
 	}
-	if (UFMODEvent* Event = ResolveEvent(Name))
+
+	FFMODEventInstance Inst = bAtLocation
+		? UFMODBlueprintStatics::PlayEventAtLocation(this, Event, FTransform(Location), false)
+		: UFMODBlueprintStatics::PlayEvent2D(this, Event, false);
+	if (CueCfg)
 	{
-		UFMODBlueprintStatics::PlayEvent2D(this, Event, true);
+		ApplyParametersToInstance(Inst, CueCfg->Parameters);
+	}
+	if (ExtraParameters)
+	{
+		ApplyParametersToInstance(Inst, *ExtraParameters);
+	}
+	if (Inst.Instance)
+	{
+		Inst.Instance->start();
+		Inst.Instance->release();
 	}
 }
 
-void ADCAudioManager::PlayCueAtLocation(FName Name, FVector Location)
+void ADCAudioManager::ApplyParametersToInstance(FFMODEventInstance Instance, const TMap<FName, float>& Parameters)
 {
-	EnsureAudioConfig();
-	if (UFMODEvent* Event = ResolveEvent(Name))
-	{
-		UFMODBlueprintStatics::PlayEventAtLocation(this, Event, FTransform(Location), true);
-	}
-}
-
-void ADCAudioManager::StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjectPtr<UFMODEvent>& CurrentEvent, UFMODEvent* TargetEvent)
-{
-	if (CurrentEvent.Get() == TargetEvent && UFMODBlueprintStatics::EventInstanceIsValid(Instance))
+	if (Parameters.IsEmpty())
 	{
 		return;
 	}
-	StopEventInstance(Instance);
-	CurrentEvent.Reset();
 
-	if (TargetEvent)
+	FMOD::Studio::EventDescription* EventDesc = nullptr;
+	if (Instance.Instance)
 	{
-		Instance = UFMODBlueprintStatics::PlayEvent2D(this, TargetEvent, false);
-		if (Instance.Instance)
+		Instance.Instance->getDescription(&EventDesc);
+	}
+
+	for (const TPair<FName, float>& Pair : Parameters)
+	{
+		if (Pair.Key.IsNone())
 		{
-			Instance.Instance->start();
-			CurrentEvent = TargetEvent;
+			continue;
+		}
+		const FTCHARToUTF8 Utf8Name(*Pair.Key.ToString());
+		const char* ParamName = Utf8Name.Get();
+
+		bool bHandledAsLocal = false;
+		if (Instance.Instance && EventDesc)
+		{
+			FMOD_STUDIO_PARAMETER_DESCRIPTION ParamDesc;
+			if (EventDesc->getParameterDescriptionByName(ParamName, &ParamDesc) == FMOD_OK
+				&& (ParamDesc.flags & FMOD_STUDIO_PARAMETER_GLOBAL) == 0)
+			{
+				Instance.Instance->setParameterByName(ParamName, Pair.Value);
+				bHandledAsLocal = true;
+			}
+		}
+
+		if (!bHandledAsLocal)
+		{
+			SetGlobalParameterStatic(ParamName, Pair.Value);
 		}
 	}
 }
 
-void ADCAudioManager::SetOptionalGlobalParameter(const char* Name, float Value) const
+void ADCAudioManager::SetGlobalParameterStatic(const char* Name, float Value)
 {
-	if (!IFMODStudioModule::IsAvailable())
+	if (!Name || !Name[0] || !IFMODStudioModule::IsAvailable())
 	{
 		return;
 	}
@@ -375,49 +493,201 @@ void ADCAudioManager::SetOptionalGlobalParameter(const char* Name, float Value) 
 	}
 }
 
+void ADCAudioManager::SetGlobalParameter(FName ParameterName, float Value)
+{
+	if (!ParameterName.IsNone())
+	{
+		const FTCHARToUTF8 Utf8Name(*ParameterName.ToString());
+		SetGlobalParameterStatic(Utf8Name.Get(), Value);
+	}
+}
+
+void ADCAudioManager::SetCueParameter(FName CueName, FName ParameterName, float Value)
+{
+	if (CueName.IsNone() || ParameterName.IsNone())
+	{
+		return;
+	}
+	EnsureAudioConfig();
+	TMap<FName, float> SingleParam;
+	SingleParam.Add(ParameterName, Value);
+
+	bool bAppliedToInstance = false;
+	if (UFMODEvent* Event = ResolveEvent(CueName))
+	{
+		if (Event == GPersistentMusicEvent.Get() && UFMODBlueprintStatics::EventInstanceIsValid(GPersistentMusicInstance))
+		{
+			ApplyParametersToInstance(GPersistentMusicInstance, SingleParam);
+			bAppliedToInstance = true;
+		}
+		const TArray<FFMODEventInstance> ActiveInstances = UFMODBlueprintStatics::FindEventInstances(this, Event);
+		for (const FFMODEventInstance& Inst : ActiveInstances)
+		{
+			ApplyParametersToInstance(Inst, SingleParam);
+			bAppliedToInstance = true;
+		}
+	}
+
+	if (!bAppliedToInstance)
+	{
+		const FTCHARToUTF8 Utf8Name(*ParameterName.ToString());
+		SetGlobalParameterStatic(Utf8Name.Get(), Value);
+	}
+}
+
+void ADCAudioManager::StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjectPtr<UFMODEvent>& CurrentEvent, const FDCAudioCue* TargetCue)
+{
+	UFMODEvent* TargetEvent = TargetCue ? TargetCue->Get() : nullptr;
+	if (CurrentEvent.Get() == TargetEvent && UFMODBlueprintStatics::EventInstanceIsValid(Instance))
+	{
+		if (TargetCue)
+		{
+			ApplyParametersToInstance(Instance, TargetCue->Parameters);
+		}
+		return;
+	}
+	StopEventInstance(Instance);
+	CurrentEvent.Reset();
+
+	if (TargetEvent)
+	{
+		Instance = UFMODBlueprintStatics::PlayEvent2D(this, TargetEvent, false);
+		if (TargetCue)
+		{
+			ApplyParametersToInstance(Instance, TargetCue->Parameters);
+		}
+		if (Instance.Instance)
+		{
+			Instance.Instance->start();
+			CurrentEvent = TargetEvent;
+		}
+	}
+}
+
+void ADCAudioManager::EnsurePersistentMusicStarted(const UObject* WorldContextObject, UPDA_AudioConfig* OptionalConfig)
+{
+	UPDA_AudioConfig* Cfg = OptionalConfig;
+	if (!Cfg && WorldContextObject)
+	{
+		if (const ADCAudioManager* ExistingMgr = Get(WorldContextObject))
+		{
+			Cfg = ExistingMgr->AudioConfig;
+		}
+	}
+	if (!Cfg)
+	{
+		Cfg = LoadDefaultAudioConfigAsset();
+	}
+
+	if (UFMODBlueprintStatics::EventInstanceIsValid(GPersistentMusicInstance))
+	{
+		if (Cfg)
+		{
+			ApplyParametersToInstance(GPersistentMusicInstance, Cfg->Music.Parameters);
+		}
+		return;
+	}
+
+	UFMODEvent* MusicEvent = Cfg ? Cfg->Music.Get() : nullptr;
+	if (!MusicEvent)
+	{
+		MusicEvent = LoadObject<UFMODEvent>(nullptr, TEXT("/Game/FMOD/Events/MUS/Music.Music"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+	if (!MusicEvent)
+	{
+		return;
+	}
+
+	GPersistentMusicInstance = UFMODBlueprintStatics::PlayEvent2D(const_cast<UObject*>(WorldContextObject), MusicEvent, false);
+	if (Cfg)
+	{
+		ApplyParametersToInstance(GPersistentMusicInstance, Cfg->Music.Parameters);
+	}
+	if (GPersistentMusicInstance.Instance)
+	{
+		GPersistentMusicInstance.Instance->start();
+		GPersistentMusicEvent = MusicEvent;
+	}
+}
+
+void ADCAudioManager::StopPersistentMusic()
+{
+	StopEventInstance(GPersistentMusicInstance);
+	GPersistentMusicEvent.Reset();
+}
+
+void ADCAudioManager::SetPauseOrDialogueActive(bool bActive)
+{
+	EnsureAudioConfig();
+	if (bActive)
+	{
+		if (!UFMODBlueprintStatics::EventInstanceIsValid(PauseOrDialogueInstance))
+		{
+			if (UFMODEvent* SnapshotEvent = ResolveEvent(TEXT("PauseOrDialogue")))
+			{
+				PauseOrDialogueInstance = UFMODBlueprintStatics::PlayEvent2D(this, SnapshotEvent, false);
+				if (const FDCAudioCue* CueCfg = ResolveCueStruct(TEXT("PauseOrDialogue")))
+				{
+					ApplyParametersToInstance(PauseOrDialogueInstance, CueCfg->Parameters);
+				}
+				if (PauseOrDialogueInstance.Instance)
+				{
+					PauseOrDialogueInstance.Instance->start();
+				}
+			}
+		}
+	}
+	else
+	{
+		StopEventInstance(PauseOrDialogueInstance);
+	}
+}
+
 void ADCAudioManager::SetZoneAmbience(ECameraZone Zone)
 {
 	EnsureAudioConfig();
 	bCurrentBackRoom = (Zone == ECameraZone::BackRoom || Zone == ECameraZone::ToBackRoom);
-	UFMODEvent* ZoneEvent = AudioConfig ? (bCurrentBackRoom ? AudioConfig->WarehouseAmbience.Get() : AudioConfig->CounterAmbience.Get()) : nullptr;
-	StartOrSwitchLoop(AmbienceInstance, CurrentAmbienceEvent, ZoneEvent);
-	UFMODEvent* BuzzEvent = AudioConfig ? AudioConfig->LightBuzz.Get() : nullptr;
-	StartOrSwitchLoop(LightBuzzInstance, CurrentLightBuzzEvent, BuzzEvent);
-	SetOptionalGlobalParameter("Location", bCurrentBackRoom ? 1.f : 0.f);
-	SetOptionalGlobalParameter("Day-Night", CurrentPhase == EPhase::Night ? 1.f : 0.f);
+	const FDCAudioCue* ZoneCue = AudioConfig ? (bCurrentBackRoom ? &AudioConfig->WarehouseAmbience : &AudioConfig->CounterAmbience) : nullptr;
+	StartOrSwitchLoop(AmbienceInstance, CurrentAmbienceEvent, ZoneCue);
+	const FDCAudioCue* BuzzCue = AudioConfig ? &AudioConfig->LightBuzz : nullptr;
+	StartOrSwitchLoop(LightBuzzInstance, CurrentLightBuzzEvent, BuzzCue);
+	EnsurePersistentMusicStarted(this, AudioConfig);
+	SetGlobalParameterStatic("Location", bCurrentBackRoom ? 1.f : 0.f);
 }
 
 void ADCAudioManager::SetPhaseMusic(EPhase Phase)
 {
 	EnsureAudioConfig();
 	CurrentPhase = Phase;
-	UFMODEvent* PhaseEvent = AudioConfig ? (Phase == EPhase::Night ? AudioConfig->NightMusic.Get() : AudioConfig->DayMusic.Get()) : nullptr;
-	if (!PhaseEvent && AudioConfig)
+	EnsurePersistentMusicStarted(this, AudioConfig);
+	if (AudioConfig && UFMODBlueprintStatics::EventInstanceIsValid(GPersistentMusicInstance))
 	{
-		PhaseEvent = AudioConfig->Music.Get();
+		const FDCAudioCue& PhaseCue = (Phase == EPhase::Night) ? AudioConfig->NightMusic : AudioConfig->DayMusic;
+		ApplyParametersToInstance(GPersistentMusicInstance, PhaseCue.Parameters);
 	}
-	StartOrSwitchLoop(MusicInstance, CurrentMusicEvent, PhaseEvent);
-	SetOptionalGlobalParameter("Day-Night", Phase == EPhase::Night ? 1.f : 0.f);
-	SetOptionalGlobalParameter("Location", bCurrentBackRoom ? 1.f : 0.f);
+	SetGlobalParameterStatic("Day-Night", Phase == EPhase::Night ? 1.f : 0.f);
 }
 
 void ADCAudioManager::StartMainMenuAudio()
 {
 	EnsureAudioConfig();
-	UFMODEvent* MenuMusic = AudioConfig ? (AudioConfig->MainMenuMusic ? AudioConfig->MainMenuMusic.Get() : AudioConfig->Music.Get()) : nullptr;
-	StartOrSwitchLoop(MusicInstance, CurrentMusicEvent, MenuMusic);
-	SetOptionalGlobalParameter("Location", 2.f);
+	SetGlobalParameterStatic("Location", 2.f);
+	EnsurePersistentMusicStarted(this, AudioConfig);
+	if (AudioConfig && UFMODBlueprintStatics::EventInstanceIsValid(GPersistentMusicInstance))
+	{
+		ApplyParametersToInstance(GPersistentMusicInstance, AudioConfig->MainMenuMusic.Parameters);
+	}
+	SetGlobalParameterStatic("Location", 2.f);
 }
 
 void ADCAudioManager::StopAllLoops()
 {
 	StopEventInstance(AmbienceInstance);
 	StopEventInstance(LightBuzzInstance);
-	StopEventInstance(MusicInstance);
 	StopEventInstance(ComputerInstance);
+	StopEventInstance(PauseOrDialogueInstance);
 	CurrentAmbienceEvent.Reset();
 	CurrentLightBuzzEvent.Reset();
-	CurrentMusicEvent.Reset();
 }
 
 ADCAudioManager* ADCAudioManager::Get(const UObject* WorldContextObject)

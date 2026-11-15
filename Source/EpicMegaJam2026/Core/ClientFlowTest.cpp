@@ -98,6 +98,19 @@ public:
 			Test->TestEqual(TEXT("generated client is level 1"), Rt.Tier, 1);
 			Test->TestEqual(TEXT("every order is a combination: 2 one-star tapes with the starting 2 slots = 6 points"), Total, 6);
 			Test->TestTrue(TEXT("level 1 hints everything it wants"), Rt.HintedSkills.Num() >= 2 && Rt.bFullyHinted);
+			// Buying slots scales the next order (5.1): 4 slots = level 3 with 3 to 4 tapes
+			GM->FilmCrafting->SetUnlockedSlots(4);
+			Client = GM->ClientDirector->SpawnClient(GM->ClientDirector->TutorialArchetypeRow);
+			if (!Client) { Test->AddError(TEXT("SpawnClient returned null")); return true; }
+			Stage = 4;
+			return false;
+		}
+		case 4:
+		{
+			const FClientRuntime& Rt = Client->Runtime;
+			const int32 Total = Rt.Target.Funny + Rt.Target.Scary + Rt.Target.Brave + Rt.Target.Thoughtful + Rt.Target.Romantic;
+			Test->TestEqual(TEXT("4 slots give a level 3 client"), Rt.Tier, 3);
+			Test->TestTrue(TEXT("4 slots: at least 3 one-star tapes = 9 points"), Total >= 9);
 			return true;
 		}
 		}

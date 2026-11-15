@@ -1,7 +1,22 @@
 #include "Core/DCGameInstance.h"
+#include "Core/DCAudioManager.h"
 #include "Core/DCGameMode.h"
 #include "Components/DCComponents.h"
 #include "Kismet/GameplayStatics.h"
+
+void UDCGameInstance::Init()
+{
+	Super::Init();
+	ADCAudioManager::SetGlobalParameterStatic("Location", 2.f);
+	ADCAudioManager::SetGlobalParameterStatic("Day-Night", 0.f);
+	ADCAudioManager::EnsurePersistentMusicStarted(this);
+}
+
+void UDCGameInstance::Shutdown()
+{
+	ADCAudioManager::StopPersistentMusic();
+	Super::Shutdown();
+}
 
 FString UDCGameInstance::SlotNameForIndex(int32 SlotIndex)
 {
@@ -326,12 +341,15 @@ void UDCGameInstance::ApplyActiveSaveToGameMode(ADCGameMode* GameMode)
 
 void UDCGameInstance::TravelToGameplay()
 {
+	ADCAudioManager::SetGlobalParameterStatic("Location", 0.f);
+	ADCAudioManager::SetGlobalParameterStatic("Day-Night", 0.f);
 	UGameplayStatics::SetGamePaused(this, false);
 	UGameplayStatics::OpenLevel(this, GameplayLevelName);
 }
 
 void UDCGameInstance::TravelToMainMenu()
 {
+	ADCAudioManager::SetGlobalParameterStatic("Location", 2.f);
 	UGameplayStatics::SetGamePaused(this, false);
 	UGameplayStatics::OpenLevel(this, MainMenuLevelName);
 }

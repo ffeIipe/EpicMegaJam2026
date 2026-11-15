@@ -7,6 +7,7 @@
 #include "Core/DCMainMenuMode.h"
 #include "Core/DCSettings.h"
 #include "Data/PDA_GameConfig.h"
+#include "Engine/Texture2D.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -70,6 +71,25 @@ void UDCDaySummaryWidget::Show(const FDaySummary& S)
 	BodyText->SetText(FText::FromString(FString::Printf(
 		TEXT("Clients served: %d\nClients lost: %d\nLoved: %d   Liked: %d   Neutral: %d   Hated: %d\nMoney earned: $%d\nRent paid: $%d\nMoney: $%d / goal $%d"),
 		S.ClientsServed, S.ClientsLost, S.Loved, S.Liked, S.Neutral, S.Hated, S.MoneyEarned, S.RentPaid, S.MoneyNow, S.Goal)));
+}
+
+// Card of the computer / supplier lists (defined with the computer): panel frame, colored tile, fill-width info column
+static UVerticalBox* AddCard(UWidgetTree* Tree, UVerticalBox* List, const FLinearColor& TileColor, UHorizontalBox** OutRow = nullptr, FVector2D TileDims = FVector2D(72.f, 72.f), TSoftObjectPtr<UTexture2D> Cover = nullptr);
+
+// Genre color from DT_Genres, a neutral blue when the genre has no row
+static FLinearColor GenreColor(const UPDA_GameConfig* Config, EGenre Genre)
+{
+	if (Config && Config->GenreTable)
+	{
+		for (const TPair<FName, uint8*>& G : Config->GenreTable->GetRowMap())
+		{
+			if (reinterpret_cast<const FGenreData*>(G.Value)->Genre == Genre)
+			{
+				return reinterpret_cast<const FGenreData*>(G.Value)->Color;
+			}
+		}
+	}
+	return DCPalette::Blue;
 }
 
 /// ---------------------------------------------------------------- Supplier
@@ -207,23 +227,23 @@ void UDCSupplierWidget::Refresh()
 	for (const FName& Row : Rows)
 	{
 		const FVHSData* Tape = Config->VHSTable->FindRow<FVHSData>(Row, TEXT("Row"));
-		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-		List->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 4.f));
-		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
-		UHorizontalBoxSlot* InfoSlot = H->AddChildToHorizontalBox(Info);
-		InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		InfoSlot->SetVerticalAlignment(VAlign_Center);
-		DCUI::Text(WidgetTree, Info, DCUI::CleanTitle(Tape->Title));
+		// Same card as the computer: cover art (falling back to genre color if unset), title with stars and skills, price over the buy buttons
+		UHorizontalBox* H = nullptr;
+		UVerticalBox* Info = AddCard(WidgetTree, List, GenreColor(Config, Tape->PrimaryGenre), &H, FVector2D(54.f, 96.f), Tape->Cover);
+		DCUI::Text(WidgetTree, Info, DCUI::CleanTitle(Tape->Title).ToUpper(), UDCText_Heading::StaticClass())->SetAutoWrapText(true);
+		DCUI::Text(WidgetTree, Info, DCUI::Stars(Tape->Rating), UDCText_Stars::StaticClass());
 		DCUI::InlineSkills(WidgetTree, Info, Tape->Skills);
 		H->SetVisibility(ESlateVisibility::Visible); // hit-testable so the tooltip shows
 		DCUI::SkillTooltip(WidgetTree, H, Tape->Skills);
-		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Tape->Rating), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
-		UHorizontalBoxSlot* PriceSlot = H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("$%d"), Inventory->GetTapePrice(Row)), UDCText_Heading::StaticClass()));
-		PriceSlot->SetVerticalAlignment(VAlign_Center);
-		PriceSlot->SetPadding(FMargin(16.f, 0.f));
+		UVerticalBox* Buy = WidgetTree->ConstructWidget<UVerticalBox>();
+		H->AddChildToHorizontalBox(Buy)->SetVerticalAlignment(VAlign_Center);
+		UCommonTextBlock* Price = DCUI::Text(WidgetTree, Buy, FString::Printf(TEXT("$%d"), Inventory->GetTapePrice(Row)), UDCText_Caution::StaticClass());
+		Cast<UVerticalBoxSlot>(Price->Slot)->SetHorizontalAlignment(HAlign_Center);
+		UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>();
+		Buy->AddChildToVerticalBox(Buttons);
 		for (const int32 Count : { 1, 5 })
 		{
-			UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, FString::Printf(TEXT("x%d"), Count), Row);
+			UDCButton* Btn = DCUI::Button(WidgetTree, Buttons, FString::Printf(TEXT("x%d"), Count), Row);
 			if (Count == 1)
 			{
 				Btn->OnPayloadClicked.AddDynamic(this, &UDCSupplierWidget::HandleBuyOne);
@@ -232,9 +252,7 @@ void UDCSupplierWidget::Refresh()
 			{
 				Btn->OnPayloadClicked.AddDynamic(this, &UDCSupplierWidget::HandleBuyFive);
 			}
-			UHorizontalBoxSlot* BtnSlot = H->AddChildToHorizontalBox(Btn);
-			BtnSlot->SetVerticalAlignment(VAlign_Center);
-			BtnSlot->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+			Cast<UHorizontalBoxSlot>(Btn->Slot)->SetPadding(FMargin(Count == 1 ? 0.f : 4.f, 0.f, 0.f, 0.f));
 			BuyButtons.Add({ Btn, Row, Count });
 		}
 	}
@@ -383,19 +401,27 @@ void UDCComputerWidget::OnMoneyChanged(int32 NewMoney, int32 Delta)
 	}
 }
 
-// A card of the computer lists: panel frame, colored tile, and a fill-width info column. Returns the info box; OutRow is the row to append things on the right.
-static UVerticalBox* AddCard(UWidgetTree* Tree, UVerticalBox* List, const FLinearColor& TileColor, UHorizontalBox** OutRow = nullptr)
+// A card of the computer lists: panel frame, colored tile (or cover art), and a fill-width info column. Returns the info box; OutRow is the row to append things on the right.
+static UVerticalBox* AddCard(UWidgetTree* Tree, UVerticalBox* List, const FLinearColor& TileColor, UHorizontalBox** OutRow, FVector2D TileDims, TSoftObjectPtr<UTexture2D> Cover)
 {
 	UCommonBorder* Card = DCUI::Border(Tree, List, UDCBorder_Panel::StaticClass(), FMargin(14.f, 12.f));
 	Cast<UVerticalBoxSlot>(Card->Slot)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 	UHorizontalBox* H = Tree->ConstructWidget<UHorizontalBox>();
 	Card->SetContent(H);
 	USizeBox* TileSize = Tree->ConstructWidget<USizeBox>();
-	TileSize->SetWidthOverride(72.f);
-	TileSize->SetHeightOverride(72.f);
+	TileSize->SetWidthOverride(TileDims.X);
+	TileSize->SetHeightOverride(TileDims.Y);
 	UImage* Tile = Tree->ConstructWidget<UImage>();
-	Tile->SetBrush(FSlateBrush());
-	Tile->SetColorAndOpacity(TileColor);
+	if (!Cover.IsNull())
+	{
+		Tile->SetColorAndOpacity(FLinearColor::White);
+		Tile->SetBrushFromSoftTexture(Cover);
+	}
+	else
+	{
+		Tile->SetBrush(FSlateBrush());
+		Tile->SetColorAndOpacity(TileColor);
+	}
 	TileSize->AddChild(Tile);
 	UHorizontalBoxSlot* TileSlot = H->AddChildToHorizontalBox(TileSize);
 	TileSlot->SetVerticalAlignment(VAlign_Center);

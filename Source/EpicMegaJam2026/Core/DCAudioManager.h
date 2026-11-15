@@ -9,6 +9,7 @@
 
 class UFMODEvent;
 class UPDA_AudioConfig;
+struct FDCAudioCue;
 
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API ADCAudioManager : public AActor
@@ -35,7 +36,22 @@ public:
 	virtual void PlayCue_Implementation(FName Name);
 
 	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void PlayCueWithParameters(FName Name, const TMap<FName, float>& Parameters);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
 	void PlayCueAtLocation(FName Name, FVector Location);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void PlayCueAtLocationWithParameters(FName Name, FVector Location, const TMap<FName, float>& Parameters);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void SetGlobalParameter(FName ParameterName, float Value);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void SetCueParameter(FName CueName, FName ParameterName, float Value);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void SetPauseOrDialogueActive(bool bActive);
 
 	UFUNCTION(BlueprintCallable, Category = "Audio")
 	void SetZoneAmbience(ECameraZone Zone);
@@ -52,19 +68,23 @@ public:
 	static ADCAudioManager* Get(const UObject* WorldContextObject);
 	static void PlayCueStatic(const UObject* WorldContextObject, FName Name);
 	static void PlayCueAtLocationStatic(const UObject* WorldContextObject, FName Name, FVector Location);
+	static void EnsurePersistentMusicStarted(const UObject* WorldContextObject, UPDA_AudioConfig* OptionalConfig = nullptr);
+	static void StopPersistentMusic();
+	static void SetGlobalParameterStatic(const char* Name, float Value);
 
 private:
 	void EnsureAudioConfig();
-	void StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjectPtr<UFMODEvent>& CurrentEvent, UFMODEvent* TargetEvent);
-	void SetOptionalGlobalParameter(const char* Name, float Value) const;
+	const FDCAudioCue* ResolveCueStruct(FName Name) const;
+	void PlayCueInternal(FName Name, bool bAtLocation, FVector Location, const TMap<FName, float>* ExtraParameters);
+	void StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjectPtr<UFMODEvent>& CurrentEvent, const FDCAudioCue* TargetCue);
+	static void ApplyParametersToInstance(FFMODEventInstance Instance, const TMap<FName, float>& Parameters);
 
 	FFMODEventInstance AmbienceInstance;
 	FFMODEventInstance LightBuzzInstance;
-	FFMODEventInstance MusicInstance;
 	FFMODEventInstance ComputerInstance;
+	FFMODEventInstance PauseOrDialogueInstance;
 	TWeakObjectPtr<UFMODEvent> CurrentAmbienceEvent;
 	TWeakObjectPtr<UFMODEvent> CurrentLightBuzzEvent;
-	TWeakObjectPtr<UFMODEvent> CurrentMusicEvent;
 	bool bCurrentBackRoom = false;
 	EPhase CurrentPhase = EPhase::Day;
 };

@@ -197,26 +197,13 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 	ADCGameMode* GM = GetGM(this);
 	const UPDA_GameConfig* Cfg = GM->Config;
 
-	// Level: scripted clients are level 1, the others are drawn by SpawnWeight among the levels the star license allows
+	// Level: scripted clients are level 1, the others follow the crafting slots (section 5.1): one level per slot past the 2nd,
+	// and the last slot jumps to the top level. Smaller clients stop showing up.
+	const int32 Slots = GM->FilmCrafting->UnlockedSlots;
 	int32 Tier = 1;
-	if (!Scripted && Cfg->ClientTierTable)
+	if (!Scripted)
 	{
-		float Sum = 0.f;
-		for (const TPair<FName, uint8*>& P : Cfg->ClientTierTable->GetRowMap())
-		{
-			const FClientTierData* T = reinterpret_cast<const FClientTierData*>(P.Value);
-			Sum += T->Tier <= GM->Unlocks->UnlockedStarTier ? T->SpawnWeight : 0.f;
-		}
-		float Roll = FMath::FRandRange(0.f, Sum);
-		for (const TPair<FName, uint8*>& P : Cfg->ClientTierTable->GetRowMap())
-		{
-			const FClientTierData* T = reinterpret_cast<const FClientTierData*>(P.Value);
-			if (T->Tier <= GM->Unlocks->UnlockedStarTier && T->SpawnWeight > 0.f && (Roll -= T->SpawnWeight) <= 0.f)
-			{
-				Tier = T->Tier;
-				break;
-			}
-		}
+		Tier = Slots >= Cfg->MaxSlots ? 5 : FMath::Clamp(Slots - 1, 1, 5);
 	}
 	const FClientTierData* TierRow = FindTier(Tier);
 	Rt.Tier = Tier;
@@ -230,12 +217,10 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 	}
 	else
 	{
-		const int32 StarMin = TierRow ? TierRow->RecipeStarMin : 1;
 		const int32 StarMax = FMath::Min(TierRow ? TierRow->RecipeStarMax : 1, GM->Unlocks->UnlockedStarTier);
-		const int32 MinTapes = TierRow ? TierRow->RecipeTapesMin : 1;
-		const int32 MaxTapes = TierRow ? TierRow->RecipeTapesMax : 2;
-		// Combining is the core mechanic: every order takes at least 2 tapes, and never more than the slots
-		const int32 Tapes = FMath::Clamp(FMath::RandRange(MinTapes, MaxTapes), 2, FMath::Max(2, GM->FilmCrafting->UnlockedSlots));
+		const int32 StarMin = FMath::Min(TierRow ? TierRow->RecipeStarMin : 1, StarMax); // the star license can sit below the level's range
+		// Recipe size follows the slots: (Slots-1) to Slots tapes, never fewer than 2 (combining is the core mechanic)
+		const int32 Tapes = FMath::RandRange(FMath::Max(2, Slots - 1), FMath::Max(2, Slots));
 
 		// The archetype's genres, or every unlocked genre when that leaves none
 		TSet<EGenre> Genres;
