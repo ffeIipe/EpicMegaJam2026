@@ -31,6 +31,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") FDateTime LastSavedAt;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 Money = 50;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") int32 DayIndex = 1;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Save") bool bIntroPlayed = false;
 
 	// TODO(SAVE): Full gameplay state fields go here when implementing complete save/load for the demo.
 };

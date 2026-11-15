@@ -20,11 +20,28 @@ class UDCShelfWidget;
 class UDCTutorialWidget;
 class UDCMainMenuWidget;
 class UDCPauseWidget;
+class UDCIntroSkipWidget;
 class UDCRootLayout;
 class UCommonActivatableWidget;
 class ULevelSequencePlayer;
 class ADCClient;
 class ADCInteractable;
+
+UENUM(BlueprintType)
+enum class ETutorialStep : uint8
+{
+	Inactive,
+	WaitForClient,
+	ApproachClient,
+	DialogueOrder,
+	GoToBackRoom,
+	CombinePick,
+	DeliverFilm,
+	WaitReview,
+	ComputerBuyGenre,
+	SupplierBuyTape,
+	Complete
+};
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCameraZoneChanged, ECameraZone, Zone);
 
@@ -49,6 +66,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCTutorialWidget> TutorialWidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCMainMenuWidget> MainMenuWidgetClass; // unused since MainMenu moved to MAP_MainMenu
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCPauseWidget> PauseWidgetClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCIntroSkipWidget> IntroSkipWidgetClass;
 
 	// Juice (tunable on BP_DC_PlayerController)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Juice") float ShakeDuration = 0.3f;
@@ -68,6 +86,14 @@ public:
 	UFUNCTION(BlueprintPure) bool CanGoToBackRoom() const;
 	// Plays the camera sequence to the back room; the crafting panel opens when it ends. Closing the panel brings the camera back.
 	UFUNCTION(BlueprintCallable) void GoToBackRoom();
+	UFUNCTION(BlueprintPure) ETutorialStep GetTutorialStep() const { return TutorialStep; }
+	UFUNCTION(BlueprintPure) bool IsTutorialActive() const { return TutorialStep != ETutorialStep::Inactive && TutorialStep != ETutorialStep::Complete; }
+	UFUNCTION(BlueprintPure) bool IsPlayingIntro() const { return bPlayingIntro; }
+	UFUNCTION(BlueprintCallable) void SkipTutorial();
+	UFUNCTION(BlueprintCallable) bool OpenInteractableScreen(EInteractType Type);
+	UFUNCTION(BlueprintCallable) void CloseScreen();
+	UFUNCTION(BlueprintCallable) void OpenDialogue(ADCClient* Client);
+	UFUNCTION() void OnDialogueButton();
 
 private:
 	// Input
@@ -79,7 +105,6 @@ private:
 	// A screen is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
 	bool IsBlockedByUI() const;
 	void HandleScreenChanged(UCommonActivatableWidget* Screen);
-	void CloseScreen();
 
 	// Camera zone: Counter -> ToBackRoom -> BackRoom -> ToCounter -> Counter
 	void SetCameraZone(ECameraZone Zone);
@@ -90,13 +115,11 @@ private:
 	ULevelSequencePlayer* GetSequencePlayer();
 	UFUNCTION() void HandleSequenceFinished();
 
-	// The order dialogue opens by itself when a client arrives and when the camera is back with a film in hand
-	void OpenDialogue(ADCClient* Client);
 	void RequestDialogue();
 	void TryOpenDialogue();
 
 	// Game events
-	UFUNCTION() void OnDialogueButton();
+	UFUNCTION() void OnDialogueReject();
 	UFUNCTION() void HandleReview(const FReview& Review);
 	UFUNCTION() void HandleGameOver();
 	UFUNCTION() void HandleVictory();
@@ -109,19 +132,35 @@ private:
 	UFUNCTION() void HandleRentCharged(int32 Amount);
 	UFUNCTION() void HandlePhaseChanged(EPhase Phase, int32 DayIndex);
 	UFUNCTION() void HandleMoneyChanged(int32 NewMoney, int32 Delta);
+	UFUNCTION() void HandleTutorialFilmStateChanged();
+	UFUNCTION() void HandleTutorialTapePurchased(FName Row, int32 Count);
+	UFUNCTION() void HandleTutorialSkipped();
 	// The front client or the prop under the crosshair within InteractRange (at most one is set)
 	void TraceTarget(ADCClient*& OutClient, const ADCInteractable*& OutProp) const;
 	void ShowEndScreen(TSubclassOf<UDCEndScreenWidget> Cls);
-	void ShowTutorial(const TCHAR* Text, bool& bFlag);
+	void SetTutorialStep(ETutorialStep NextStep);
+	void RefreshTutorial();
+	void EndTutorialPause();
+	void CompleteTutorial();
+	void DismissCompletedTutorial();
 	void HitStop();
 	void Cue(const TCHAR* Name) const;
+	void TryStartIntro();
+	void TickIntro(float DeltaTime);
+	bool IsAnyDigitalKeyDown() const;
+	UFUNCTION() void FinishIntro();
 
+	bool bPlayingIntro = false;
+	float IntroSkipHoldElapsed = 0.f;
 	float ShakeLeft = 0.f;
 	FRotator CounterRot = FRotator::ZeroRotator; // Starting direction: the look range is centred on it
 	FRotator LookRot = FRotator::ZeroRotator; // Mouse look without the shake on top
 	FVector2D LookRaw = FVector2D::ZeroVector; // Accumulated mouse offset (yaw, pitch) from CounterRot, before the soft limit
 	TWeakObjectPtr<ADCClient> DialogueClient;
-	bool bTutorialClientShown = false, bTutorialBackRoomShown = false, bTutorialAcceptShown = false;
+	ETutorialStep TutorialStep = ETutorialStep::Inactive;
+	bool bTutorialGenreBought = false;
+	bool bTutorialTapeAfterGenreBought = false;
+	FTimerHandle TutorialCompleteHideTimer;
 
 	ECameraZone CameraZone = ECameraZone::Counter;
 	bool bDialogueDue = false; // a dialogue should open as soon as nothing blocks it
@@ -134,9 +173,11 @@ private:
 	FRotator BackRoomRot = FRotator::ZeroRotator;
 
 	UPROPERTY() TObjectPtr<ULevelSequencePlayer> SequencePlayer;
+	UPROPERTY() TObjectPtr<ULevelSequencePlayer> IntroSequencePlayer;
 	UPROPERTY() TObjectPtr<UDCOrderPanelWidget> OrderPanelWidget;
 	UPROPERTY() TObjectPtr<UDCHUDWidget> HUDWidget;
 	UPROPERTY() TObjectPtr<UDCReviewToastWidget> ReviewToastWidget;
 	UPROPERTY() TObjectPtr<UDCTutorialWidget> TutorialWidget;
+	UPROPERTY() TObjectPtr<UDCIntroSkipWidget> IntroSkipWidget;
 	UPROPERTY() TObjectPtr<UDCRootLayout> RootLayout;
 };

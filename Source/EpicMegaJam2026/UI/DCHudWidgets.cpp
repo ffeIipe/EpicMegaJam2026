@@ -18,6 +18,20 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Kismet/GameplayStatics.h"
 
+// Shared money "punch": P goes 1 -> 0. A gain swells and jumps up; a loss swells, sinks and shakes sideways.
+static void ApplyPunch(UWidget* W, float P, bool bGain, float Time)
+{
+	FWidgetTransform T;
+	T.Scale = FVector2D(1.f + 0.45f * P);
+	T.Translation = bGain ? FVector2D(0.f, -18.f * P) : FVector2D(FMath::Sin(Time * 70.f) * 7.f * P, 18.f * P);
+	W->SetRenderTransform(T);
+}
+
+static float PunchFromDelta(int32 Delta)
+{
+	return FMath::Clamp(0.5f + FMath::Abs(Delta) / 300.f, 0.5f, 1.f);
+}
+
 // ---------------------------------------------------------------- HUD
 
 UDCHUDWidget::UDCHUDWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -36,6 +50,7 @@ void UDCHUDWidget::NativeOnInitialized()
 	// Money box and day info, top right
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(1.f, 0.f), FVector2D(1.f, 0.f), FVector2D(-24.f, 24.f));
 	MoneyText = DCUI::Text(WidgetTree, V, TEXT("$0"), UDCText_Title::StaticClass());
+	MoneyText->SetRenderTransformPivot(FVector2D(1.f, 0.5f));
 	GoalBar = DCUI::Bar(WidgetTree, V, 260.f);
 	Cast<UVerticalBoxSlot>(GoalBar->GetParent()->Slot)->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
 	GoalText = DCUI::Text(WidgetTree, V, TEXT(""));
@@ -98,10 +113,18 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		DisplayedMoney = Money;
 	}
+	if (LastMoney >= 0 && Money != LastMoney)
+	{
+		bPunchGain = Money > LastMoney;
+		Punch = PunchFromDelta(Money - LastMoney);
+	}
+	LastMoney = Money;
+	Punch = FMath::Max(0.f, Punch - InDeltaTime * 1.4f);
+	ApplyPunch(MoneyText, Punch, bPunchGain, GetWorld()->GetTimeSeconds());
 	// Animated counter: lime while rising, red while falling
 	const bool bMoving = !FMath::IsNearlyEqual(DisplayedMoney, (float)Money, 0.5f);
 	const float Diff = Money - DisplayedMoney;
-	const float Step = FMath::Max(40.f, FMath::Abs(Diff) * 3.f) * InDeltaTime;
+	const float Step = FMath::Max(40.f, FMath::Abs(Diff) * 2.f) * InDeltaTime; // slower than before so the roll is readable
 	DisplayedMoney = bMoving ? DisplayedMoney + FMath::Sign(Diff) * FMath::Min(Step, FMath::Abs(Diff)) : (float)Money;
 	MoneyText->SetText(FText::FromString(FString::Printf(TEXT("$ %d"), FMath::RoundToInt(DisplayedMoney))));
 	MoneyText->SetColorAndOpacity(FSlateColor(!bMoving ? DCPalette::Beige : (Diff > 0 ? DCPalette::Lime : DCPalette::Red)));
@@ -111,7 +134,9 @@ void UDCHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	GoalText->SetText(FText::FromString(FString::Printf(TEXT("Goal: $%d"), Goal)));
 	DayText->SetText(FText::FromString(FString::Printf(TEXT("Day %d - %s"), GM->DayNightCycle->DayIndex,
 		GM->DayNightCycle->CurrentPhase == EPhase::Day ? TEXT("Day") : TEXT("Night"))));
-	ClockText->SetText(GM->DayNightCycle->GetClockText());
+	ClockText->SetText(GM->DayNightCycle->bTutorialPaused
+		? FText::Format(INVTEXT("{0} (Tutorial)"), GM->DayNightCycle->GetClockText())
+		: GM->DayNightCycle->GetClockText());
 	RentText->SetText(FText::FromString(FString::Printf(TEXT("Rent tonight: $%d"), GM->Economy->GetRentForDay(GM->DayNightCycle->DayIndex))));
 	HeldText->SetText(GM->FilmCrafting->HeldFilms.Num() > 0
 		? FText::FromString(FString::Printf(TEXT("In hand: %s"), *GM->FilmCrafting->HeldFilms[0].Title.ToString()))
@@ -140,6 +165,15 @@ void UDCReviewToastWidget::NativeOnInitialized()
 	LineText->SetWrapTextAt(520.f);
 	MoneyText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Heading::StaticClass());
 	Panel->SetVisibility(ESlateVisibility::Collapsed);
+	Panel->SetRenderTransformPivot(FVector2D(0.5f, 0.f));
+}
+
+void UDCReviewToastWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	Pop = FMath::Max(0.f, Pop - InDeltaTime * 2.f);
+	// Bounce in: a good review pops up with a growing swell, a bad one slams down and shakes
+	ApplyPunch(Panel, Pop * 0.7f, bPopGain, GetWorld()->GetTimeSeconds());
 }
 
 void UDCReviewToastWidget::Hide()
@@ -155,6 +189,8 @@ void UDCReviewToastWidget::ShowReview(const FReview& Review, int32 Stars, float 
 	MoneyText->SetText(FText::FromString(Review.MoneyDelta == 0 ? FString() : FString::Printf(TEXT("%+d"), Review.MoneyDelta)));
 	MoneyText->SetColorAndOpacity(FSlateColor(Review.MoneyDelta < 0 ? DCPalette::Red : DCPalette::Lime));
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
+	Pop = 1.f;
+	bPopGain = Review.MoneyDelta >= 0;
 	GetWorld()->GetTimerManager().SetTimer(HideTimer, this, &UDCReviewToastWidget::Hide, DurationSec);
 }
 
@@ -213,6 +249,25 @@ void UDCWorldLabelWidget::NativeOnInitialized()
 	Border->SetContent(LabelText);
 	Plate = Border;
 	Plate->SetVisibility(ESlateVisibility::Collapsed);
+	Plate->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+}
+
+void UDCWorldLabelWidget::PunchMoney(int32 Delta)
+{
+	bPunchGain = Delta > 0;
+	Punch = PunchFromDelta(Delta);
+}
+
+void UDCWorldLabelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (Punch <= 0.f)
+	{
+		return;
+	}
+	Punch = FMath::Max(0.f, Punch - InDeltaTime * 1.4f);
+	ApplyPunch(Plate, Punch, bPunchGain, GetWorld()->GetTimeSeconds());
+	LabelText->SetColorAndOpacity(FSlateColor(Punch > 0.f ? (bPunchGain ? DCPalette::Lime : DCPalette::Red) : DCPalette::Beige));
 }
 
 void UDCWorldLabelWidget::SetLabel(const FText& Text)
@@ -221,5 +276,28 @@ void UDCWorldLabelWidget::SetLabel(const FText& Text)
 	{
 		LabelText->SetText(Text);
 		Plate->SetVisibility(Text.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
+}
+
+// ---------------------------------------------------------------- Intro skip prompt
+
+void UDCIntroSkipWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	UVerticalBox* Box = DCUI::Panel(WidgetTree, FAnchors(1.f, 1.f), FVector2D(1.f, 1.f), FVector2D(-24.f, -24.f));
+	DCUI::Text(WidgetTree, Box, TEXT("Hold any key to skip"), UDCText_Body::StaticClass());
+	ProgressBar = DCUI::Bar(WidgetTree, Box, 220.f);
+	if (UVerticalBoxSlot* BarSlot = Cast<UVerticalBoxSlot>(ProgressBar->GetParent()->Slot))
+	{
+		BarSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+	}
+	ProgressBar->SetPercent(0.f);
+}
+
+void UDCIntroSkipWidget::SetSkipProgress(float Progress)
+{
+	if (ProgressBar)
+	{
+		ProgressBar->SetPercent(FMath::Clamp(Progress, 0.f, 1.f));
 	}
 }

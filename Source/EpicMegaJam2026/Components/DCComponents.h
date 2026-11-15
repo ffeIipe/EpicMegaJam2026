@@ -17,6 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnClientLeft, AActor*, Client, boo
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReviewReceived, const FReview&, Review);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFilmCreated, const FCreatedFilm&, Film);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTapePurchased, FName, Row, int32, Count);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDayClosed, const FDaySummary&, Summary);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnlockPurchased, FName, UnlockId);
 
@@ -65,6 +66,8 @@ public:
 	UPROPERTY(BlueprintReadOnly) float PhaseElapsed = 0.f;
 	// False while the day summary is open or the game has ended
 	UPROPERTY(BlueprintReadOnly) bool bRunning = false;
+	// True while the Day 1 tutorial is teaching core mechanics so nightfall does not interrupt
+	UPROPERTY(BlueprintReadWrite) bool bTutorialPaused = false;
 
 	UAC_DayNightCycle() { PrimaryComponentTick.bCanEverTick = true; }
 	virtual void BeginPlay() override;
@@ -108,6 +111,11 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) TSubclassOf<class ADCClient> ClientClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FName TutorialArchetypeRow = "TutorialClient";
+	// Freezes extra scheduled client spawns and client patience while the Day 1 tutorial is active
+	UPROPERTY(BlueprintReadWrite) bool bTutorialPaused = false;
+	// Prevents a second scheduled client from walking in behind client #1 before tutorial finishes or skips
+	UPROPERTY(BlueprintReadWrite) bool bHoldExtraClientsForTutorial = false;
+	void ResumeFromTutorial();
 
 	// Spawns at the door with the order of 5.2: the next DT_ScriptedOrders row if any is left (it also fixes the archetype),
 	// otherwise a level and recipe drawn from what the player has unlocked.
@@ -182,6 +190,7 @@ public:
 	UFUNCTION(BlueprintCallable) bool CanBuyUnlock(FName UnlockId) const;
 	// Spends the price and applies the effect: a genre, one more VHS player slot or the next star level
 	UFUNCTION(BlueprintCallable) bool BuyUnlock(FName UnlockId);
+	const FUnlockData* GetUnlockData(FName UnlockId) const { return FindUnlock(UnlockId); }
 
 private:
 	const FUnlockData* FindUnlock(FName UnlockId) const;
@@ -193,6 +202,7 @@ class EPICMEGAJAM2026_API UAC_Inventory : public UActorComponent
 	GENERATED_BODY()
 public:
 	UPROPERTY(BlueprintAssignable) FOnInventoryChanged OnInventoryChanged;
+	UPROPERTY(BlueprintAssignable) FOnTapePurchased OnTapePurchased;
 
 	// v2 (section 4.3): copies of each DT_VHS row. Tapes are consumed when a film is combined.
 	UPROPERTY(BlueprintReadOnly) TMap<FName, int32> Stock;

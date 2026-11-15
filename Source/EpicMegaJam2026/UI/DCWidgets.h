@@ -72,6 +72,7 @@ public:
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeOnActivated() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
 	UFUNCTION() void OnClearClicked(FName SlotName);
@@ -119,15 +120,19 @@ class EPICMEGAJAM2026_API UDCDialogueWidget : public UDCScreen
 	GENERATED_BODY()
 public:
 	UPROPERTY(BlueprintAssignable) FOnDialogueButton OnButton;
-	UFUNCTION(BlueprintCallable) void Show(const FText& Line, const FText& ButtonLabel);
+	UPROPERTY(BlueprintAssignable) FOnDialogueButton OnReject;
+	// bCanReject shows the "No, sorry" button (only when taking the order, not when delivering)
+	UFUNCTION(BlueprintCallable) void Show(const FText& Line, const FText& ButtonLabel, bool bCanReject = false);
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
 	UFUNCTION() void HandleButton(FName Unused) { OnButton.Broadcast(); }
+	UFUNCTION() void HandleReject(FName Unused) { OnReject.Broadcast(); }
 	UPROPERTY() TObjectPtr<UCommonTextBlock> LineText;
 	UPROPERTY() TObjectPtr<UDCButton> Button;
+	UPROPERTY() TObjectPtr<UDCButton> RejectButton;
 };
 
 // WBP_OrderPanel: the front client's order and patience bar, visible in both zones

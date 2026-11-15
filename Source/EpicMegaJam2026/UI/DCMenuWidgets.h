@@ -10,6 +10,7 @@
 class UVerticalBox;
 class UHorizontalBox;
 class UScrollBox;
+class UCanvasPanelSlot;
 class UImage;
 class UMediaPlayer;
 class UMediaSource;
@@ -130,21 +131,43 @@ private:
 	UPROPERTY() TObjectPtr<UDCInventoryWidget> List;
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTutorialSkipped);
+
+UENUM(BlueprintType)
+enum class ETutorialPlacement : uint8
+{
+	BottomCenter,
+	TopCenter,
+	TopRight
+};
+
 // Contextual tutorial sign, one at a time
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCTutorialWidget : public UUserWidget
 {
 	GENERATED_BODY()
 public:
+	UPROPERTY(BlueprintAssignable) FOnTutorialSkipped OnSkipped;
+
 	UFUNCTION(BlueprintCallable) void ShowHint(const FText& Text);
+	UFUNCTION(BlueprintCallable) void ShowStep(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip = true);
 	UFUNCTION(BlueprintCallable) void HideHint();
+	// Repositions the banner cleanly away from bottom dialogues or full-screen crafting/computer/supplier panels
+	UFUNCTION(BlueprintCallable) void SetPlacement(ETutorialPlacement Placement);
+	UFUNCTION(BlueprintCallable) void SetTopPlacement(bool bTop) { SetPlacement(bTop ? ETutorialPlacement::TopCenter : ETutorialPlacement::BottomCenter); }
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
+	UFUNCTION() void HandleSkip(FName Unused);
+
 	UPROPERTY() TObjectPtr<UWidget> Panel;
+	UPROPERTY() TObjectPtr<UCanvasPanelSlot> PanelSlot;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> StepTitleText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HintText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> ActionText;
+	UPROPERTY() TObjectPtr<UDCButton> SkipButton;
 };
 
 // WBP_MainMenu: left-aligned menu over a looping background video (Play/Continue, New Game, Credits, Options, Exit)
@@ -227,6 +250,12 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> KeyButtons; // indexed by EDCAction
 	UPROPERTY() TObjectPtr<UCommonTextBlock> VolumeText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> SensitivityText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> QualityText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> LumenText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> FpsText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> VSyncText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> ResScaleText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> FullscreenText;
 	TSharedPtr<FDCKeyCapture> Capture;
 	int32 CapturingAction = INDEX_NONE;
 };

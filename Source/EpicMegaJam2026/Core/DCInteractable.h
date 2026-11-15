@@ -31,8 +31,17 @@ public:
 
 	// What the prop does, shown above it in the world and in the HUD prompt when aimed at. Empty = no label.
 	FText GetLabel() const;
+	virtual void Tick(float DeltaTime) override;
+
+	// Computer: wobbles and sparkles while there is something new to buy; the player opening the screen clears it
+	void ClearNews();
 
 private:
 	UFUNCTION() void OnMoneyChanged(int32 NewMoney, int32 Delta);
+	UFUNCTION() void CheckNews(FName UnlockId);
 	void SetLabelText(const FText& Text) const;
+
+	bool bHasNews = false;
+	TSet<FName> NotifiedUnlocks; // buyable unlocks the player was already told about
+	FRotator BaseRotation;
 };

@@ -186,6 +186,8 @@ namespace DCUI
 	EPICMEGAJAM2026_API TSubclassOf<UCommonTextStyle> SkillStyle(int32 SkillIndex);
 	// One line per skill in its color: "Funny 3", or "Funny 3/10" with a cap; zeros are skipped when bHideZero
 	EPICMEGAJAM2026_API void SkillList(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap = 0, bool bHideZero = false);
+	// Compact inline wrap row of non-zero colored skills (e.g. "Funny 3  Scary 1") for VHS rows
+	EPICMEGAJAM2026_API void InlineSkills(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills);
 	EPICMEGAJAM2026_API FSlateBrush Box(const FLinearColor& Fill, const FLinearColor& Outline, float OutlineWidth = 2.f, float Radius = 4.f);
 	// Patience/goal bar in the palette
 	EPICMEGAJAM2026_API UProgressBar* Bar(UWidgetTree* Tree, UPanelWidget* Parent, float Width);

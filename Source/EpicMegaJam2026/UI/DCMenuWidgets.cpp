@@ -16,6 +16,7 @@
 #include "Components/ScrollBox.h"
 #include "Input/CommonUIInputTypes.h"
 #include "Components/SizeBox.h"
+#include "Components/Spacer.h"
 #include "Containers/Ticker.h"
 #include "FileMediaSource.h"
 #include "Framework/Application/IInputProcessor.h"
@@ -201,6 +202,7 @@ void UDCSupplierWidget::Refresh()
 		InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		InfoSlot->SetVerticalAlignment(VAlign_Center);
 		DCUI::Text(WidgetTree, Info, DCUI::CleanTitle(Tape->Title));
+		DCUI::InlineSkills(WidgetTree, Info, Tape->Skills);
 		H->SetVisibility(ESlateVisibility::Visible); // hit-testable so the tooltip shows
 		DCUI::SkillTooltip(WidgetTree, H, Tape->Skills);
 		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Tape->Rating), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
@@ -433,12 +435,39 @@ void UDCComputerWidget::BuildUnlocks(EUnlockType Type)
 		const FUnlockData* Row = Config->UnlockTable->FindRow<FUnlockData>(Id, TEXT("Row"));
 		const TPair<FName, const FUnlockData*> P(Id, Row);
 		const bool bOwned = Unlocks->IsOwned(P.Key);
+		// One card per item: colored tile (genre color, yellow for stars, blue for slots), type tag, name, description, price and button
+		UCommonBorder* Card = DCUI::Border(WidgetTree, List, UDCBorder_Panel::StaticClass(), FMargin(14.f, 12.f));
+		Cast<UVerticalBoxSlot>(Card->Slot)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+		Card->SetRenderOpacity(bOwned ? 0.6f : 1.f);
 		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
-		List->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 6.f));
+		Card->SetContent(H);
+		FLinearColor TileColor = Type == EUnlockType::StarTier ? DCPalette::Yellow : DCPalette::Blue;
+		if (Type == EUnlockType::Genre && Config->GenreTable)
+		{
+			for (const TPair<FName, uint8*>& G : Config->GenreTable->GetRowMap())
+			{
+				if (reinterpret_cast<const FGenreData*>(G.Value)->Genre == Row->Genre)
+				{
+					TileColor = reinterpret_cast<const FGenreData*>(G.Value)->Color;
+				}
+			}
+		}
+		USizeBox* TileSize = WidgetTree->ConstructWidget<USizeBox>();
+		TileSize->SetWidthOverride(72.f);
+		TileSize->SetHeightOverride(72.f);
+		UImage* Tile = WidgetTree->ConstructWidget<UImage>();
+		Tile->SetBrush(FSlateBrush());
+		Tile->SetColorAndOpacity(TileColor);
+		TileSize->AddChild(Tile);
+		UHorizontalBoxSlot* TileSlot = H->AddChildToHorizontalBox(TileSize);
+		TileSlot->SetVerticalAlignment(VAlign_Center);
+		TileSlot->SetPadding(FMargin(0.f, 0.f, 16.f, 0.f));
 		UVerticalBox* Info = WidgetTree->ConstructWidget<UVerticalBox>();
 		UHorizontalBoxSlot* InfoSlot = H->AddChildToHorizontalBox(Info);
 		InfoSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		InfoSlot->SetVerticalAlignment(VAlign_Center);
 		InfoSlot->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
+		DCUI::Text(WidgetTree, Info, Type == EUnlockType::Genre ? TEXT("GENRE") : Type == EUnlockType::Slot ? TEXT("COMBINE SLOT") : TEXT("STAR LICENSE"), UDCText_Tab::StaticClass());
 		DCUI::Text(WidgetTree, Info, Row->DisplayName.ToString().ToUpper(), UDCText_Heading::StaticClass());
 		DCUI::Text(WidgetTree, Info, Row->Description.ToString())->SetWrapTextAt(440.f);
 		TArray<FString> Needs;
@@ -453,13 +482,14 @@ void UDCComputerWidget::BuildUnlocks(EUnlockType Type)
 		}
 		if (!bOwned && Needs.Num() > 0)
 		{
-			DCUI::Text(WidgetTree, Info, TEXT("Requires: ") + FString::Join(Needs, TEXT(", ")), UDCText_Accent::StaticClass())->SetWrapTextAt(440.f);
+			DCUI::Text(WidgetTree, Info, TEXT("Requires: ") + FString::Join(Needs, TEXT(", ")), UDCText_Warn::StaticClass())->SetWrapTextAt(440.f);
 		}
-		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("$%d"), Row->Price), UDCText_Heading::StaticClass()))->SetVerticalAlignment(VAlign_Center);
-		UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, bOwned ? TEXT("OWNED") : TEXT("BUY"), P.Key);
-		UHorizontalBoxSlot* BtnSlot = H->AddChildToHorizontalBox(Btn);
-		BtnSlot->SetVerticalAlignment(VAlign_Center);
-		BtnSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
+		UVerticalBox* Buy = WidgetTree->ConstructWidget<UVerticalBox>();
+		H->AddChildToHorizontalBox(Buy)->SetVerticalAlignment(VAlign_Center);
+		UCommonTextBlock* Price = DCUI::Text(WidgetTree, Buy, bOwned ? FString() : FString::Printf(TEXT("$%d"), Row->Price), UDCText_Caution::StaticClass());
+		Price->SetJustification(ETextJustify::Center);
+		Cast<UVerticalBoxSlot>(Price->Slot)->SetHorizontalAlignment(HAlign_Center);
+		UDCButton* Btn = DCUI::Button(WidgetTree, Buy, bOwned ? TEXT("OWNED") : TEXT("BUY"), P.Key);
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCComputerWidget::HandleBuy);
 		Buttons.Add({ Btn, P.Key });
 	}
@@ -509,23 +539,128 @@ void UDCShelfWidget::ShowGenre(EGenre Genre)
 void UDCTutorialWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	UCommonBorder* Border = nullptr;
-	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, -270.f), &Border, UDCBorder_Header::StaticClass());
-	Border->SetPadding(DCUI::HeaderPadding);
-	Panel = Border;
-	HintText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Heading::StaticClass());
-	Panel->SetVisibility(ESlateVisibility::Collapsed);
+	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
+	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	WidgetTree->RootWidget = Canvas;
+
+	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>();
+	Stack->SetVisibility(ESlateVisibility::Collapsed);
+	Panel = Stack;
+	PanelSlot = Canvas->AddChildToCanvas(Stack);
+	PanelSlot->SetAutoSize(true);
+	SetTopPlacement(false);
+
+	UHorizontalBox* TopRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	TopRow->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Stack->AddChildToVerticalBox(TopRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+	UCommonBorder* HeaderPlate = DCUI::Border(WidgetTree, TopRow, UDCBorder_Header::StaticClass(), FMargin(48.f, 8.f, 36.f, 8.f));
+	HeaderPlate->SetVisibility(ESlateVisibility::HitTestInvisible);
+	StepTitleText = DCUI::Text(WidgetTree, nullptr, TEXT("TUTORIAL"), UDCText_Heading::StaticClass());
+	HeaderPlate->SetContent(StepTitleText);
+
+	USpacer* FillGap = WidgetTree->ConstructWidget<USpacer>();
+	FillGap->SetVisibility(ESlateVisibility::HitTestInvisible);
+	TopRow->AddChildToHorizontalBox(FillGap)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+	SkipButton = DCUI::Button(WidgetTree, TopRow, TEXT("Skip (F3)"), NAME_None, UDCButton_Tab::StaticClass());
+	SkipButton->SetIsFocusable(false);
+	SkipButton->OnPayloadClicked.AddDynamic(this, &UDCTutorialWidget::HandleSkip);
+	if (UHorizontalBoxSlot* SkipSlot = Cast<UHorizontalBoxSlot>(SkipButton->Slot))
+	{
+		SkipSlot->SetVerticalAlignment(VAlign_Bottom);
+		SkipSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
+	}
+
+	UCommonBorder* BodyBorder = DCUI::Border(WidgetTree, Stack, UDCBorder_Panel::StaticClass(), FMargin(18.f, 10.f));
+	BodyBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UVerticalBox* BodyV = WidgetTree->ConstructWidget<UVerticalBox>();
+	BodyV->SetVisibility(ESlateVisibility::HitTestInvisible);
+	BodyBorder->SetContent(BodyV);
+
+	HintText = DCUI::Text(WidgetTree, BodyV, TEXT(""), UDCText_Body::StaticClass());
+	HintText->SetWrapTextAt(780.f);
+	ActionText = DCUI::Text(WidgetTree, BodyV, TEXT(""), UDCText_Accent::StaticClass());
+	ActionText->SetWrapTextAt(780.f);
+	ActionText->SetMargin(FMargin(0.f, 4.f, 0.f, 0.f));
+}
+
+void UDCTutorialWidget::SetPlacement(ETutorialPlacement Placement)
+{
+	if (!PanelSlot)
+	{
+		return;
+	}
+	const float WrapWidth = Placement == ETutorialPlacement::TopRight ? 540.f : 780.f;
+	if (HintText)
+	{
+		HintText->SetWrapTextAt(WrapWidth);
+	}
+	if (ActionText)
+	{
+		ActionText->SetWrapTextAt(WrapWidth);
+	}
+	switch (Placement)
+	{
+	case ETutorialPlacement::TopCenter:
+		PanelSlot->SetAnchors(FAnchors(0.5f, 0.f));
+		PanelSlot->SetAlignment(FVector2D(0.5f, 0.f));
+		PanelSlot->SetPosition(FVector2D(0.f, 20.f));
+		break;
+	case ETutorialPlacement::TopRight:
+		PanelSlot->SetAnchors(FAnchors(1.f, 0.f));
+		PanelSlot->SetAlignment(FVector2D(1.f, 0.f));
+		PanelSlot->SetPosition(FVector2D(-24.f, 14.f));
+		break;
+	default:
+		PanelSlot->SetAnchors(FAnchors(0.5f, 1.f));
+		PanelSlot->SetAlignment(FVector2D(0.5f, 1.f));
+		PanelSlot->SetPosition(FVector2D(0.f, -18.f));
+		break;
+	}
 }
 
 void UDCTutorialWidget::ShowHint(const FText& Text)
 {
-	HintText->SetText(Text);
-	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
+	ShowStep(FText::FromString(TEXT("TUTORIAL")), Text, FText::GetEmpty(), true);
+}
+
+void UDCTutorialWidget::ShowStep(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip)
+{
+	if (StepTitleText)
+	{
+		StepTitleText->SetText(StepHeader);
+	}
+	if (HintText)
+	{
+		HintText->SetText(Body);
+	}
+	if (ActionText)
+	{
+		ActionText->SetText(Action);
+		ActionText->SetVisibility(Action.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
+	if (SkipButton)
+	{
+		SkipButton->SetVisibility(bShowSkip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	if (Panel)
+	{
+		Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
 }
 
 void UDCTutorialWidget::HideHint()
 {
-	Panel->SetVisibility(ESlateVisibility::Collapsed);
+	if (Panel)
+	{
+		Panel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UDCTutorialWidget::HandleSkip(FName Unused)
+{
+	OnSkipped.Broadcast();
 }
 
 // ---------------------------------------------------------------- Main menu / pause
@@ -976,6 +1111,8 @@ private:
 
 namespace
 {
+	const TCHAR* const QualityNames[] = {TEXT("LOW"), TEXT("MEDIUM"), TEXT("HIGH"), TEXT("ULTRA")};
+
 	void StepValue(float& Value, float Delta, float Min, float Max)
 	{
 		Value = FMath::Clamp(FMath::RoundToFloat((Value + Delta) * 10.f) / 10.f, Min, Max);
@@ -1033,6 +1170,15 @@ void UDCSettingsWidget::NativeOnInitialized()
 	};
 	VolumeText = AddStepper(TEXT("Volume"), "VolDown", "VolUp");
 	SensitivityText = AddStepper(TEXT("Mouse sensitivity"), "SensDown", "SensUp");
+
+	UCommonTextBlock* GfxHeader = DCUI::Text(WidgetTree, V, TEXT("GRAPHICS"), UDCText_Heading::StaticClass());
+	GfxHeader->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
+	QualityText = AddStepper(TEXT("Quality"), "QualDown", "QualUp");
+	LumenText = AddStepper(TEXT("Lumen (GI + reflections)"), "LumenDown", "LumenUp");
+	FpsText = AddStepper(TEXT("Frame rate cap"), "FpsDown", "FpsUp");
+	VSyncText = AddStepper(TEXT("VSync"), "VSyncDown", "VSyncUp");
+	ResScaleText = AddStepper(TEXT("Resolution scale"), "ResDown", "ResUp");
+	FullscreenText = AddStepper(TEXT("Fullscreen"), "FullDown", "FullUp");
 	Refresh();
 }
 
@@ -1045,19 +1191,59 @@ void UDCSettingsWidget::Refresh()
 	}
 	VolumeText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(S->MasterVolume * 100.f))));
 	SensitivityText->SetText(FText::FromString(FString::Printf(TEXT("%.1fx"), S->MouseSensitivityScale)));
+	QualityText->SetText(FText::FromString(QualityNames[FMath::Clamp(S->Quality, 0, 3)]));
+	LumenText->SetText(FText::FromString(S->bLumen ? TEXT("ON") : TEXT("OFF")));
+	FpsText->SetText(FText::FromString(S->FpsCap > 0 ? FString::FromInt(S->FpsCap) : FString(TEXT("NONE"))));
+	VSyncText->SetText(FText::FromString(S->bVSync ? TEXT("ON") : TEXT("OFF")));
+	ResScaleText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), S->ResolutionScale)));
+	FullscreenText->SetText(FText::FromString(S->bFullscreen ? TEXT("ON") : TEXT("OFF")));
 }
 
 void UDCSettingsWidget::HandleStep(FName Id)
 {
 	UDCSettings* S = UDCSettings::Get();
-	const float Dir = Id == "VolUp" || Id == "SensUp" ? 0.1f : -0.1f;
+	const bool bUp = Id.ToString().EndsWith(TEXT("Up"));
+	const float Dir = bUp ? 0.1f : -0.1f;
 	if (Id == "VolUp" || Id == "VolDown")
 	{
 		StepValue(S->MasterVolume, Dir, 0.f, 1.f);
 	}
-	else
+	else if (Id == "SensUp" || Id == "SensDown")
 	{
 		StepValue(S->MouseSensitivityScale, Dir, 0.1f, 3.f);
+	}
+	else if (Id == "QualUp" || Id == "QualDown")
+	{
+		S->Quality = FMath::Clamp(S->Quality + (bUp ? 1 : -1), 0, 3);
+	}
+	else if (Id == "LumenUp" || Id == "LumenDown")
+	{
+		S->bLumen = !S->bLumen;
+	}
+	else if (Id == "VSyncUp" || Id == "VSyncDown")
+	{
+		S->bVSync = !S->bVSync;
+	}
+	else if (Id == "FullUp" || Id == "FullDown")
+	{
+		S->bFullscreen = !S->bFullscreen;
+	}
+	else if (Id == "ResUp" || Id == "ResDown")
+	{
+		S->ResolutionScale = FMath::Clamp(S->ResolutionScale + (bUp ? 10 : -10), 50, 100);
+	}
+	else // frame cap: steps through the list, 0 (unlimited) last
+	{
+		const int32 Caps[] = {30, 60, 120, 0};
+		int32 Idx = 1;
+		for (int32 i = 0; i < UE_ARRAY_COUNT(Caps); ++i)
+		{
+			if (Caps[i] == S->FpsCap)
+			{
+				Idx = i;
+			}
+		}
+		S->FpsCap = Caps[FMath::Clamp(Idx + (bUp ? 1 : -1), 0, UE_ARRAY_COUNT(Caps) - 1)];
 	}
 	S->Save();
 	Refresh();

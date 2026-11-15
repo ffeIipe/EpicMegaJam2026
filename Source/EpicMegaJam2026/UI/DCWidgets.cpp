@@ -232,7 +232,8 @@ void UDCInventoryWidget::Refresh()
 		Btn->Content->AddChild(H);
 		SetCover(AddCover(WidgetTree, H, FVector2D(34.f, 48.f)), &Tape, Config);
 		UVerticalBox* Text = WidgetTree->ConstructWidget<UVerticalBox>();
-		Text->AddChildToVerticalBox(Btn->Label);
+		Text->AddChildToVerticalBox(Btn->Label)->SetHorizontalAlignment(HAlign_Left);
+		DCUI::InlineSkills(WidgetTree, Text, Tape.Skills);
 		UHorizontalBoxSlot* TitleSlot = H->AddChildToHorizontalBox(Text);
 		TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		TitleSlot->SetVerticalAlignment(VAlign_Center);
@@ -425,6 +426,17 @@ void UDCFilmCraftingWidget::NativeOnActivated()
 	Refresh();
 }
 
+void UDCFilmCraftingWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	// The game keeps running behind this screen: follow the client's patience live
+	const ADCClient* Front = Director ? Director->GetFrontClient() : nullptr;
+	if (Front && Front->IsAtFront() && Front->PatienceMax > 0.f)
+	{
+		OrderPatience->SetPercent(Front->Runtime.PatienceLeft / Front->PatienceMax);
+	}
+}
+
 void UDCFilmCraftingWidget::Refresh()
 {
 	if (!Crafting || !Inventory)
@@ -537,17 +549,22 @@ void UDCDialogueWidget::NativeOnInitialized()
 	DCUI::Text(WidgetTree, V, TEXT("CUSTOMER"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
 	LineText = DCUI::Text(WidgetTree, V, TEXT(""));
 	LineText->SetWrapTextAt(1400.f);
-	Button = DCUI::Button(WidgetTree, V, TEXT(""));
-	Button->OnPayloadClicked.AddDynamic(this, &UDCDialogueWidget::HandleButton);
-	UVerticalBoxSlot* ButtonSlot = Cast<UVerticalBoxSlot>(Button->Slot);
+	UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>();
+	UVerticalBoxSlot* ButtonSlot = V->AddChildToVerticalBox(Buttons);
 	ButtonSlot->SetHorizontalAlignment(HAlign_Right);
 	ButtonSlot->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
+	RejectButton = DCUI::Button(WidgetTree, Buttons, TEXT("No, sorry"), NAME_None, UDCButton_Tab::StaticClass());
+	RejectButton->OnPayloadClicked.AddDynamic(this, &UDCDialogueWidget::HandleReject);
+	Button = DCUI::Button(WidgetTree, Buttons, TEXT(""));
+	Button->OnPayloadClicked.AddDynamic(this, &UDCDialogueWidget::HandleButton);
+	Cast<UHorizontalBoxSlot>(Button->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
 }
 
-void UDCDialogueWidget::Show(const FText& Line, const FText& ButtonLabel)
+void UDCDialogueWidget::Show(const FText& Line, const FText& ButtonLabel, bool bCanReject)
 {
 	LineText->SetText(Line);
 	Button->Label->SetText(ButtonLabel);
+	RejectButton->SetVisibility(bCanReject ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
 // ---------------------------------------------------------------- Order panel

@@ -28,6 +28,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Save") bool SelectSaveSlot(const FString& SlotName);
 	// Lightweight bracket to persist creation date + account money until the full save system is implemented.
 	UFUNCTION(BlueprintCallable, Category = "Save") void SaveActiveSlotMetadata(int32 CurrentMoney, int32 CurrentDay);
+	UFUNCTION(BlueprintPure, Category = "Save") bool ShouldPlayIntro() const;
+	UFUNCTION(BlueprintCallable, Category = "Save") void MarkIntroPlayed();
+
+private:
+	bool bIntroPlayedWithoutSlot = false;
+
+public:
 
 	// TODO(SAVE): Implement full world serialization/deserialization once demo gameplay systems are finalized.
 	UFUNCTION(BlueprintCallable, Category = "Save") void ApplyActiveSaveToGameMode(ADCGameMode* GameMode) {}

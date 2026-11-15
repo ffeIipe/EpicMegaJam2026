@@ -1,4 +1,5 @@
 #include "Core/DCPlayerController.h"
+#include "Core/BPFL_Scoring.h"
 #include "Core/DCGameInstance.h"
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
@@ -10,6 +11,7 @@
 #include "UI/DCCommonUI.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 #include "LevelSequence.h"
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
@@ -77,15 +79,19 @@ void ADCPlayerController::BeginPlay()
 	HUDWidget = MakeWidget<UDCHUDWidget>(this, HUDWidgetClass, 0, PassThrough);
 	OrderPanelWidget = MakeWidget<UDCOrderPanelWidget>(this, OrderPanelWidgetClass, 1, ESlateVisibility::HitTestInvisible);
 	OrderPanelWidget->Setup(GM->ClientDirector);
-	TutorialWidget = MakeWidget<UDCTutorialWidget>(this, TutorialWidgetClass, 2, PassThrough);
 	ReviewToastWidget = MakeWidget<UDCReviewToastWidget>(this, ReviewToastWidgetClass, 3, PassThrough);
 	RootLayout = MakeWidget<UDCRootLayout>(this, nullptr, 4, PassThrough);
+	// Above RootLayout (ZOrder 4) so the guide remains visible over modal screens without blocking clicks
+	TutorialWidget = MakeWidget<UDCTutorialWidget>(this, TutorialWidgetClass, 5, PassThrough);
+	TutorialWidget->OnSkipped.AddDynamic(this, &ADCPlayerController::HandleTutorialSkipped);
 	RootLayout->Stack->OnDisplayedWidgetChanged().AddUObject(this, &ADCPlayerController::HandleScreenChanged);
 
 	GM->ClientDirector->OnReviewReceived.AddDynamic(this, &ADCPlayerController::HandleReview);
 	GM->ClientDirector->OnClientReachedCounter.AddDynamic(this, &ADCPlayerController::HandleClientReached);
 	GM->ClientDirector->OnClientLeft.AddDynamic(this, &ADCPlayerController::HandleClientLeft);
 	GM->FilmCrafting->OnFilmCreated.AddDynamic(this, &ADCPlayerController::HandleFilmCreated);
+	GM->FilmCrafting->OnFilmStateChanged.AddDynamic(this, &ADCPlayerController::HandleTutorialFilmStateChanged);
+	GM->Inventory->OnTapePurchased.AddDynamic(this, &ADCPlayerController::HandleTutorialTapePurchased);
 	GM->Unlocks->OnUnlockPurchased.AddDynamic(this, &ADCPlayerController::HandleUnlockPurchased);
 	GM->Economy->OnGameOver.AddDynamic(this, &ADCPlayerController::HandleGameOver);
 	GM->Economy->OnVictory.AddDynamic(this, &ADCPlayerController::HandleVictory);
@@ -100,6 +106,9 @@ void ADCPlayerController::BeginPlay()
 		// TODO(SAVE): ApplyActiveSaveToGameMode(GM) when full save serialization is implemented.
 		GI->ApplyActiveSaveToGameMode(GM);
 	}
+	TutorialStep = GM->Config->bShowTutorial ? ETutorialStep::WaitForClient : ETutorialStep::Inactive;
+	GM->ClientDirector->bHoldExtraClientsForTutorial = GM->Config->bShowTutorial;
+	TryStartIntro();
 }
 
 void ADCPlayerController::SetupInputComponent()
@@ -107,6 +116,7 @@ void ADCPlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 	// Interact and back-room keys are rebindable (UDCSettings): PlayerTick polls them
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADCPlayerController::TogglePause).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::F3, IE_Pressed, this, &ADCPlayerController::SkipTutorial);
 #if !UE_BUILD_SHIPPING
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &ADCPlayerController::ToggleDebugAttributes);
 	InputComponent->BindKey(EKeys::F2, IE_Pressed, this, &ADCPlayerController::DebugSpawnTutorialClient);
@@ -133,12 +143,28 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 	if (!Cast<UDCDialogueWidget>(Screen))
 	{
 		DialogueClient.Reset();
+		if (TutorialStep == ETutorialStep::DialogueOrder)
+		{
+			SetTutorialStep(ETutorialStep::ApproachClient); // cancelled dialogue without accepting
+		}
+	}
+	if (TutorialWidget)
+	{
+		const bool bTopRight = Cast<UDCFilmCraftingWidget>(Screen) || Cast<UDCComputerWidget>(Screen) || Cast<UDCSupplierWidget>(Screen);
+		TutorialWidget->SetPlacement(Cast<UDCDialogueWidget>(Screen) ? ETutorialPlacement::TopCenter
+			: (bTopRight ? ETutorialPlacement::TopRight : ETutorialPlacement::BottomCenter));
 	}
 	// The crafting panel was closed (Back, Combine) or replaced (day summary): the camera goes home
 	if (CameraZone == ECameraZone::BackRoom && !Cast<UDCFilmCraftingWidget>(Screen))
 	{
+		const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+		if (TutorialStep == ETutorialStep::CombinePick && (!GM || GM->FilmCrafting->HeldFilms.Num() == 0))
+		{
+			SetTutorialStep(ETutorialStep::GoToBackRoom); // left back room without combining yet
+		}
 		BeginTransition(false);
 	}
+	RefreshTutorial();
 	if (!Screen && bDialogueDue)
 	{
 		// Next tick: PushScreen clears the stack before adding, and that must not count as "nothing is up"
@@ -156,6 +182,10 @@ void ADCPlayerController::CloseScreen()
 
 void ADCPlayerController::TogglePause()
 {
+	if (bPlayingIntro)
+	{
+		return;
+	}
 	// Only reached in game mode: with a screen up, Esc is the CommonUI back action
 	if (RootLayout && !IsBlockedByUI())
 	{
@@ -168,6 +198,17 @@ void ADCPlayerController::TogglePause()
 void ADCPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	if (bPlayingIntro)
+	{
+		TickIntro(DeltaTime);
+		return;
+	}
+
+	if (IsTutorialActive() && WasInputKeyJustPressed(EKeys::F3))
+	{
+		SkipTutorial();
+	}
 
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || !GM->Config || !GetPawn())
@@ -248,11 +289,8 @@ void ADCPlayerController::GoToBackRoom()
 {
 	if (CanGoToBackRoom() && GetPawn())
 	{
-		if (TutorialWidget)
-		{
-			TutorialWidget->HideHint(); // SPACE pressed: the "go to the back room" sign has done its job
-		}
 		BeginTransition(true);
+		RefreshTutorial();
 	}
 }
 
@@ -348,7 +386,14 @@ void ADCPlayerController::FinishTransition()
 		}
 		PushScreen<UDCFilmCraftingWidget>(RootLayout, FilmCraftingWidgetClass);
 		SetCameraZone(ECameraZone::BackRoom);
-		ShowTutorial(TEXT("Pick tapes and combine them"), bTutorialBackRoomShown);
+		if (TutorialStep == ETutorialStep::GoToBackRoom)
+		{
+			SetTutorialStep(ETutorialStep::CombinePick);
+		}
+		else
+		{
+			RefreshTutorial();
+		}
 	}
 	else if (CameraZone == ECameraZone::ToCounter)
 	{
@@ -357,10 +402,127 @@ void ADCPlayerController::FinishTransition()
 			SequencePlayer->Stop(); // bPauseAtEnd keeps the sequence's camera cut alive; stopping gives the view back to the pawn
 		}
 		SetControlRotation(LookRot); // aim where the player was looking before leaving
-		SetCameraZone(ECameraZone::Counter);
-		bDialogueDue = true;
-		TryOpenDialogue();
+		SetCameraZone(ECameraZone::Counter); // the dialogue (order or delivery) reopens with E
+		RefreshTutorial();
 	}
+}
+
+// ---------------------------------------------------------------- Intro sequence
+
+void ADCPlayerController::TryStartIntro()
+{
+	UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr;
+	ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+	if (!GI || !GM || !GM->Config || !GI->ShouldPlayIntro())
+	{
+		return;
+	}
+
+	ULevelSequence* Sequence = GM->Config->IntroSequence.LoadSynchronous();
+	if (!Sequence)
+	{
+		Sequence = LoadObject<ULevelSequence>(nullptr, TEXT("/Game/_MainGame/Sequences/Intro/MS_Intro.MS_Intro"));
+	}
+	if (!Sequence)
+	{
+		return;
+	}
+
+	FMovieSceneSequencePlaybackSettings Settings;
+	Settings.bPauseAtEnd = false;
+	ALevelSequenceActor* Actor = nullptr;
+	IntroSequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(this, Sequence, Settings, Actor);
+	if (!IntroSequencePlayer)
+	{
+		return;
+	}
+
+	IntroSequencePlayer->OnFinished.AddDynamic(this, &ADCPlayerController::FinishIntro);
+	GM->DayNightCycle->bRunning = false;
+	if (HUDWidget) HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (OrderPanelWidget) OrderPanelWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (TutorialWidget) TutorialWidget->SetVisibility(ESlateVisibility::Collapsed);
+	IntroSkipWidget = MakeWidget<UDCIntroSkipWidget>(this, IntroSkipWidgetClass, 6, ESlateVisibility::HitTestInvisible);
+
+	bPlayingIntro = true;
+	IntroSkipHoldElapsed = 0.f;
+	IntroSequencePlayer->Play();
+}
+
+bool ADCPlayerController::IsAnyDigitalKeyDown() const
+{
+	static TArray<FKey> DigitalKeys;
+	if (DigitalKeys.IsEmpty())
+	{
+		TArray<FKey> AllKeys;
+		EKeys::GetAllKeys(AllKeys);
+		for (const FKey& Key : AllKeys)
+		{
+			if (Key.IsValid() && Key != EKeys::AnyKey && !Key.IsAxis1D() && !Key.IsAxis2D() && !Key.IsAxis3D())
+			{
+				DigitalKeys.Add(Key);
+			}
+		}
+	}
+	for (const FKey& Key : DigitalKeys)
+	{
+		if (IsInputKeyDown(Key))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void ADCPlayerController::TickIntro(float DeltaTime)
+{
+	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+	const float HoldDuration = (GM && GM->Config) ? FMath::Max(GM->Config->IntroSkipHoldSec, 0.1f) : 3.f;
+	IntroSkipHoldElapsed = IsAnyDigitalKeyDown() ? (IntroSkipHoldElapsed + DeltaTime) : 0.f;
+	if (IntroSkipWidget)
+	{
+		IntroSkipWidget->SetSkipProgress(IntroSkipHoldElapsed / HoldDuration);
+	}
+	if (IntroSkipHoldElapsed >= HoldDuration)
+	{
+		FinishIntro();
+	}
+}
+
+void ADCPlayerController::FinishIntro()
+{
+	if (!bPlayingIntro)
+	{
+		return;
+	}
+	bPlayingIntro = false;
+	IntroSkipHoldElapsed = 0.f;
+
+	if (IntroSequencePlayer)
+	{
+		IntroSequencePlayer->OnFinished.RemoveDynamic(this, &ADCPlayerController::FinishIntro);
+		IntroSequencePlayer->Stop();
+		IntroSequencePlayer = nullptr;
+	}
+	if (IntroSkipWidget)
+	{
+		IntroSkipWidget->RemoveFromParent();
+		IntroSkipWidget = nullptr;
+	}
+	if (HUDWidget) HUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (OrderPanelWidget) OrderPanelWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (TutorialWidget) TutorialWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	SetControlRotation(LookRot);
+
+	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
+	{
+		GI->MarkIntroPlayed();
+	}
+	if (ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr)
+	{
+		GM->DayNightCycle->bRunning = true;
+	}
+	RefreshTutorial();
 }
 
 // ---------------------------------------------------------------- Interaction (key from UDCSettings, E by default)
@@ -421,7 +583,7 @@ FText ADCPlayerController::GetInteractPrompt() const
 
 void ADCPlayerController::OnInteract()
 {
-	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	if (!GM || CameraZone != ECameraZone::Counter || IsBlockedByUI())
 	{
 		return;
@@ -431,22 +593,42 @@ void ADCPlayerController::OnInteract()
 	TraceTarget(Client, Prop);
 	if (Client)
 	{
-		OpenDialogue(Client); // normally automatic; this reopens it after Back
+		OpenDialogue(Client);
 		return;
 	}
-	if (!Prop)
+	if (Prop)
 	{
-		return;
+		OpenInteractableScreen(Prop->InteractType);
 	}
-	Cue(TEXT("Click"));
-	if (Prop->InteractType == EInteractType::CashRegister)
+}
+
+bool ADCPlayerController::OpenInteractableScreen(EInteractType Type)
+{
+	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (!GM || CameraZone != ECameraZone::Counter || IsBlockedByUI())
 	{
+		return false;
+	}
+	if (Type == EInteractType::CashRegister)
+	{
+		Cue(TEXT("Click"));
 		PushScreen<UDCSupplierWidget>(RootLayout, SupplierWidgetClass);
+		return true;
 	}
-	else if (Prop->InteractType == EInteractType::Computer)
+	if (Type == EInteractType::Computer)
 	{
+		Cue(TEXT("Click"));
+		for (TActorIterator<ADCInteractable> It(GetWorld()); It; ++It)
+		{
+			if (It->InteractType == EInteractType::Computer)
+			{
+				It->ClearNews();
+			}
+		}
 		PushScreen<UDCComputerWidget>(RootLayout, ComputerWidgetClass);
+		return true;
 	}
+	return false;
 }
 
 // ---------------------------------------------------------------- Order dialogue
@@ -454,12 +636,23 @@ void ADCPlayerController::OnInteract()
 void ADCPlayerController::OpenDialogue(ADCClient* Client)
 {
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (!Client || !GM)
+	{
+		return;
+	}
 	const bool bDeliver = Client->bOrderAcknowledged && GM->FilmCrafting->HeldFilms.Num() > 0;
+	if (!bDeliver && TutorialStep == ETutorialStep::ApproachClient)
+	{
+		TutorialStep = ETutorialStep::DialogueOrder;
+	}
+	const bool bCanReject = !bDeliver && TutorialStep != ETutorialStep::DialogueOrder;
 	UDCDialogueWidget* Dialogue = PushScreen<UDCDialogueWidget>(RootLayout, DialogueWidgetClass);
 	Dialogue->OnButton.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueButton); // pooled screens come back already bound
+	Dialogue->OnReject.AddUniqueDynamic(this, &ADCPlayerController::OnDialogueReject);
 	Dialogue->Show(bDeliver ? FText::FromString(FString::Printf(TEXT("\"%s\""), *GM->FilmCrafting->HeldFilms[0].Title.ToString())) : Client->Runtime.OrderText,
-		FText::FromString(bDeliver ? TEXT("Here you go") : TEXT("Coming right up")));
+		FText::FromString(bDeliver ? TEXT("Here you go") : TEXT("Coming right up")), bCanReject);
 	DialogueClient = Client;
+	RefreshTutorial();
 	Cue(TEXT("DialogueOpen"));
 }
 
@@ -498,8 +691,23 @@ void ADCPlayerController::OnDialogueButton()
 		else
 		{
 			Client->bOrderAcknowledged = true;
-			ShowTutorial(*FString::Printf(TEXT("Press %s to go to the back room"), *UDCSettings::Get()->BackRoom.GetDisplayName(false).ToString().ToUpper()), bTutorialAcceptShown);
+			if (TutorialStep == ETutorialStep::DialogueOrder)
+			{
+				TutorialStep = ETutorialStep::GoToBackRoom;
+			}
 		}
+	}
+	CloseScreen();
+}
+
+void ADCPlayerController::OnDialogueReject()
+{
+	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	if (ADCClient* Client = DialogueClient.Get(); GM && Client && !Client->bOrderAcknowledged)
+	{
+		GM->ClientDirector->ApplyLeavePenalty(); // turning a client away counts as a lost client (LeavePenalty in the config, 0 by default)
+		Client->ForceLeave();
+		Cue(TEXT("OrderRejected"));
 	}
 	CloseScreen();
 }
@@ -515,6 +723,17 @@ void ADCPlayerController::HandleReview(const FReview& Review)
 	if (Review.MoneyDelta < 0)
 	{
 		StartShake(); // fine received
+	}
+	if (TutorialStep == ETutorialStep::WaitReview)
+	{
+		if (bTutorialTapeAfterGenreBought)
+		{
+			CompleteTutorial();
+		}
+		else
+		{
+			SetTutorialStep(bTutorialGenreBought ? ETutorialStep::SupplierBuyTape : ETutorialStep::ComputerBuyGenre);
+		}
 	}
 }
 
@@ -540,15 +759,33 @@ void ADCPlayerController::HandlePhaseChanged(EPhase Phase, int32 DayIndex)
 void ADCPlayerController::HandleUnlockPurchased(FName UnlockId)
 {
 	Cue(TEXT("UnlockPurchased"));
+	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+	const FUnlockData* Row = GM && GM->Unlocks ? GM->Unlocks->GetUnlockData(UnlockId) : nullptr;
+	if (Row && Row->Type == EUnlockType::Genre && IsTutorialActive())
+	{
+		bTutorialGenreBought = true;
+		if (TutorialStep == ETutorialStep::ComputerBuyGenre)
+		{
+			SetTutorialStep(ETutorialStep::SupplierBuyTape);
+		}
+	}
 }
 
 void ADCPlayerController::HandleFilmCreated(const FCreatedFilm& Film)
 {
 	Cue(TEXT("FilmCreated"));
 	HitStop();
+	if (TutorialStep == ETutorialStep::CombinePick || TutorialStep == ETutorialStep::GoToBackRoom)
+	{
+		TutorialStep = ETutorialStep::DeliverFilm;
+	}
 	if (CameraZone == ECameraZone::BackRoom)
 	{
 		CloseScreen(); // the panel closes and the camera goes home (HandleScreenChanged)
+	}
+	else
+	{
+		RefreshTutorial();
 	}
 	// TODO(art): CRT static + rewind effect and the VHS-into-player animation need the TV/player props; play them before closing
 }
@@ -556,9 +793,15 @@ void ADCPlayerController::HandleFilmCreated(const FCreatedFilm& Film)
 void ADCPlayerController::HandleClientReached(AActor* Client)
 {
 	Cue(TEXT("ClientAtCounter"));
-	ShowTutorial(TEXT("Listen to what they want"), bTutorialClientShown);
-	bDialogueDue = true;
-	GetWorldTimerManager().SetTimerForNextTick(this, &ADCPlayerController::TryOpenDialogue);
+	if (TutorialStep == ETutorialStep::WaitForClient)
+	{
+		if (ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr)
+		{
+			GM->DayNightCycle->bTutorialPaused = true;
+			GM->ClientDirector->bTutorialPaused = true;
+		}
+		SetTutorialStep(ETutorialStep::ApproachClient);
+	}
 }
 
 void ADCPlayerController::HandleClientLeft(AActor* Client, bool bServed)
@@ -567,25 +810,292 @@ void ADCPlayerController::HandleClientLeft(AActor* Client, bool bServed)
 	{
 		CloseScreen(); // ran out of patience mid-conversation: don't leave their dialogue up
 	}
-	if (bServed && TutorialWidget)
+	if (bServed && TutorialStep == ETutorialStep::DeliverFilm)
 	{
-		TutorialWidget->HideHint(); // the loop was understood: hide whatever sign is up
+		SetTutorialStep(ETutorialStep::WaitReview);
+		return;
+	}
+	// Safety guard: if the first tutorial customer somehow leaves unserved, lift pause cleanly rather than softlocking
+	if (!bServed && (TutorialStep == ETutorialStep::ApproachClient || TutorialStep == ETutorialStep::DialogueOrder
+		|| TutorialStep == ETutorialStep::GoToBackRoom || TutorialStep == ETutorialStep::CombinePick || TutorialStep == ETutorialStep::DeliverFilm))
+	{
+		const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+		if (!GM || !GM->ClientDirector->GetFrontClient())
+		{
+			EndTutorialPause();
+			SetTutorialStep(ETutorialStep::WaitForClient);
+		}
 	}
 }
 
-void ADCPlayerController::ShowTutorial(const TCHAR* Text, bool& bFlag)
+void ADCPlayerController::HandleTutorialFilmStateChanged()
 {
-	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	if (bFlag || !GM || !GM->Config->bShowTutorial || !TutorialWidget)
+	if (TutorialStep == ETutorialStep::CombinePick)
+	{
+		RefreshTutorial();
+	}
+	else if (TutorialStep == ETutorialStep::DeliverFilm && CameraZone == ECameraZone::BackRoom)
+	{
+		// Only discarding in the back room reverts to CombinePick; DeliverFilm consumes the held film at the counter right before HandleClientLeft advances to WaitReview
+		const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+		if (GM && GM->FilmCrafting->HeldFilms.Num() == 0)
+		{
+			SetTutorialStep(ETutorialStep::CombinePick);
+		}
+	}
+}
+
+void ADCPlayerController::HandleTutorialTapePurchased(FName Row, int32 Count)
+{
+	if (bTutorialGenreBought && IsTutorialActive())
+	{
+		bTutorialTapeAfterGenreBought = true;
+	}
+	if (TutorialStep == ETutorialStep::SupplierBuyTape)
+	{
+		CompleteTutorial();
+	}
+}
+
+void ADCPlayerController::HandleTutorialSkipped()
+{
+	SkipTutorial();
+}
+
+void ADCPlayerController::SkipTutorial()
+{
+	if (!IsTutorialActive())
 	{
 		return;
 	}
-	bFlag = true;
-	TutorialWidget->ShowHint(FText::FromString(Text)); // replaces the previous sign: one at a time
+	GetWorldTimerManager().ClearTimer(TutorialCompleteHideTimer);
+	EndTutorialPause();
+	TutorialStep = ETutorialStep::Complete;
+	if (TutorialWidget)
+	{
+		TutorialWidget->HideHint();
+	}
+}
+
+void ADCPlayerController::EndTutorialPause()
+{
+	if (ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr)
+	{
+		GM->DayNightCycle->bTutorialPaused = false;
+		GM->ClientDirector->ResumeFromTutorial();
+	}
+}
+
+void ADCPlayerController::CompleteTutorial()
+{
+	EndTutorialPause();
+	TutorialStep = ETutorialStep::Complete;
+	Cue(TEXT("TutorialComplete"));
+	if (TutorialWidget)
+	{
+		TutorialWidget->SetPlacement(ETutorialPlacement::BottomCenter);
+		TutorialWidget->ShowStep(
+			FText::FromString(TEXT("TUTORIAL COMPLETE!")),
+			FText::FromString(TEXT("You know clues, VHS combinations, genre unlocks, and supplier orders. Watch patience bars and cover tonight's rent!")),
+			FText::FromString(TEXT("Close the Supplier (Esc) - your next customer is on the way!")),
+			false);
+	}
+	GetWorldTimerManager().SetTimer(TutorialCompleteHideTimer, this, &ADCPlayerController::DismissCompletedTutorial, 6.f, false);
+}
+
+void ADCPlayerController::DismissCompletedTutorial()
+{
+	TutorialStep = ETutorialStep::Inactive;
+	if (TutorialWidget)
+	{
+		TutorialWidget->HideHint();
+	}
+}
+
+void ADCPlayerController::SetTutorialStep(ETutorialStep NextStep)
+{
+	TutorialStep = NextStep;
+	RefreshTutorial();
+}
+
+void ADCPlayerController::RefreshTutorial()
+{
+	if (!TutorialWidget)
+	{
+		return;
+	}
+	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+	if (!GM || !GM->Config || !GM->Config->bShowTutorial || !IsTutorialActive() || TutorialStep == ETutorialStep::WaitForClient)
+	{
+		if (TutorialStep != ETutorialStep::Complete)
+		{
+			TutorialWidget->HideHint();
+		}
+		return;
+	}
+	UCommonActivatableWidget* ActiveScreen = RootLayout ? RootLayout->Stack->GetActiveWidget() : nullptr;
+	if (Cast<UDCPauseWidget>(ActiveScreen) || Cast<UDCDaySummaryWidget>(ActiveScreen) || Cast<UDCEndScreenWidget>(ActiveScreen))
+	{
+		TutorialWidget->HideHint();
+		return;
+	}
+
+	const UDCSettings* Settings = UDCSettings::Get();
+	const FString InteractKey = Settings->Interact.GetDisplayName(false).ToString().ToUpper();
+	const FString BackRoomKey = Settings->BackRoom.GetDisplayName(false).ToString().ToUpper();
+
+	switch (TutorialStep)
+	{
+	case ETutorialStep::ApproachClient:
+		TutorialWidget->ShowStep(
+			FText::FromString(TEXT("TUTORIAL 1/6: FIRST CUSTOMER")),
+			FText::FromString(TEXT("Customers give mood clues - never exact skill or genre names. Turn toward them at the counter to talk.")),
+			FText::FromString(ActiveScreen
+				? FString::Printf(TEXT("Close this screen (Esc), look at the customer and press [%s]"), *InteractKey)
+				: FString::Printf(TEXT("Look at the customer and press [%s] to listen"), *InteractKey)));
+		break;
+
+	case ETutorialStep::DialogueOrder:
+		TutorialWidget->ShowStep(
+			FText::FromString(TEXT("TUTORIAL 1/6: INTERPRET CLUES")),
+			FText::FromString(TEXT("Clues map to hidden Skills (Funny, Scary, Brave...). Slapstick/laughs = Funny high; 'sleep tonight' / 'no scares' = Scary 0. Next you'll combine 2+ tapes to hit 6 pts.")),
+			FText::FromString(TEXT("Read the clues, then click 'Coming right up'")));
+		break;
+
+	case ETutorialStep::GoToBackRoom:
+		if (CameraZone == ECameraZone::ToBackRoom)
+		{
+			TutorialWidget->HideHint();
+		}
+		else
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 2/6: BACK ROOM")),
+				FText::FromString(TEXT("The ORDER box (top-left) keeps their clues pinned. Head to the back room to combine 2+ VHS tapes into one 6-point film.")),
+				FText::FromString(FString::Printf(TEXT("Press [%s] to go to the back room"), *BackRoomKey)));
+		}
+		break;
+
+	case ETutorialStep::CombinePick:
+	{
+		const int32 Filled = GM->FilmCrafting->GetFilledSlots();
+		if (Filled == 0)
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 3/6: INSPECT & PICK")),
+				FText::FromString(TEXT("Skills show right under each tape title. Pick tapes whose skills match the ORDER clues (here: Funny high, Scary zero).")),
+				FText::FromString(TEXT("Click a Comedy tape (Funny 3) to load Slot 1")));
+		}
+		else if (!GM->FilmCrafting->CanConfirm())
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 3/6: SKILLS ADD UP")),
+				FText::FromString(TEXT("Slotted tapes add together in FILM PROFILE - and you can repeat copies of the same tape! Watch Order size & MATCH WITH THE ORDER.")),
+				FText::FromString(TEXT("Click a 2nd Comedy tape (repeats work!) so MATCH turns GREAT")));
+		}
+		else
+		{
+			const ADCClient* Front = GM->ClientDirector->GetFrontClient();
+			EReaction Reaction = EReaction::Loved;
+			if (Front)
+			{
+				const float Known = UBPFL_Scoring::ComputeKnownErrorRatio(GM->FilmCrafting->GetProfile(), Front->Runtime.HintedSkills, Front->Runtime.bFullyHinted, Front->Runtime.Target.Total(), GM->Config);
+				Reaction = UBPFL_Scoring::GetReaction(Known, GM->Config);
+			}
+			if (Reaction == EReaction::Loved || Reaction == EReaction::Liked)
+			{
+				TutorialWidget->ShowStep(
+					FText::FromString(TEXT("TUTORIAL 3/6: COMBINE FILM")),
+					FText::FromString(TEXT("MATCH WITH THE ORDER looks great! Edit the title if you want - combining consumes the slotted tape copies.")),
+					FText::FromString(TEXT("Click COMBINE to return to the counter with your film")));
+			}
+			else
+			{
+				TutorialWidget->ShowStep(
+					FText::FromString(TEXT("TUTORIAL 3/6: CHECK THE MATCH")),
+					FText::FromString(TEXT("MATCH WITH THE ORDER is low. Click 'x' next to a slot to swap tapes until Funny is high and Scary stays 0.")),
+					FText::FromString(TEXT("Swap tapes with 'x' or click COMBINE when ready")));
+			}
+		}
+		break;
+	}
+
+	case ETutorialStep::DeliverFilm:
+		if (CameraZone == ECameraZone::ToCounter)
+		{
+			TutorialWidget->HideHint();
+		}
+		else if (Cast<UDCDialogueWidget>(ActiveScreen))
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 4/6: DELIVERY & PAY")),
+				FText::FromString(FString::Printf(TEXT("Base rental ($%d) pays immediately. Bonus tips (or fines!) arrive shortly after on ReelTalk.net."), GM->Config->BaseRentalPrice)),
+				FText::FromString(TEXT("Click 'Here you go' to deliver your film")));
+		}
+		else
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 4/6: HAND OVER FILM")),
+				FText::FromString(TEXT("Your combined VHS is ready! Base rental pays on delivery; tips (or fines) arrive with the customer's review.")),
+				FText::FromString(FString::Printf(TEXT("Look at the customer and press [%s] to deliver"), *InteractKey)));
+		}
+		break;
+
+	case ETutorialStep::WaitReview:
+		TutorialWidget->ShowStep(
+			FText::FromString(TEXT("TUTORIAL 4/6: REELTALK REVIEW")),
+			FText::FromString(TEXT("Base rent is paid! Customers post star ratings, bonus tips (or fines), and missing-skill feedback on ReelTalk.net.")),
+			FText::FromString(TEXT("Wait a moment for the customer's review...")));
+		break;
+
+	case ETutorialStep::ComputerBuyGenre:
+		if (Cast<UDCComputerWidget>(ActiveScreen))
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 5/6: SHOP UPGRADES")),
+				FText::FromString(TEXT("GENRES adds genres to your catalog (future customers ask for them!). COMBINE MACHINE adds slots; STAR LICENSES raise tape tier.")),
+				FText::FromString(TEXT("On the GENRES tab, buy a new genre (e.g. ROMANCE for $40)")));
+		}
+		else
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 5/6: OPEN COMPUTER")),
+				FText::FromString(TEXT("See ReelTalk.net above - tips boost your cash and Criterio! Now unlock a new genre on the Computer.")),
+				FText::FromString(FString::Printf(TEXT("Look at the COMPUTER on the counter and press [%s]"), *InteractKey)));
+		}
+		break;
+
+	case ETutorialStep::SupplierBuyTape:
+		if (Cast<UDCSupplierWidget>(ActiveScreen))
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 6/6: SUPPLIER STOCK")),
+				FText::FromString(TEXT("Switch Genre tabs (try your new genre!) and filter by stars. Skills show below each tape - x1 buys one copy, x5 buys five.")),
+				FText::FromString(TEXT("Buy any tape (x1 or x5) to stock your shelf and finish!")));
+		}
+		else
+		{
+			TutorialWidget->ShowStep(
+				FText::FromString(TEXT("TUTORIAL 6/6: BUY FROM SUPPLIER")),
+				FText::FromString(TEXT("Unlocking a genre on the Computer does NOT add copies to stock! You must order physical tapes at the Cash Register.")),
+				FText::FromString(Cast<UDCComputerWidget>(ActiveScreen)
+					? FString::Printf(TEXT("Close Computer (Esc), look at the CASH REGISTER and press [%s]"), *InteractKey)
+					: FString::Printf(TEXT("Look at the CASH REGISTER and press [%s] to open Supplier"), *InteractKey)));
+		}
+		break;
+
+	default:
+		TutorialWidget->HideHint();
+		break;
+	}
 }
 
 void ADCPlayerController::HandleDayClosed(const FDaySummary& Summary)
 {
+	if (IsTutorialActive())
+	{
+		SkipTutorial();
+	}
 	if (UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr)
 	{
 		// Save slot bracket: keep slot metadata (money & day) updated at the end of each day

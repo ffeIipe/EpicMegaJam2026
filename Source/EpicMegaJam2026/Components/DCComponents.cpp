@@ -431,5 +431,6 @@ bool UAC_Inventory::BuyTape(FName Row, int32 Count)
 		return false;
 	}
 	AddTape(Row, Count); // new tapes appear instantly; floor boxes are cosmetic (TODO(art))
+	OnTapePurchased.Broadcast(Row, Count);
 	return true;
 }

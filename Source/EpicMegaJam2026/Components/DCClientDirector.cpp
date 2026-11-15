@@ -530,10 +530,24 @@ void UAC_ClientDirector::BeginPhase(EPhase Phase, int32 DayIndex)
 	SpawnTimes.Sort();
 }
 
+void UAC_ClientDirector::ResumeFromTutorial()
+{
+	bTutorialPaused = false;
+	bHoldExtraClientsForTutorial = false;
+	if (const UPDA_GameConfig* Cfg = GetGM(this) ? GetGM(this)->Config : nullptr)
+	{
+		// Queue up the next customer right away once the player finishes or skips the tutorial
+		if (ActiveClientCount() == 0)
+		{
+			LastSpawnTime = PhaseTime - Cfg->MinSpawnGapSec;
+		}
+	}
+}
+
 void UAC_ClientDirector::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (!GetGM(this)->DayNightCycle->bRunning)
+	if (!GetGM(this)->DayNightCycle->bRunning || bTutorialPaused)
 	{
 		return;
 	}
@@ -541,6 +555,10 @@ void UAC_ClientDirector::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	const UPDA_GameConfig* Cfg = GetGM(this)->Config;
 	while (NextSpawn < SpawnTimes.Num())
 	{
+		if (bHoldExtraClientsForTutorial && ActiveClientCount() >= 1)
+		{
+			break;
+		}
 		// Pull the next client forward when the store is running dry, so the player never waits on the fixed schedule.
 		const bool bDue = PhaseTime >= SpawnTimes[NextSpawn];
 		const bool bPull = ActiveClientCount() < Cfg->MinActiveClients && PhaseTime - LastSpawnTime >= Cfg->MinSpawnGapSec;

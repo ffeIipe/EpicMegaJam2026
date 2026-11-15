@@ -13,6 +13,7 @@
 #include "Components/OverlaySlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WrapBox.h"
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
 #include "Data/DCTypes.h"
@@ -435,6 +436,25 @@ namespace DCUI
 				const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
 				Text(Tree, Parent, Cap > 0 ? FString::Printf(TEXT("%s %d/%d"), *Name, Value, Cap) : FString::Printf(TEXT("%s %d"), *Name, Value), SkillStyle(i));
 			}
+		}
+	}
+
+	void InlineSkills(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills)
+	{
+		UWrapBox* Row = Tree->ConstructWidget<UWrapBox>();
+		Row->SetInnerSlotPadding(FVector2D(12.f, 0.f));
+		for (int32 i = 0; i < DCNumSkills; ++i)
+		{
+			const int32 Value = Skills.Get((ESkill)i);
+			if (Value > 0)
+			{
+				const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
+				Text(Tree, Row, FString::Printf(TEXT("%s %d"), *Name, Value), SkillStyle(i));
+			}
+		}
+		if (Row->GetChildrenCount() > 0 && Parent)
+		{
+			Parent->AddChild(Row);
 		}
 	}
 }

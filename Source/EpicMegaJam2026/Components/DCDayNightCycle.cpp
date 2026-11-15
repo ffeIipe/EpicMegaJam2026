@@ -31,6 +31,10 @@ void UAC_DayNightCycle::StartDay(int32 Day)
 	CurrentPhase = EPhase::Day;
 	PhaseElapsed = 0.f;
 	bRunning = true;
+	if (Day > 1)
+	{
+		bTutorialPaused = false;
+	}
 	GM->Economy->DayEarned = 0;
 	GM->ClientDirector->ResetDayLines();
 	GM->ClientDirector->BeginPhase(EPhase::Day, DayIndex);
@@ -69,7 +73,7 @@ void UAC_DayNightCycle::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	const ADCGameMode* GM = GM_(this);
-	if (!bRunning || !GM || !GM->Config)
+	if (!bRunning || bTutorialPaused || !GM || !GM->Config)
 	{
 		return;
 	}

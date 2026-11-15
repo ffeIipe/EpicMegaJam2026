@@ -38,6 +38,9 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> BackRoomHint; // "[SPACE] Back room", only with the camera at the counter
 	UPROPERTY() TObjectPtr<UCommonTextBlock> BackRoomKeyText;
 	float DisplayedMoney = -1.f;
+	int32 LastMoney = -1;
+	float Punch = 0.f;      // 1 right after the money changes, decays to 0
+	bool bPunchGain = true;
 };
 
 // WBP_ReviewToast: ReelTalk.net notification
@@ -50,9 +53,12 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
 	void Hide();
+	float Pop = 0.f;
+	bool bPopGain = true;
 	UPROPERTY() TObjectPtr<UWidget> Panel;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> TitleText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> StarsText;
@@ -88,11 +94,31 @@ class EPICMEGAJAM2026_API UDCWorldLabelWidget : public UUserWidget
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintCallable) void SetLabel(const FText& Text);
+	// Money feedback: the label jumps (up and green on a gain, down, shaking and red on a loss)
+	void PunchMoney(int32 Delta);
+
+protected:
+	virtual void NativeOnInitialized() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+private:
+	float Punch = 0.f;
+	bool bPunchGain = true;
+	UPROPERTY() TObjectPtr<UWidget> Plate;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> LabelText;
+};
+
+// Passive overlay shown during the intro sequence: "Hold any key to skip" + progress bar
+UCLASS(Blueprintable)
+class EPICMEGAJAM2026_API UDCIntroSkipWidget : public UUserWidget
+{
+	GENERATED_BODY()
+public:
+	UFUNCTION(BlueprintCallable) void SetSkipProgress(float Progress);
 
 protected:
 	virtual void NativeOnInitialized() override;
 
 private:
-	UPROPERTY() TObjectPtr<UWidget> Plate;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> LabelText;
+	UPROPERTY() TObjectPtr<UProgressBar> ProgressBar;
 };

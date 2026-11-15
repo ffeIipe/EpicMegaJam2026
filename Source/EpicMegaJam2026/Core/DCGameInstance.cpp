@@ -98,6 +98,49 @@ void UDCGameInstance::SaveActiveSlotMetadata(int32 CurrentMoney, int32 CurrentDa
 	UGameplayStatics::SaveGameToSlot(Save, ActiveSlotName, SaveUserIndex);
 }
 
+bool UDCGameInstance::ShouldPlayIntro() const
+{
+	if (ActiveSlotName.IsEmpty())
+	{
+		return !bIntroPlayedWithoutSlot;
+	}
+	if (UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
+	{
+		if (const UDCSaveGame* Save = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(ActiveSlotName, SaveUserIndex)))
+		{
+			return !Save->bIntroPlayed;
+		}
+	}
+	return true;
+}
+
+void UDCGameInstance::MarkIntroPlayed()
+{
+	if (ActiveSlotName.IsEmpty())
+	{
+		bIntroPlayedWithoutSlot = true;
+		return;
+	}
+	UDCSaveGame* Save = nullptr;
+	if (UGameplayStatics::DoesSaveGameExist(ActiveSlotName, SaveUserIndex))
+	{
+		Save = Cast<UDCSaveGame>(UGameplayStatics::LoadGameFromSlot(ActiveSlotName, SaveUserIndex));
+	}
+	if (!Save)
+	{
+		Save = Cast<UDCSaveGame>(UGameplayStatics::CreateSaveGameObject(UDCSaveGame::StaticClass()));
+		if (!Save)
+		{
+			return;
+		}
+		Save->SlotName = ActiveSlotName;
+		Save->CreatedAt = FDateTime::Now();
+	}
+	Save->LastSavedAt = FDateTime::Now();
+	Save->bIntroPlayed = true;
+	UGameplayStatics::SaveGameToSlot(Save, ActiveSlotName, SaveUserIndex);
+}
+
 void UDCGameInstance::TravelToGameplay()
 {
 	UGameplayStatics::SetGamePaused(this, false);

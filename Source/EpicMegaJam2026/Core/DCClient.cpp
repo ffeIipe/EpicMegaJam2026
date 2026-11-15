@@ -236,6 +236,10 @@ void ADCClient::Tick(float DeltaSeconds)
 	// The clock starts once the player says "Coming right up"
 	if (Runtime.State == EClientState::AtCounter && bOrderAcknowledged)
 	{
+		if (Director.IsValid() && Director->bTutorialPaused)
+		{
+			return;
+		}
 		Runtime.PatienceLeft -= DeltaSeconds;
 		if (Runtime.PatienceLeft <= 0.f)
 		{
