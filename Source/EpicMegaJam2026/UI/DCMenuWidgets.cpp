@@ -33,17 +33,23 @@
 #include "MediaTexture.h"
 #include "Misc/Paths.h"
 
+#define LOCTEXT_NAMESPACE "DirectorsCut"
+
 namespace
 {
 	const FAnchors Center(0.5f, 0.5f);
 	const FVector2D Middle(0.5f, 0.5f);
 
 	// Stacked menu buttons, stretched to the panel width
-	UDCButton* MenuButton(UWidgetTree* Tree, UVerticalBox* Parent, const TCHAR* Label, TSubclassOf<UCommonButtonStyle> Style = UDCButton_Primary::StaticClass())
+	UDCButton* MenuButton(UWidgetTree* Tree, UVerticalBox* Parent, const FText& Label, TSubclassOf<UCommonButtonStyle> Style = UDCButton_Primary::StaticClass())
 	{
 		UDCButton* Btn = DCUI::Button(Tree, Parent, Label, NAME_None, Style);
 		Cast<UVerticalBoxSlot>(Btn->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 		return Btn;
+	}
+	UDCButton* MenuButton(UWidgetTree* Tree, UVerticalBox* Parent, const TCHAR* Label, TSubclassOf<UCommonButtonStyle> Style = UDCButton_Primary::StaticClass())
+	{
+		return MenuButton(Tree, Parent, FText::FromString(Label), Style);
 	}
 }
 
@@ -62,15 +68,17 @@ void UDCDaySummaryWidget::NativeOnInitialized()
 	TitleText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Title::StaticClass());
 	TitleText->SetMargin(FMargin(0.f, 0.f, 0.f, 12.f));
 	BodyText = DCUI::Text(WidgetTree, V, TEXT(""));
-	MenuButton(WidgetTree, V, TEXT("Open the store"))->OnPayloadClicked.AddDynamic(this, &UDCDaySummaryWidget::HandleOpen);
+	MenuButton(WidgetTree, V, LOCTEXT("Summary_OpenStore", "Open the store"))->OnPayloadClicked.AddDynamic(this, &UDCDaySummaryWidget::HandleOpen);
 }
 
 void UDCDaySummaryWidget::Show(const FDaySummary& S)
 {
-	TitleText->SetText(FText::FromString(FString::Printf(TEXT("DAY %d COMPLETE"), S.DayIndex)));
-	BodyText->SetText(FText::FromString(FString::Printf(
-		TEXT("Clients served: %d\nClients lost: %d\nLoved: %d   Liked: %d   Neutral: %d   Hated: %d\nMoney earned: $%d\nRent paid: $%d\nMoney: $%d / goal $%d"),
-		S.ClientsServed, S.ClientsLost, S.Loved, S.Liked, S.Neutral, S.Hated, S.MoneyEarned, S.RentPaid, S.MoneyNow, S.Goal)));
+	auto Num = [](int32 V) { return FText::FromString(FString::FromInt(V)); };
+	TitleText->SetText(FText::Format(LOCTEXT("Summary_DayComplete", "DAY {0} COMPLETE"), Num(S.DayIndex)));
+	BodyText->SetText(FText::Format(
+		LOCTEXT("Summary_Body", "Clients served: {0}\nClients lost: {1}\nLoved: {2}   Liked: {3}   Neutral: {4}   Hated: {5}\nMoney earned: ${6}\nRent paid: ${7}\nMoney: ${8} / goal ${9}"),
+		Num(S.ClientsServed), Num(S.ClientsLost), Num(S.Loved), Num(S.Liked), Num(S.Neutral), Num(S.Hated),
+		Num(S.MoneyEarned), Num(S.RentPaid), Num(S.MoneyNow), Num(S.Goal)));
 }
 
 // Card of the computer / supplier lists (defined with the computer): panel frame, colored tile, fill-width info column
@@ -109,7 +117,7 @@ void UDCSupplierWidget::NativeOnInitialized()
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("Warehouse"), false, FSimpleDelegate::CreateLambda([this]() { if (ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer())) { PC->GoToBackRoomFromScreen(); } })));
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
-	DCUI::Header(WidgetTree, V, TEXT("SUPPLIER"), TEXT("Tapes for sale, one copy at a time"));
+	DCUI::Header(WidgetTree, V, LOCTEXT("Supplier_Title", "SUPPLIER"), LOCTEXT("Supplier_Subtitle", "Tapes for sale, one copy at a time"));
 	Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	V->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	StarFilter = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -163,26 +171,26 @@ void UDCSupplierWidget::Refresh()
 
 	// Genre tabs: the unlocked ones, in DT_Genres order
 	Tabs->ClearChildren();
-	TArray<FName> Genres;
+	TArray<TPair<FName, FText>> Genres;
 	for (const TPair<FName, uint8*>& P : Config->GenreTable->GetRowMap())
 	{
 		const FGenreData* Row = reinterpret_cast<const FGenreData*>(P.Value);
 		if (Row->Genre != EGenre::Paranormal && Unlocks->IsGenreUnlocked(Row->Genre))
 		{
-			Genres.Add(FName(*StaticEnum<EGenre>()->GetNameStringByValue((int64)Row->Genre)));
+			Genres.Emplace(FName(*StaticEnum<EGenre>()->GetNameStringByValue((int64)Row->Genre)), Row->DisplayName);
 		}
 	}
-	if (!Genres.Contains(SelectedGenre))
+	if (!Genres.ContainsByPredicate([this](const TPair<FName, FText>& Entry) { return Entry.Key == SelectedGenre; }))
 	{
-		SelectedGenre = Genres.IsEmpty() ? NAME_None : Genres[0];
+		SelectedGenre = Genres.IsEmpty() ? NAME_None : Genres[0].Key;
 	}
-	for (const FName& Genre : Genres)
+	for (const TPair<FName, FText>& Genre : Genres)
 	{
-		UDCButton* Tab = DCUI::Button(WidgetTree, Tabs, Genre.ToString().ToUpper(), Genre, UDCButton_Tab::StaticClass());
+		UDCButton* Tab = DCUI::Button(WidgetTree, Tabs, Genre.Value.ToString().ToUpper(), Genre.Key, UDCButton_Tab::StaticClass());
 		Tab->SetIsSelectable(true);
 		Tab->OnPayloadClicked.AddDynamic(this, &UDCSupplierWidget::OnTabClicked);
 		Cast<UHorizontalBoxSlot>(Tab->Slot)->SetPadding(FMargin(0.f, 0.f, 2.f, 0.f));
-		Select(Tab, Genre == SelectedGenre);
+		Select(Tab, Genre.Key == SelectedGenre);
 	}
 
 	// Star filter: up to the licensed level
@@ -193,7 +201,8 @@ void UDCSupplierWidget::Refresh()
 	}
 	for (int32 Stars = 0; Stars <= Unlocks->UnlockedStarTier; ++Stars)
 	{
-		const FString Label = Stars == 0 ? TEXT("ALL STARS") : FString::Printf(TEXT("%d STAR%s"), Stars, Stars > 1 ? TEXT("S") : TEXT(""));
+		const FText Label = Stars == 0 ? LOCTEXT("Supplier_AllStars", "ALL STARS")
+			: (Stars == 1 ? LOCTEXT("Supplier_OneStar", "1 STAR") : FText::Format(LOCTEXT("Supplier_ManyStars", "{0} STARS"), FText::FromString(FString::FromInt(Stars))));
 		UDCButton* Filter = DCUI::Button(WidgetTree, StarFilter, Label, FName(*FString::FromInt(Stars)), UDCButton_Tab::StaticClass());
 		Filter->SetIsSelectable(true);
 		Filter->OnPayloadClicked.AddDynamic(this, &UDCSupplierWidget::OnStarClicked);
@@ -222,7 +231,7 @@ void UDCSupplierWidget::Refresh()
 	});
 	if (Rows.IsEmpty())
 	{
-		DCUI::Text(WidgetTree, List, TEXT("Nothing on sale here yet."));
+		DCUI::Text(WidgetTree, List, LOCTEXT("Supplier_Empty", "Nothing on sale here yet."));
 	}
 	for (const FName& Row : Rows)
 	{
@@ -297,13 +306,19 @@ void UDCComputerWidget::NativeOnInitialized()
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("Warehouse"), false, FSimpleDelegate::CreateLambda([this]() { if (ADCPlayerController* PC = Cast<ADCPlayerController>(GetOwningPlayer())) { PC->GoToBackRoomFromScreen(); } })));
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
-	DCUI::Header(WidgetTree, V, TEXT("COMPUTER"), TEXT("Upgrade the store, check the rent and read your reviews"));
+	DCUI::Header(WidgetTree, V, LOCTEXT("Computer_Title", "COMPUTER"), LOCTEXT("Computer_Subtitle", "Upgrade the store, check the rent and read your reviews"));
 	MoneyText = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Heading::StaticClass());
 	MoneyText->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
 	Tabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	V->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-	const TPair<const TCHAR*, const TCHAR*> TabDefs[] = { { TEXT("Genres"), TEXT("GENRES") }, { TEXT("Machine"), TEXT("COMBINE MACHINE") }, { TEXT("Stars"), TEXT("STAR LICENSES") }, { TEXT("Rent"), TEXT("RENT") }, { TEXT("Reviews"), TEXT("REVIEWS") } };
-	for (const TPair<const TCHAR*, const TCHAR*>& Def : TabDefs)
+	const TPair<const TCHAR*, FText> TabDefs[] = {
+		{ TEXT("Genres"), LOCTEXT("Computer_TabGenres", "GENRES") },
+		{ TEXT("Machine"), LOCTEXT("Computer_TabMachine", "COMBINE MACHINE") },
+		{ TEXT("Stars"), LOCTEXT("Computer_TabStars", "STAR LICENSES") },
+		{ TEXT("Rent"), LOCTEXT("Computer_TabRent", "RENT") },
+		{ TEXT("Reviews"), LOCTEXT("Computer_TabReviews", "REVIEWS") }
+	};
+	for (const TPair<const TCHAR*, FText>& Def : TabDefs)
 	{
 		UDCButton* Tab = DCUI::Button(WidgetTree, Tabs, Def.Value, FName(Def.Key), UDCButton_Tab::StaticClass());
 		Tab->SetIsSelectable(true);
@@ -342,7 +357,7 @@ void UDCComputerWidget::Refresh()
 		return;
 	}
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
-	MoneyText->SetText(FText::FromString(FString::Printf(TEXT("Money: $%d"), GM->Economy->Money)));
+	MoneyText->SetText(FText::Format(LOCTEXT("Computer_Money", "Money: ${0}"), FText::FromString(FString::FromInt(GM->Economy->Money))));
 	for (int32 i = 0; i < Tabs->GetChildrenCount(); ++i)
 	{
 		UDCButton* Tab = Cast<UDCButton>(Tabs->GetChildAt(i));
@@ -396,7 +411,7 @@ void UDCComputerWidget::OnMoneyChanged(int32 NewMoney, int32 Delta)
 	}
 	else
 	{
-		MoneyText->SetText(FText::FromString(FString::Printf(TEXT("Money: $%d"), NewMoney)));
+		MoneyText->SetText(FText::Format(LOCTEXT("Computer_Money", "Money: ${0}"), FText::FromString(FString::FromInt(NewMoney))));
 		UpdateAffordability();
 	}
 }
@@ -440,18 +455,18 @@ void UDCComputerWidget::BuildRent()
 	const int32 Rent = GM->Economy->GetRentForDay(Day);
 	const int32 Money = GM->Economy->Money;
 	UVerticalBox* Now = AddCard(WidgetTree, List, Money >= Rent ? DCPalette::Lime : DCPalette::Red);
-	DCUI::Text(WidgetTree, Now, FString::Printf(TEXT("RENT FOR DAY %d: $%d"), Day, Rent), UDCText_Heading::StaticClass());
-	DCUI::Text(WidgetTree, Now, TEXT("It is collected automatically when the night ends. If you can't cover it, you are evicted."))->SetWrapTextAt(520.f);
+	DCUI::Text(WidgetTree, Now, FText::Format(LOCTEXT("Rent_ForDay", "RENT FOR DAY {0}: ${1}"), FText::FromString(FString::FromInt(Day)), FText::FromString(FString::FromInt(Rent))), UDCText_Heading::StaticClass());
+	DCUI::Text(WidgetTree, Now, LOCTEXT("Rent_Explanation", "It is collected automatically when the night ends. If you can't cover it, you are evicted."))->SetWrapTextAt(520.f);
 	DCUI::Text(WidgetTree, Now, Money >= Rent
-		? FString::Printf(TEXT("Covered: you have $%d, $%d to spare."), Money, Money - Rent)
-		: FString::Printf(TEXT("Short by $%d: you have $%d."), Rent - Money, Money),
+		? FText::Format(LOCTEXT("Rent_Covered", "Covered: you have ${0}, ${1} to spare."), FText::FromString(FString::FromInt(Money)), FText::FromString(FString::FromInt(Money - Rent)))
+		: FText::Format(LOCTEXT("Rent_Short", "Short by ${0}: you have ${1}."), FText::FromString(FString::FromInt(Rent - Money)), FText::FromString(FString::FromInt(Money))),
 		Money >= Rent ? UDCText_Accent::StaticClass() : UDCText_Warn::StaticClass());
-	DCUI::Text(WidgetTree, List, TEXT("COMING UP"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 6.f, 0.f, 8.f));
+	DCUI::Text(WidgetTree, List, LOCTEXT("Rent_ComingUp", "COMING UP"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 6.f, 0.f, 8.f));
 	for (int32 Next = Day + 1; Next <= Day + 3; ++Next)
 	{
 		UHorizontalBox* Row = nullptr;
 		UVerticalBox* Info = AddCard(WidgetTree, List, DCPalette::Blue, &Row);
-		DCUI::Text(WidgetTree, Info, FString::Printf(TEXT("DAY %d"), Next), UDCText_Heading::StaticClass());
+		DCUI::Text(WidgetTree, Info, FText::Format(LOCTEXT("Rent_DayN", "DAY {0}"), FText::FromString(FString::FromInt(Next))), UDCText_Heading::StaticClass());
 		Row->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, FString::Printf(TEXT("$%d"), GM->Economy->GetRentForDay(Next)), UDCText_Caution::StaticClass()))->SetVerticalAlignment(VAlign_Center);
 	}
 }
@@ -462,7 +477,7 @@ void UDCComputerWidget::BuildReviews()
 	const TArray<FReview>& History = GM->ClientDirector->ReviewHistory;
 	if (History.IsEmpty())
 	{
-		DCUI::Text(WidgetTree, List, TEXT("No reviews yet. Deliver a film and ReelTalk.net will have an opinion."));
+		DCUI::Text(WidgetTree, List, LOCTEXT("Reviews_Empty", "No reviews yet. Deliver a film and ReelTalk.net will have an opinion."));
 		return;
 	}
 	for (const FReview& R : History)
@@ -472,11 +487,11 @@ void UDCComputerWidget::BuildReviews()
 			: R.Reaction == EReaction::Neutral ? DCPalette::Yellow : DCPalette::Red;
 		UHorizontalBox* H = nullptr;
 		UVerticalBox* Info = AddCard(WidgetTree, List, Tile, &H);
-		DCUI::Text(WidgetTree, Info, R.FilmTitle.ToString(), UDCText_Heading::StaticClass());
-		DCUI::Text(WidgetTree, Info, R.Line.ToString())->SetWrapTextAt(440.f);
+		DCUI::Text(WidgetTree, Info, R.FilmTitle, UDCText_Heading::StaticClass());
+		DCUI::Text(WidgetTree, Info, R.Line)->SetWrapTextAt(440.f);
 		if (!R.FeedbackLine.IsEmpty())
 		{
-			DCUI::Text(WidgetTree, Info, R.FeedbackLine.ToString(), UDCText_Accent::StaticClass())->SetWrapTextAt(440.f);
+			DCUI::Text(WidgetTree, Info, R.FeedbackLine, UDCText_Accent::StaticClass())->SetWrapTextAt(440.f);
 		}
 		H->AddChildToHorizontalBox(DCUI::Text(WidgetTree, nullptr, DCUI::Stars(Stars ? *Stars : 0), UDCText_Stars::StaticClass()))->SetVerticalAlignment(VAlign_Center);
 		UCommonTextBlock* Delta = DCUI::Text(WidgetTree, nullptr, R.MoneyDelta == 0 ? FString() : FString::Printf(TEXT("%+d"), R.MoneyDelta), UDCText_Heading::StaticClass());
@@ -541,7 +556,7 @@ void UDCComputerWidget::BuildUnlocks(EUnlockType Type)
 		InfoSlot->SetVerticalAlignment(VAlign_Center);
 		InfoSlot->SetPadding(FMargin(0.f, 0.f, 24.f, 0.f));
 		DCUI::Text(WidgetTree, Info, Row->DisplayName.ToString().ToUpper(), UDCText_Heading::StaticClass());
-		DCUI::Text(WidgetTree, Info, Row->Description.ToString())->SetWrapTextAt(440.f);
+		DCUI::Text(WidgetTree, Info, Row->Description)->SetWrapTextAt(440.f);
 		TArray<FString> Needs;
 		for (const FName& Required : Row->RequiresUnlocks)
 		{
@@ -550,24 +565,26 @@ void UDCComputerWidget::BuildUnlocks(EUnlockType Type)
 		}
 		if (Row->MinGenresOwned > 0)
 		{
-			Needs.Add(FString::Printf(TEXT("%d genres unlocked (you have %d)"), Row->MinGenresOwned, Unlocks->GetGenreCount()));
+			Needs.Add(FText::Format(LOCTEXT("Unlock_MinGenres", "{0} genres unlocked (you have {1})"),
+				FText::FromString(FString::FromInt(Row->MinGenresOwned)),
+				FText::FromString(FString::FromInt(Unlocks->GetGenreCount()))).ToString());
 		}
 		if (!bOwned && Needs.Num() > 0)
 		{
-			DCUI::Text(WidgetTree, Info, TEXT("Requires: ") + FString::Join(Needs, TEXT(", ")), UDCText_Warn::StaticClass())->SetWrapTextAt(440.f);
+			DCUI::Text(WidgetTree, Info, FText::Format(LOCTEXT("Unlock_Requires", "Requires: {0}"), FText::FromString(FString::Join(Needs, TEXT(", ")))), UDCText_Warn::StaticClass())->SetWrapTextAt(440.f);
 		}
 		UVerticalBox* Buy = WidgetTree->ConstructWidget<UVerticalBox>();
 		H->AddChildToHorizontalBox(Buy)->SetVerticalAlignment(VAlign_Center);
 		UCommonTextBlock* Price = DCUI::Text(WidgetTree, Buy, bOwned ? FString() : FString::Printf(TEXT("$%d"), Row->Price), UDCText_Caution::StaticClass());
 		Price->SetJustification(ETextJustify::Center);
 		Cast<UVerticalBoxSlot>(Price->Slot)->SetHorizontalAlignment(HAlign_Center);
-		UDCButton* Btn = DCUI::Button(WidgetTree, Buy, bOwned ? TEXT("OWNED") : TEXT("BUY"), P.Key);
+		UDCButton* Btn = DCUI::Button(WidgetTree, Buy, bOwned ? LOCTEXT("Unlock_Owned", "OWNED") : LOCTEXT("Unlock_Buy", "BUY"), P.Key);
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCComputerWidget::HandleBuy);
 		Buttons.Add({ Btn, P.Key });
 	}
 	if (Ids.IsEmpty())
 	{
-		DCUI::Text(WidgetTree, List, TEXT("Nothing to buy here."));
+		DCUI::Text(WidgetTree, List, LOCTEXT("Unlock_Empty", "Nothing to buy here."));
 	}
 }
 
@@ -594,7 +611,7 @@ void UDCShelfWidget::NativeOnInitialized()
 	Super::NativeOnInitialized();
 	const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
-	DCUI::Header(WidgetTree, V, TEXT("VHS INVENTORY"));
+	DCUI::Header(WidgetTree, V, LOCTEXT("Shelf_Title", "VHS INVENTORY"));
 	List = WidgetTree->ConstructWidget<UDCInventoryWidget>();
 	V->AddChild(List);
 	List->Setup(GM->Inventory, GM->Config, false, nullptr); // read-only stock (section 9): clicking a row only shows its detail
@@ -628,14 +645,14 @@ void UDCTutorialWidget::NativeOnInitialized()
 
 	UCommonBorder* HeaderPlate = DCUI::Border(WidgetTree, TopRow, UDCBorder_Header::StaticClass(), FMargin(48.f, 8.f, 36.f, 8.f));
 	HeaderPlate->SetVisibility(ESlateVisibility::HitTestInvisible);
-	StepTitleText = DCUI::Text(WidgetTree, nullptr, TEXT("TUTORIAL"), UDCText_Heading::StaticClass());
+	StepTitleText = DCUI::Text(WidgetTree, nullptr, LOCTEXT("Tutorial_DefaultHeader", "TUTORIAL"), UDCText_Heading::StaticClass());
 	HeaderPlate->SetContent(StepTitleText);
 
 	USpacer* FillGap = WidgetTree->ConstructWidget<USpacer>();
 	FillGap->SetVisibility(ESlateVisibility::HitTestInvisible);
 	TopRow->AddChildToHorizontalBox(FillGap)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
-	SkipButton = DCUI::Button(WidgetTree, TopRow, TEXT("Skip (F3)"), NAME_None, UDCButton_Tab::StaticClass());
+	SkipButton = DCUI::Button(WidgetTree, TopRow, LOCTEXT("Tutorial_SkipBtn", "Skip (F3)"), NAME_None, UDCButton_Tab::StaticClass());
 	SkipButton->SetIsFocusable(false);
 	SkipButton->OnPayloadClicked.AddDynamic(this, &UDCTutorialWidget::HandleSkip);
 	if (UHorizontalBoxSlot* SkipSlot = Cast<UHorizontalBoxSlot>(SkipButton->Slot))
@@ -694,7 +711,7 @@ void UDCTutorialWidget::SetPlacement(ETutorialPlacement Placement)
 
 void UDCTutorialWidget::ShowHint(const FText& Text)
 {
-	ShowStep(FText::FromString(TEXT("TUTORIAL")), Text, FText::GetEmpty(), true);
+	ShowStep(LOCTEXT("Tutorial_DefaultHeader", "TUTORIAL"), Text, FText::GetEmpty(), true);
 }
 
 void UDCTutorialWidget::ShowStep(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip)
@@ -772,7 +789,7 @@ void UDCMainMenuWidget::NativeOnInitialized()
 	PanelSlot->SetAutoSize(true);
 
 	UCommonBorder* HeaderPlate = DCUI::Border(WidgetTree, nullptr, UDCBorder_Header::StaticClass(), DCUI::HeaderPadding);
-	HeaderPlate->SetContent(DCUI::Text(WidgetTree, nullptr, TEXT("RENT TONIGHT"), UDCText_Title::StaticClass()));
+	HeaderPlate->SetContent(DCUI::Text(WidgetTree, nullptr, INVTEXT("RENT TONIGHT"), UDCText_Title::StaticClass()));
 	UVerticalBoxSlot* PlateSlot = Stack->AddChildToVerticalBox(HeaderPlate);
 	PlateSlot->SetHorizontalAlignment(HAlign_Left);
 	PlateSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
@@ -788,12 +805,12 @@ void UDCMainMenuWidget::NativeOnInitialized()
 	// --- Main buttons (left side)
 	MainButtons = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(MainButtons);
-	PlayButton = MenuButton(WidgetTree, MainButtons, TEXT("PLAY"), UDCButton_Menu::StaticClass());
+	PlayButton = MenuButton(WidgetTree, MainButtons, LOCTEXT("Menu_Play", "PLAY"), UDCButton_Menu::StaticClass());
 	PlayButton->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandlePlay);
-	MenuButton(WidgetTree, MainButtons, TEXT("NEW GAME"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleNewGame);
-	MenuButton(WidgetTree, MainButtons, TEXT("CREDITS"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCredits);
-	MenuButton(WidgetTree, MainButtons, TEXT("OPTIONS"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleOptions);
-	MenuButton(WidgetTree, MainButtons, TEXT("EXIT"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleQuit);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Menu_NewGame", "NEW GAME"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleNewGame);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Menu_Credits", "CREDITS"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCredits);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Menu_Options", "OPTIONS"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleOptions);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Menu_Exit", "EXIT"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleQuit);
 
 	// --- Save slots sub-page (Continue / New Game)
 	SlotsPage = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -805,52 +822,52 @@ void UDCMainMenuWidget::NativeOnInitialized()
 
 	OverwriteConfirmBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	SlotsPage->AddChildToVerticalBox(OverwriteConfirmBox)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
-	OverwriteConfirmText = DCUI::Text(WidgetTree, OverwriteConfirmBox, TEXT("OVERWRITE THIS SAVE SLOT?"), UDCText_Caution::StaticClass());
-	MenuButton(WidgetTree, OverwriteConfirmBox, TEXT("CONFIRM OVERWRITE"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleConfirmOverwrite);
-	MenuButton(WidgetTree, OverwriteConfirmBox, TEXT("CANCEL"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCancelOverwrite);
+	OverwriteConfirmText = DCUI::Text(WidgetTree, OverwriteConfirmBox, LOCTEXT("Menu_OverwritePrompt", "OVERWRITE THIS SAVE SLOT?"), UDCText_Caution::StaticClass());
+	MenuButton(WidgetTree, OverwriteConfirmBox, LOCTEXT("Menu_ConfirmOverwrite", "CONFIRM OVERWRITE"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleConfirmOverwrite);
+	MenuButton(WidgetTree, OverwriteConfirmBox, LOCTEXT("Menu_Cancel", "CANCEL"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCancelOverwrite);
 	OverwriteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
 
 	DeleteConfirmBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	SlotsPage->AddChildToVerticalBox(DeleteConfirmBox)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
-	DeleteConfirmText = DCUI::Text(WidgetTree, DeleteConfirmBox, TEXT("DELETE THIS SAVE SLOT?"), UDCText_Caution::StaticClass());
-	MenuButton(WidgetTree, DeleteConfirmBox, TEXT("CONFIRM DELETE"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleConfirmDelete);
-	MenuButton(WidgetTree, DeleteConfirmBox, TEXT("CANCEL"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCancelDelete);
+	DeleteConfirmText = DCUI::Text(WidgetTree, DeleteConfirmBox, LOCTEXT("Menu_DeletePrompt", "DELETE THIS SAVE SLOT?"), UDCText_Caution::StaticClass());
+	MenuButton(WidgetTree, DeleteConfirmBox, LOCTEXT("Menu_ConfirmDelete", "CONFIRM DELETE"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleConfirmDelete);
+	MenuButton(WidgetTree, DeleteConfirmBox, LOCTEXT("Menu_Cancel", "CANCEL"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleCancelDelete);
 	DeleteConfirmBox->SetVisibility(ESlateVisibility::Collapsed);
 
-	MenuButton(WidgetTree, SlotsPage, TEXT("BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
+	MenuButton(WidgetTree, SlotsPage, LOCTEXT("Menu_Back", "BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
 
 	// --- Credits sub-page
 	CreditsPage = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(CreditsPage);
-	UCommonTextBlock* CreditsHeader = DCUI::Text(WidgetTree, CreditsPage, TEXT("CREDITS"), UDCText_Heading::StaticClass());
+	UCommonTextBlock* CreditsHeader = DCUI::Text(WidgetTree, CreditsPage, LOCTEXT("Menu_Credits", "CREDITS"), UDCText_Heading::StaticClass());
 	CreditsHeader->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
 
-	auto AddCredit = [this](const TCHAR* Name, const TCHAR* Role)
+	auto AddCredit = [this](const TCHAR* Name, const FText& Role)
 	{
 		UCommonTextBlock* NameText = DCUI::Text(WidgetTree, CreditsPage, Name, UDCText_Heading::StaticClass());
 		NameText->SetMargin(FMargin(0.f, 8.f, 0.f, 0.f));
 		UCommonTextBlock* RoleText = DCUI::Text(WidgetTree, CreditsPage, Role, UDCText_Body::StaticClass());
 		RoleText->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
 	};
-	AddCredit(TEXT("Couture Augusto"), TEXT("3D Props Artist & Technical Art"));
-	AddCredit(TEXT("Londonio Gabriel"), TEXT("Art Direction, 3D Environment Art & Cinematics"));
-	AddCredit(TEXT("Felipe Nuñez"), TEXT("Gameplay Systems Designer & Programmer"));
-	AddCredit(TEXT("Patricio Mackinlay"), TEXT("Technical Sound Designer & Composer"));
+	AddCredit(TEXT("Couture Augusto"), LOCTEXT("Credits_Role1", "3D Props Artist & Technical Art"));
+	AddCredit(TEXT("Londonio Gabriel"), LOCTEXT("Credits_Role2", "Art Direction, 3D Environment Art & Cinematics"));
+	AddCredit(TEXT("Felipe Nuñez"), LOCTEXT("Credits_Role3", "Gameplay Systems Designer & Programmer"));
+	AddCredit(TEXT("Patricio Mackinlay"), LOCTEXT("Credits_Role4", "Technical Sound Designer & Composer"));
 
-	UCommonTextBlock* StudioFooter = DCUI::Text(WidgetTree, CreditsPage, TEXT("Ampersand Games"), UDCText_Accent::StaticClass());
+	UCommonTextBlock* StudioFooter = DCUI::Text(WidgetTree, CreditsPage, INVTEXT("Ampersand Games"), UDCText_Accent::StaticClass());
 	StudioFooter->SetMargin(FMargin(0.f, 12.f, 0.f, 4.f));
-	MenuButton(WidgetTree, CreditsPage, TEXT("BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
+	MenuButton(WidgetTree, CreditsPage, LOCTEXT("Menu_Back", "BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
 
 	// --- Options sub-page (reuses UDCSettingsWidget)
 	OptionsPage = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(OptionsPage);
 	Settings = WidgetTree->ConstructWidget<UDCSettingsWidget>();
 	OptionsPage->AddChild(Settings);
-	MenuButton(WidgetTree, OptionsPage, TEXT("BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
+	MenuButton(WidgetTree, OptionsPage, LOCTEXT("Menu_Back", "BACK"), UDCButton_Menu::StaticClass())->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleBackToMain);
 
 	// Studio badge outside the menu in the bottom-right corner (mirrors bottom-left action bar margin)
 	UCommonBorder* StudioBadge = DCUI::Border(WidgetTree, nullptr, UDCBorder_Inset::StaticClass(), FMargin(14.f, 8.f));
-	StudioBadge->SetContent(DCUI::Text(WidgetTree, nullptr, TEXT("AMPERSAND GAMES"), UDCText_Heading::StaticClass()));
+	StudioBadge->SetContent(DCUI::Text(WidgetTree, nullptr, INVTEXT("AMPERSAND GAMES"), UDCText_Heading::StaticClass()));
 	UCanvasPanelSlot* StudioSlot = Root->AddChildToCanvas(StudioBadge);
 	StudioSlot->SetAnchors(FAnchors(1.f, 1.f));
 	StudioSlot->SetAlignment(FVector2D(1.f, 1.f));
@@ -860,6 +877,7 @@ void UDCMainMenuWidget::NativeOnInitialized()
 	SetupBackgroundVideo();
 	RefreshMainButtons();
 	ShowPage(EMenuPage::Main);
+	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &UDCMainMenuWidget::RefreshDynamicTexts);
 }
 
 void UDCMainMenuWidget::NativeOnActivated()
@@ -871,6 +889,7 @@ void UDCMainMenuWidget::NativeOnActivated()
 
 void UDCMainMenuWidget::NativeDestruct()
 {
+	UDCSettings::OnLanguageChanged.Remove(LanguageChangedHandle);
 	if (Settings)
 	{
 		Settings->CancelCapture();
@@ -1013,9 +1032,27 @@ void UDCMainMenuWidget::ShowPage(EMenuPage Page)
 	}
 }
 
+void UDCMainMenuWidget::RefreshDynamicTexts()
+{
+	if (CurrentPage == EMenuPage::Continue || CurrentPage == EMenuPage::NewGame)
+	{
+		RefreshSlots(CurrentPage == EMenuPage::NewGame);
+	}
+	if (!PendingOverwriteSlot.IsEmpty() && OverwriteConfirmText)
+	{
+		OverwriteConfirmText->SetText(FText::Format(LOCTEXT("Menu_OverwriteSlot", "OVERWRITE {0}?"), FText::FromString(PendingOverwriteSlot.ToUpper())));
+	}
+	if (!PendingDeleteSlot.IsEmpty() && DeleteConfirmText)
+	{
+		DeleteConfirmText->SetText(FText::Format(LOCTEXT("Menu_DeleteSlot", "DELETE {0}?"), FText::FromString(PendingDeleteSlot.ToUpper())));
+	}
+}
+
 void UDCMainMenuWidget::RefreshSlots(bool bForNewGame)
 {
-	SlotsTitle->SetText(FText::FromString(bForNewGame ? TEXT("NEW GAME - SELECT SLOT") : TEXT("CONTINUE - SELECT SLOT")));
+	SlotsTitle->SetText(bForNewGame
+		? LOCTEXT("Menu_NewGameSlots", "NEW GAME - SELECT SLOT")
+		: LOCTEXT("Menu_ContinueSlots", "CONTINUE - SELECT SLOT"));
 	SlotsList->ClearChildren();
 
 	const UDCGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UDCGameInstance>() : nullptr;
@@ -1026,22 +1063,26 @@ void UDCMainMenuWidget::RefreshSlots(bool bForNewGame)
 
 	for (const FDCSaveSlotSummary& SlotSummary : GI->GetSaveSlots())
 	{
-		FString Label;
+		FText Label;
 		if (SlotSummary.bExists)
 		{
 			const FDateTime Timestamp = SlotSummary.LastSavedAt.GetTicks() > 0 ? SlotSummary.LastSavedAt : SlotSummary.CreatedAt;
 			const FString DateStr = Timestamp.ToString(TEXT("%Y-%m-%d %H:%M"));
-			Label = FString::Printf(TEXT("SLOT %d  |  DAY %d  |  $%d  |  %s"), SlotSummary.SlotIndex + 1, SlotSummary.DayIndex, SlotSummary.Money, *DateStr);
+			Label = FText::Format(LOCTEXT("Menu_SlotSummary", "SLOT {0}  |  DAY {1}  |  ${2}  |  {3}"),
+				FText::FromString(FString::FromInt(SlotSummary.SlotIndex + 1)),
+				FText::FromString(FString::FromInt(SlotSummary.DayIndex)),
+				FText::FromString(FString::FromInt(SlotSummary.Money)),
+				FText::FromString(DateStr));
 		}
 		else
 		{
-			Label = FString::Printf(TEXT("SLOT %d  |  EMPTY"), SlotSummary.SlotIndex + 1);
+			Label = FText::Format(LOCTEXT("Menu_SlotEmpty", "SLOT {0}  |  EMPTY"), FText::FromString(FString::FromInt(SlotSummary.SlotIndex + 1)));
 		}
 
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 		SlotsList->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 
-		UDCButton* Btn = DCUI::Button(WidgetTree, Row, *Label, FName(*SlotSummary.SlotName), UDCButton_Menu::StaticClass());
+		UDCButton* Btn = DCUI::Button(WidgetTree, Row, Label, FName(*SlotSummary.SlotName), UDCButton_Menu::StaticClass());
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleSlotClicked);
 		if (UHorizontalBoxSlot* BtnSlot = Cast<UHorizontalBoxSlot>(Btn->Slot))
 		{
@@ -1055,7 +1096,7 @@ void UDCMainMenuWidget::RefreshSlots(bool bForNewGame)
 
 		if (SlotSummary.bExists)
 		{
-			UDCButton* DelBtn = DCUI::Button(WidgetTree, Row, TEXT("DELETE"), FName(*SlotSummary.SlotName), UDCButton_Menu::StaticClass());
+			UDCButton* DelBtn = DCUI::Button(WidgetTree, Row, LOCTEXT("Menu_Delete", "DELETE"), FName(*SlotSummary.SlotName), UDCButton_Menu::StaticClass());
 			DelBtn->OnPayloadClicked.AddDynamic(this, &UDCMainMenuWidget::HandleDeleteSlotClicked);
 			if (UHorizontalBoxSlot* DelSlot = Cast<UHorizontalBoxSlot>(DelBtn->Slot))
 			{
@@ -1110,7 +1151,7 @@ void UDCMainMenuWidget::HandleSlotClicked(FName SlotName)
 	if (UGameplayStatics::DoesSaveGameExist(SlotStr, UDCGameInstance::SaveUserIndex))
 	{
 		PendingOverwriteSlot = SlotStr;
-		OverwriteConfirmText->SetText(FText::FromString(FString::Printf(TEXT("OVERWRITE %s?"), *SlotStr.ToUpper())));
+		OverwriteConfirmText->SetText(FText::Format(LOCTEXT("Menu_OverwriteSlot", "OVERWRITE {0}?"), FText::FromString(SlotStr.ToUpper())));
 		OverwriteConfirmBox->SetVisibility(ESlateVisibility::Visible);
 		return;
 	}
@@ -1141,7 +1182,7 @@ void UDCMainMenuWidget::HandleDeleteSlotClicked(FName SlotName)
 	}
 
 	PendingDeleteSlot = SlotName.ToString();
-	DeleteConfirmText->SetText(FText::FromString(FString::Printf(TEXT("DELETE %s?"), *PendingDeleteSlot.ToUpper())));
+	DeleteConfirmText->SetText(FText::Format(LOCTEXT("Menu_DeleteSlot", "DELETE {0}?"), FText::FromString(PendingDeleteSlot.ToUpper())));
 	DeleteConfirmBox->SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -1248,7 +1289,16 @@ private:
 
 namespace
 {
-	const TCHAR* const QualityNames[] = {TEXT("LOW"), TEXT("MEDIUM"), TEXT("HIGH"), TEXT("ULTRA")};
+	FText QualityLabel(int32 Quality)
+	{
+		switch (FMath::Clamp(Quality, 0, 3))
+		{
+		case 0: return LOCTEXT("Quality_Low", "LOW");
+		case 1: return LOCTEXT("Quality_Medium", "MEDIUM");
+		case 2: return LOCTEXT("Quality_High", "HIGH");
+		default: return LOCTEXT("Quality_Ultra", "ULTRA");
+		}
+	}
 
 	void StepValue(float& Value, float Delta, float Min, float Max)
 	{
@@ -1264,12 +1314,12 @@ void UDCSettingsWidget::NativeOnInitialized()
 	WidgetTree->RootWidget = RootBox;
 	UVerticalBox* V = WidgetTree->ConstructWidget<UVerticalBox>();
 	RootBox->AddChild(V);
-	DCUI::Text(WidgetTree, V, TEXT("OPTIONS"), UDCText_Heading::StaticClass());
+	DCUI::Text(WidgetTree, V, LOCTEXT("Options_Title", "OPTIONS"), UDCText_Heading::StaticClass());
 	UHorizontalBox* TabRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 	V->AddChildToVerticalBox(TabRow)->SetPadding(FMargin(0.f, 8.f, 0.f, 10.f));
 
 	// Row with the label filling the left side, so whatever follows is pushed against the right edge
-	auto AddRow = [this](UVerticalBox* Page, const FString& Label)
+	auto AddRow = [this](UVerticalBox* Page, const FText& Label)
 	{
 		UHorizontalBox* H = WidgetTree->ConstructWidget<UHorizontalBox>();
 		Page->AddChildToVerticalBox(H)->SetPadding(FMargin(0.f, 4.f));
@@ -1278,7 +1328,7 @@ void UDCSettingsWidget::NativeOnInitialized()
 		LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		return H;
 	};
-	auto AddPage = [this, V, TabRow](const TCHAR* Title)
+	auto AddPage = [this, V, TabRow](const FText& Title)
 	{
 		UVerticalBox* Page = WidgetTree->ConstructWidget<UVerticalBox>();
 		V->AddChildToVerticalBox(Page);
@@ -1291,14 +1341,14 @@ void UDCSettingsWidget::NativeOnInitialized()
 		return Page;
 	};
 	// Value-plus-arrows control: [◀] value [▶] (Press Start 2P has the glyphs)
-	auto AddStepper = [this, &AddRow](UVerticalBox* Page, const TCHAR* Label, FName Down, FName Up)
+	auto AddStepper = [this, &AddRow](UVerticalBox* Page, const FText& Label, FName Down, FName Up)
 	{
 		UHorizontalBox* H = AddRow(Page, Label);
 		UDCButton* Left = DCUI::Button(WidgetTree, H, TEXT("◀"), Down);
 		UCommonTextBlock* Value = DCUI::Text(WidgetTree, nullptr, TEXT(""), UDCText_Heading::StaticClass());
 		Value->SetJustification(ETextJustify::Center);
 		USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>();
-		ValueBox->SetMinDesiredWidth(110.f);
+		ValueBox->SetMinDesiredWidth(160.f);
 		ValueBox->AddChild(Value);
 		UHorizontalBoxSlot* ValueSlot = H->AddChildToHorizontalBox(ValueBox);
 		ValueSlot->SetVerticalAlignment(VAlign_Center);
@@ -1309,7 +1359,7 @@ void UDCSettingsWidget::NativeOnInitialized()
 		return Value;
 	};
 	// Slider plus a percent readout; the slider's size box is the row's slot
-	auto AddSlider = [this, &AddRow](UVerticalBox* Page, const TCHAR* Label, FName Id)
+	auto AddSlider = [this, &AddRow](UVerticalBox* Page, const FText& Label, FName Id)
 	{
 		UHorizontalBox* H = AddRow(Page, Label);
 		USlider* Slider = DCUI::Slider(WidgetTree, H, 240.f);
@@ -1327,10 +1377,10 @@ void UDCSettingsWidget::NativeOnInitialized()
 		return Slider;
 	};
 
-	UVerticalBox* Controls = AddPage(TEXT("CONTROLS"));
+	UVerticalBox* Controls = AddPage(LOCTEXT("Options_TabControls", "CONTROLS"));
 	for (int32 i = 0; i < (int32)EDCAction::Count; ++i)
 	{
-		UHorizontalBox* H = AddRow(Controls, UDCSettings::ActionLabel((EDCAction)i));
+		UHorizontalBox* H = AddRow(Controls, UDCSettings::ActionDisplayLabel((EDCAction)i));
 		UDCButton* Btn = DCUI::Button(WidgetTree, nullptr, TEXT(""), FName(*FString::FromInt(i)));
 		USizeBox* BtnBox = WidgetTree->ConstructWidget<USizeBox>();
 		BtnBox->SetMinDesiredWidth(240.f);
@@ -1339,21 +1389,37 @@ void UDCSettingsWidget::NativeOnInitialized()
 		Btn->OnPayloadClicked.AddDynamic(this, &UDCSettingsWidget::HandleRebind);
 		KeyButtons.Add(Btn);
 	}
-	SensitivityText = AddStepper(Controls, TEXT("Mouse sensitivity"), "SensDown", "SensUp");
+	SensitivityText = AddStepper(Controls, LOCTEXT("Options_MouseSens", "Mouse sensitivity"), "SensDown", "SensUp");
 
-	UVerticalBox* Audio = AddPage(TEXT("AUDIO"));
-	AddSlider(Audio, TEXT("Master"), "Master")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleMasterVolume);
-	AddSlider(Audio, TEXT("SFX"), "Sfx")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleSfxVolume);
-	AddSlider(Audio, TEXT("Music"), "Music")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleMusicVolume);
+	UVerticalBox* Audio = AddPage(LOCTEXT("Options_TabAudio", "AUDIO"));
+	AddSlider(Audio, LOCTEXT("Options_Master", "Master"), "Master")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleMasterVolume);
+	AddSlider(Audio, LOCTEXT("Options_SFX", "SFX"), "Sfx")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleSfxVolume);
+	AddSlider(Audio, LOCTEXT("Options_Music", "Music"), "Music")->OnValueChanged.AddDynamic(this, &UDCSettingsWidget::HandleMusicVolume);
 
-	UVerticalBox* Graphics = AddPage(TEXT("GRAPHICS"));
-	QualityText = AddStepper(Graphics, TEXT("Quality"), "QualDown", "QualUp");
-	LumenText = AddStepper(Graphics, TEXT("Lumen (GI + reflections)"), "LumenDown", "LumenUp");
-	FpsText = AddStepper(Graphics, TEXT("Frame rate cap"), "FpsDown", "FpsUp");
-	VSyncText = AddStepper(Graphics, TEXT("VSync"), "VSyncDown", "VSyncUp");
-	ResScaleText = AddStepper(Graphics, TEXT("Resolution scale"), "ResDown", "ResUp");
-	FullscreenText = AddStepper(Graphics, TEXT("Fullscreen"), "FullDown", "FullUp");
+	UVerticalBox* Graphics = AddPage(LOCTEXT("Options_TabGraphics", "GRAPHICS"));
+	QualityText = AddStepper(Graphics, LOCTEXT("Options_Quality", "Quality"), "QualDown", "QualUp");
+	LumenText = AddStepper(Graphics, LOCTEXT("Options_Lumen", "Lumen (GI + reflections)"), "LumenDown", "LumenUp");
+	FpsText = AddStepper(Graphics, LOCTEXT("Options_FpsCap", "Frame rate cap"), "FpsDown", "FpsUp");
+	VSyncText = AddStepper(Graphics, LOCTEXT("Options_VSync", "VSync"), "VSyncDown", "VSyncUp");
+	ResScaleText = AddStepper(Graphics, LOCTEXT("Options_ResScale", "Resolution scale"), "ResDown", "ResUp");
+	FullscreenText = AddStepper(Graphics, LOCTEXT("Options_Fullscreen", "Fullscreen"), "FullDown", "FullUp");
+
+	UVerticalBox* LanguagePage = AddPage(LOCTEXT("Options_TabLanguage", "LANGUAGE"));
+	LanguageText = AddStepper(LanguagePage, LOCTEXT("Options_Language", "Language"), "LangDown", "LangUp");
+
 	ShowTab(0);
+	Refresh();
+	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &UDCSettingsWidget::HandleLanguageChanged);
+}
+
+void UDCSettingsWidget::NativeDestruct()
+{
+	UDCSettings::OnLanguageChanged.Remove(LanguageChangedHandle);
+	Super::NativeDestruct();
+}
+
+void UDCSettingsWidget::HandleLanguageChanged()
+{
 	Refresh();
 }
 
@@ -1384,7 +1450,7 @@ void UDCSettingsWidget::Refresh()
 	UDCSettings* S = UDCSettings::Get();
 	for (int32 i = 0; i < KeyButtons.Num(); ++i)
 	{
-		KeyButtons[i]->Label->SetText(i == CapturingAction ? FText::FromString(TEXT("PRESS A KEY...")) : S->Key((EDCAction)i).GetDisplayName());
+		KeyButtons[i]->Label->SetText(i == CapturingAction ? LOCTEXT("Options_PressKey", "PRESS A KEY...") : S->Key((EDCAction)i).GetDisplayName());
 	}
 	const TPair<FName, float> Volumes[] = {{"Master", S->MasterVolume}, {"Sfx", S->SfxVolume}, {"Music", S->MusicVolume}};
 	for (const TPair<FName, float>& Vol : Volumes)
@@ -1392,18 +1458,30 @@ void UDCSettingsWidget::Refresh()
 		VolumeSliders[Vol.Key]->SetValue(Vol.Value);
 		VolumeTexts[Vol.Key]->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Vol.Value * 100.f))));
 	}
+	const FText OnText = LOCTEXT("Options_On", "ON");
+	const FText OffText = LOCTEXT("Options_Off", "OFF");
 	SensitivityText->SetText(FText::FromString(FString::Printf(TEXT("%.1fx"), S->MouseSensitivityScale)));
-	QualityText->SetText(FText::FromString(QualityNames[FMath::Clamp(S->Quality, 0, 3)]));
-	LumenText->SetText(FText::FromString(S->bLumen ? TEXT("ON") : TEXT("OFF")));
-	FpsText->SetText(FText::FromString(S->FpsCap > 0 ? FString::FromInt(S->FpsCap) : FString(TEXT("NONE"))));
-	VSyncText->SetText(FText::FromString(S->bVSync ? TEXT("ON") : TEXT("OFF")));
+	QualityText->SetText(QualityLabel(S->Quality));
+	LumenText->SetText(S->bLumen ? OnText : OffText);
+	FpsText->SetText(S->FpsCap > 0 ? FText::FromString(FString::FromInt(S->FpsCap)) : LOCTEXT("Options_None", "NONE"));
+	VSyncText->SetText(S->bVSync ? OnText : OffText);
 	ResScaleText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), S->ResolutionScale)));
-	FullscreenText->SetText(FText::FromString(S->bFullscreen ? TEXT("ON") : TEXT("OFF")));
+	FullscreenText->SetText(S->bFullscreen ? OnText : OffText);
+	if (LanguageText)
+	{
+		LanguageText->SetText(UDCSettings::LanguageDisplayName(S->GetEffectiveLanguage()));
+	}
 }
 
 void UDCSettingsWidget::HandleStep(FName Id)
 {
 	UDCSettings* S = UDCSettings::Get();
+	if (Id == "LangUp" || Id == "LangDown")
+	{
+		const FString Next = S->GetEffectiveLanguage() == TEXT("es") ? TEXT("en") : TEXT("es");
+		S->SetLanguage(Next);
+		return;
+	}
 	const bool bUp = Id.ToString().EndsWith(TEXT("Up"));
 	const float Dir = bUp ? 0.1f : -0.1f;
 	if (Id == "SensUp" || Id == "SensDown")
@@ -1515,17 +1593,17 @@ void UDCPauseWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 	UVerticalBox* V = DCUI::Panel(WidgetTree, Center, Middle, FVector2D::ZeroVector);
-	DCUI::Header(WidgetTree, V, TEXT("PAUSED"));
+	DCUI::Header(WidgetTree, V, LOCTEXT("Pause_Title", "PAUSED"));
 	MainButtons = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(MainButtons);
-	MenuButton(WidgetTree, MainButtons, TEXT("CONTINUE"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleContinue);
-	MenuButton(WidgetTree, MainButtons, TEXT("OPTIONS"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleOptions);
-	MenuButton(WidgetTree, MainButtons, TEXT("RESTART"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleRestart);
-	MenuButton(WidgetTree, MainButtons, TEXT("BACK TO MAIN MENU"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleMainMenu);
-	MenuButton(WidgetTree, MainButtons, TEXT("QUIT"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleQuit);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Pause_Continue", "CONTINUE"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleContinue);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Pause_Options", "OPTIONS"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleOptions);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Pause_Restart", "RESTART"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleRestart);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Pause_MainMenu", "BACK TO MAIN MENU"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleMainMenu);
+	MenuButton(WidgetTree, MainButtons, LOCTEXT("Pause_Quit", "QUIT"))->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleQuit);
 	Settings = WidgetTree->ConstructWidget<UDCSettingsWidget>();
 	V->AddChild(Settings);
-	OptionsBackButton = MenuButton(WidgetTree, V, TEXT("BACK"));
+	OptionsBackButton = MenuButton(WidgetTree, V, LOCTEXT("Menu_Back", "BACK"));
 	OptionsBackButton->OnPayloadClicked.AddDynamic(this, &UDCPauseWidget::HandleOptionsBack);
 	ShowOptions(false);
 }
@@ -1578,3 +1656,5 @@ void UDCPauseWidget::HandleQuit(FName Unused)
 {
 	UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
 }
+
+#undef LOCTEXT_NAMESPACE

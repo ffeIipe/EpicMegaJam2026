@@ -201,6 +201,7 @@ private:
 	void ShowPage(EMenuPage Page);
 	void RefreshMainButtons();
 	void RefreshSlots(bool bForNewGame);
+	void RefreshDynamicTexts();
 	void StartGameOnSlot(const FString& SlotName, bool bNewGame);
 	void Cue(const TCHAR* Name) const;
 
@@ -235,6 +236,7 @@ private:
 	UPROPERTY() TObjectPtr<UVerticalBox> CreditsPage;
 	UPROPERTY() TObjectPtr<UVerticalBox> OptionsPage;
 	UPROPERTY() TObjectPtr<UDCSettingsWidget> Settings;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 class FDCKeyCapture;
@@ -250,8 +252,10 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 
 private:
+	void HandleLanguageChanged();
 	UFUNCTION() void HandleRebind(FName ActionIndex);
 	UFUNCTION() void HandleStep(FName Id);
 	UFUNCTION() void HandleTab(FName Index);
@@ -275,8 +279,10 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> VSyncText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> ResScaleText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> FullscreenText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> LanguageText;
 	TSharedPtr<FDCKeyCapture> Capture;
 	int32 CapturingAction = INDEX_NONE;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 // WBP_Pause: Continue (or Esc) closes it; Options swaps the buttons for the settings and Back returns to them

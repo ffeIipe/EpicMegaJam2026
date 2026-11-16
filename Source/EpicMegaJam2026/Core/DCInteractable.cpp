@@ -11,6 +11,8 @@
 #include "NiagaraSystem.h"
 #include "UObject/ConstructorHelpers.h"
 
+#define LOCTEXT_NAMESPACE "DirectorsCut"
+
 ADCInteractable::ADCInteractable()
 {
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
@@ -81,8 +83,8 @@ FText ADCInteractable::GetLabel() const
 	// TODO(DESIGN): placeholder wording; the doc only asks for an outline on aimed props
 	switch (InteractType)
 	{
-	case EInteractType::CashRegister: return FText::FromString(TEXT("Supplier: buy tapes"));
-	case EInteractType::Computer: return FText::FromString(TEXT("Computer: unlocks"));
+	case EInteractType::CashRegister: return LOCTEXT("Prop_Supplier", "Supplier: buy tapes");
+	case EInteractType::Computer: return LOCTEXT("Prop_Computer", "Computer: unlocks");
 	default: return FText::GetEmpty(); // shelves and the VHS player are scenery since v2.1
 	}
 }
@@ -191,7 +193,7 @@ void ADCInteractable::Tick(float DeltaTime)
 	const float Envelope = Phase < 0.7f ? FMath::Sin(Phase / 0.7f * PI) : 0.f;
 	SetActorRotation(BaseRotation + FRotator(Envelope * FMath::Sin(T * 40.f) * 1.5f, 0.f, Envelope * FMath::Sin(T * 33.f) * 3.f));
 	// Sparkle: the label blinks between two star patterns
-	SetLabelText(FText::FromString(FMath::Fmod(T, 0.5f) < 0.25f ? TEXT("★ NEW ★") : TEXT("* NEW *")));
+	SetLabelText(FMath::Fmod(T, 0.5f) < 0.25f ? LOCTEXT("Prop_NewStar", "★ NEW ★") : LOCTEXT("Prop_NewAst", "* NEW *"));
 }
 
 void ADCInteractable::SetLabelText(const FText& Text) const
@@ -201,3 +203,5 @@ void ADCInteractable::SetLabelText(const FText& Text) const
 		Widget->SetLabel(Text);
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

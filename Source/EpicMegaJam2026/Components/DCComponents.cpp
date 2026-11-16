@@ -3,6 +3,8 @@
 #include "Core/BPFL_Scoring.h"
 #include "Components/DCFilmTitles.h"
 
+#define LOCTEXT_NAMESPACE "DirectorsCut"
+
 static const UPDA_GameConfig* GetConfig(const UActorComponent* C)
 {
 	const ADCGameMode* GM = Cast<ADCGameMode>(C->GetOwner());
@@ -351,7 +353,7 @@ bool UAC_FilmCrafting::ConfirmFilm(FText Title)
 	}
 	if (TitleStr.IsEmpty()) // generator ran out of fresh combinations
 	{
-		TitleStr = FString::Printf(TEXT("Untitled Cut #%d"), FilmsCreated + 1);
+		TitleStr = FText::Format(LOCTEXT("Craft_UntitledCut", "Untitled Cut #{0}"), FText::FromString(FString::FromInt(FilmsCreated + 1))).ToString();
 	}
 	UsedTitles.Add(TitleStr);
 	Film.Title = FText::FromString(TitleStr);
@@ -455,3 +457,5 @@ bool UAC_Inventory::BuyTape(FName Row, int32 Count)
 	ADCAudioManager::PlayCueStatic(this, TEXT("TapePurchased"));
 	return true;
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -144,11 +144,12 @@ TArray<FHintedSkill> UAC_ClientDirector::BuildHints(const FSkillVector& Target, 
 FText UAC_ClientDirector::BuildOrderText(const TArray<FHintedSkill>& Hints, ESpawnPhase Phase, TArray<FOrderLine>* OutLines)
 {
 	const UPDA_GameConfig* Cfg = GetGM(this)->Config;
-	FString Out = PickLine(Cfg->GreetingTable, Phase == ESpawnPhase::Night ? ESpawnPhase::Night : ESpawnPhase::Day).ToString();
+	const FText Greeting = PickLine(Cfg->GreetingTable, Phase == ESpawnPhase::Night ? ESpawnPhase::Night : ESpawnPhase::Day);
+	FString Out = Greeting.ToString();
 	if (OutLines)
 	{
 		OutLines->Reset();
-		OutLines->Add({ FText::FromString(Out), -1 });
+		OutLines->Add({ Greeting, -1 });
 	}
 	for (const FHintedSkill& Hint : Hints)
 	{

@@ -76,6 +76,7 @@ public:
 	UPROPERTY(BlueprintAssignable) FOnCameraZoneChanged OnCameraZoneChanged;
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
 
@@ -149,6 +150,7 @@ private:
 	void EndTutorialPause();
 	void CompleteTutorial();
 	void DismissCompletedTutorial();
+	void HandleLanguageChanged();
 	void HitStop();
 	void Cue(const TCHAR* Name) const;
 	void TryStartIntro();
@@ -169,6 +171,7 @@ private:
 	bool bTutorialGenreBought = false;
 	bool bTutorialTapeAfterGenreBought = false;
 	FTimerHandle TutorialCompleteHideTimer;
+	FDelegateHandle LanguageChangedHandle;
 
 	ECameraZone CameraZone = ECameraZone::Counter;
 	bool bDialogueDue = false; // a dialogue should open as soon as nothing blocks it

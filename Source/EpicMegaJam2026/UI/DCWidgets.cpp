@@ -3,6 +3,7 @@
 #include "Core/DCGameMode.h"
 #include "Core/DCClient.h"
 #include "Core/DCPlayerController.h"
+#include "Core/DCSettings.h"
 #include "Core/BPFL_Scoring.h"
 #include "Data/PDA_GameConfig.h"
 #include "Blueprint/WidgetTree.h"
@@ -19,6 +20,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Input/CommonUIInputTypes.h"
+
+#define LOCTEXT_NAMESPACE "DirectorsCut"
 
 namespace
 {
@@ -81,6 +84,46 @@ void UDCInventoryWidget::NativeOnInitialized()
 	Super::NativeOnInitialized();
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("PrevTab"), false, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, -1)));
 	RegisterUIActionBinding(FBindUIActionArgs(UDCUIInputData::Action("NextTab"), false, FSimpleDelegate::CreateUObject(this, &UDCInventoryWidget::CycleTab, 1)));
+	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &UDCInventoryWidget::HandleLanguageChanged);
+}
+
+void UDCInventoryWidget::NativeDestruct()
+{
+	UDCSettings::OnLanguageChanged.Remove(LanguageChangedHandle);
+	Super::NativeDestruct();
+}
+
+void UDCInventoryWidget::HandleLanguageChanged()
+{
+	RebuildTabs();
+	Refresh();
+}
+
+void UDCInventoryWidget::RebuildTabs()
+{
+	if (!Tabs)
+	{
+		return;
+	}
+	Tabs->ClearChildren();
+	auto AddTab = [this](const FText& Label, FName Id)
+	{
+		UDCButton* Tab = DCUI::Button(WidgetTree, Tabs, Label.ToString().ToUpper(), Id, UDCButton_Tab::StaticClass());
+		Tab->SetIsSelectable(true);
+		Tab->OnPayloadClicked.AddDynamic(this, &UDCInventoryWidget::OnTabClicked);
+	};
+	AddTab(LOCTEXT("Inv_TabAll", "ALL"), AllTab);
+	if (Config && Config->GenreTable)
+	{
+		for (const TPair<FName, uint8*>& Pair : Config->GenreTable->GetRowMap())
+		{
+			const FGenreData* Row = reinterpret_cast<const FGenreData*>(Pair.Value);
+			if (Row->Genre != EGenre::Paranormal) // DEPRECATED v1 genre: it has no tapes
+			{
+				AddTab(Row->DisplayName, GenreName(Row->Genre));
+			}
+		}
+	}
 }
 
 void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InConfig, bool bInPicker, UAC_FilmCrafting* InCrafting)
@@ -99,24 +142,7 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	Tabs->SetExplicitWrapSize(true);
 	Tabs->SetWrapSize(bPicker ? ListW + 20.f : ListW + DetailWidth + 64.f);
 	Root->AddChildToVerticalBox(Tabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-	auto AddTab = [this](const FString& Label, FName Id)
-	{
-		UDCButton* Tab = DCUI::Button(WidgetTree, Tabs, Label.ToUpper(), Id, UDCButton_Tab::StaticClass());
-		Tab->SetIsSelectable(true);
-		Tab->OnPayloadClicked.AddDynamic(this, &UDCInventoryWidget::OnTabClicked);
-	};
-	AddTab(TEXT("All"), AllTab);
-	if (Config && Config->GenreTable)
-	{
-		for (const TPair<FName, uint8*>& Pair : Config->GenreTable->GetRowMap())
-		{
-			const FGenreData* Row = reinterpret_cast<const FGenreData*>(Pair.Value);
-			if (Row->Genre != EGenre::Paranormal) // DEPRECATED v1 genre: it has no tapes
-			{
-				AddTab(Row->DisplayName.ToString(), GenreName(Row->Genre));
-			}
-		}
-	}
+	RebuildTabs();
 
 	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>();
 	Root->AddChild(Body);
@@ -152,12 +178,12 @@ void UDCInventoryWidget::Setup(UAC_Inventory* InInventory, UPDA_GameConfig* InCo
 	DetailCover = AddCover(WidgetTree, Info, FVector2D(135.f, 240.f));
 	UVerticalBox* Facts = WidgetTree->ConstructWidget<UVerticalBox>();
 	Info->AddChildToHorizontalBox(Facts)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
-	DCUI::Text(WidgetTree, Facts, TEXT("Rating:"));
+	DCUI::Text(WidgetTree, Facts, LOCTEXT("Inv_Rating", "Rating:"));
 	DetailStars = DCUI::Text(WidgetTree, Facts, TEXT(""), UDCText_Stars::StaticClass());
-	DCUI::Text(WidgetTree, Facts, TEXT("Genre:"))->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
+	DCUI::Text(WidgetTree, Facts, LOCTEXT("Inv_Genre", "Genre:"))->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
 	DetailGenre = DCUI::Text(WidgetTree, Facts, TEXT(""), UDCText_Accent::StaticClass());
 	DetailGenre->SetWrapTextAt(250.f);
-	DCUI::Text(WidgetTree, Facts, TEXT("Skills:"))->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
+	DCUI::Text(WidgetTree, Facts, LOCTEXT("Inv_Skills", "Skills:"))->SetMargin(FMargin(0.f, 14.f, 0.f, 0.f));
 	DetailSkills = WidgetTree->ConstructWidget<UVerticalBox>();
 	Facts->AddChild(DetailSkills);
 	DetailSynopsis = DCUI::Text(WidgetTree, D, TEXT(""));
@@ -215,7 +241,7 @@ void UDCInventoryWidget::Refresh()
 	}
 	if (Rows.IsEmpty())
 	{
-		DCUI::Text(WidgetTree, List, bPicker ? TEXT("No tapes left to combine.") : TEXT("No tapes on this shelf."));
+		DCUI::Text(WidgetTree, List, bPicker ? LOCTEXT("Inv_EmptyPicker", "No tapes left to combine.") : LOCTEXT("Inv_EmptyShelf", "No tapes on this shelf."));
 	}
 
 	for (const FName& Row : Rows)
@@ -313,11 +339,13 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	Director = GM->ClientDirector;
 
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 0.5f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector);
-	DCUI::Header(WidgetTree, V, TEXT("COMBINE VHS"), TEXT("Mix tapes: their skills add up"));
+	DCUI::Header(WidgetTree, V, LOCTEXT("Craft_Title", "COMBINE VHS"), LOCTEXT("Craft_Subtitle", "Mix tapes: their skills add up"));
 	// Two views of the same screen: mixing tapes, and the permanent library of films already made
 	UHorizontalBox* ViewTabs = WidgetTree->ConstructWidget<UHorizontalBox>();
 	V->AddChildToVerticalBox(ViewTabs)->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-	for (const TPair<const TCHAR*, const TCHAR*>& Def : { TPair<const TCHAR*, const TCHAR*>(TEXT("Combine"), TEXT("COMBINE")), TPair<const TCHAR*, const TCHAR*>(TEXT("Crafted"), TEXT("CRAFTED FILMS")) })
+	for (const TPair<const TCHAR*, FText>& Def : {
+		TPair<const TCHAR*, FText>(TEXT("Combine"), LOCTEXT("Craft_TabCombine", "COMBINE")),
+		TPair<const TCHAR*, FText>(TEXT("Crafted"), LOCTEXT("Craft_TabCrafted", "CRAFTED FILMS")) })
 	{
 		UDCButton* Tab = DCUI::Button(WidgetTree, ViewTabs, Def.Value, Def.Key, UDCButton_Tab::StaticClass());
 		Tab->SetIsSelectable(true);
@@ -331,7 +359,7 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 		Cast<UVerticalBoxSlot>(Box->Slot)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
 		UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>();
 		Box->SetContent(Content);
-		Heading = DCUI::Text(WidgetTree, Content, TEXT("ORDER"), UDCText_Heading::StaticClass());
+		Heading = DCUI::Text(WidgetTree, Content, LOCTEXT("Order_Heading", "ORDER"), UDCText_Heading::StaticClass());
 		Heading->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
 		Text = WidgetTree->ConstructWidget<UVerticalBox>();
 		Content->AddChild(Text);
@@ -375,20 +403,20 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	CraftedTitle->SetWrapTextAt(DetailWidth - 40.f);
 	CraftedStars = DCUI::Text(WidgetTree, CraftedDetail, TEXT(""), UDCText_Stars::StaticClass());
 	CraftedStars->SetMargin(FMargin(0.f, 6.f, 0.f, 10.f));
-	DCUI::Text(WidgetTree, CraftedDetail, TEXT("SKILLS"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
+	DCUI::Text(WidgetTree, CraftedDetail, LOCTEXT("Craft_Skills", "SKILLS"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 4.f));
 	CraftedSkills = WidgetTree->ConstructWidget<UVerticalBox>();
 	CraftedDetail->AddChild(CraftedSkills);
-	DCUI::Text(WidgetTree, CraftedDetail, TEXT("MADE FROM"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 10.f, 0.f, 4.f));
+	DCUI::Text(WidgetTree, CraftedDetail, LOCTEXT("Craft_MadeFrom", "MADE FROM"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 10.f, 0.f, 4.f));
 	CraftedTapes = DCUI::Text(WidgetTree, CraftedDetail, TEXT(""), UDCText_Body::StaticClass());
 	CraftedTapes->SetWrapTextAt(DetailWidth - 40.f);
-	UCommonTextBlock* CraftedHint = DCUI::Text(WidgetTree, CraftedDetail, TEXT("Click a film to take it to the counter"), UDCText_Accent::StaticClass());
+	UCommonTextBlock* CraftedHint = DCUI::Text(WidgetTree, CraftedDetail, LOCTEXT("Craft_Hint", "Click a film to take it to the counter"), UDCText_Accent::StaticClass());
 	CraftedHint->SetMargin(FMargin(0.f, 10.f, 0.f, 0.f));
 	CraftedHint->SetWrapTextAt(DetailWidth - 40.f);
 
 	// Left: the tapes with copies left; a click fills the next empty slot
 	UVerticalBox* Left = WidgetTree->ConstructWidget<UVerticalBox>();
 	DCUI::Border(WidgetTree, Body, UDCBorder_Panel::StaticClass(), FMargin(12.f))->SetContent(Left);
-	DCUI::Text(WidgetTree, Left, TEXT("VHS INVENTORY"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 10.f));
+	DCUI::Text(WidgetTree, Left, LOCTEXT("Craft_VHSInventory", "VHS INVENTORY"), UDCText_Heading::StaticClass())->SetMargin(FMargin(0.f, 0.f, 0.f, 10.f));
 	Picker = WidgetTree->ConstructWidget<UDCInventoryWidget>();
 	Left->AddChild(Picker);
 	Picker->Setup(Inventory, Config, true, Crafting);
@@ -457,7 +485,7 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	RightPanel->SetContent(Right);
 	Cast<UHorizontalBoxSlot>(RightPanel->Slot)->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 	// Each block sits in an inset box, like the ORDER one
-	auto InsetBlock = [this, Right](const TCHAR* Heading, float TopGap)
+	auto InsetBlock = [this, Right](const FText& Heading, float TopGap)
 	{
 		UCommonBorder* Box = DCUI::Border(WidgetTree, Right, UDCBorder_Inset::StaticClass(), FMargin(12.f, 8.f));
 		Cast<UVerticalBoxSlot>(Box->Slot)->SetPadding(FMargin(0.f, TopGap, 0.f, 0.f));
@@ -467,13 +495,13 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 		return Content;
 	};
 	ProfileText = WidgetTree->ConstructWidget<UVerticalBox>(); // rebuilt on every refresh, so the heading stays outside it
-	InsetBlock(TEXT("FILM PROFILE"), 0.f)->AddChild(ProfileText);
-	UVerticalBox* MatchBox = InsetBlock(TEXT("MATCH WITH THE ORDER"), 8.f);
+	InsetBlock(LOCTEXT("Craft_FilmProfile", "FILM PROFILE"), 0.f)->AddChild(ProfileText);
+	UVerticalBox* MatchBox = InsetBlock(LOCTEXT("Craft_MatchOrder", "MATCH WITH THE ORDER"), 8.f);
 	MatchText = DCUI::Text(WidgetTree, MatchBox, TEXT(""), UDCText_Body::StaticClass());
 	PointsText = DCUI::Text(WidgetTree, MatchBox, TEXT(""), UDCText_Body::StaticClass());
 
 	TitleBox = WidgetTree->ConstructWidget<UEditableTextBox>();
-	TitleBox->SetHintText(FText::FromString(TEXT("Film title")));
+	TitleBox->SetHintText(LOCTEXT("Craft_TitleHint", "Film title"));
 	FEditableTextBoxStyle FieldStyle = TitleBox->GetWidgetStyle();
 	const FSlateBrush Field = DCUI::Box(DCPalette::Navy, DCPalette::Blue);
 	const FSlateBrush FieldActive = DCUI::Box(DCPalette::Navy, DCPalette::Lime);
@@ -483,14 +511,27 @@ void UDCFilmCraftingWidget::NativeOnInitialized()
 	TitleBox->SetWidgetStyle(FieldStyle);
 	Right->AddChildToVerticalBox(TitleBox)->SetPadding(FMargin(0.f, 16.f, 0.f, 10.f));
 
-	ConfirmButton = DCUI::Button(WidgetTree, Right, TEXT("COMBINE"));
+	ConfirmButton = DCUI::Button(WidgetTree, Right, LOCTEXT("Craft_CombineBtn", "COMBINE"));
 	ConfirmButton->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnConfirm);
-	DiscardButton = DCUI::Button(WidgetTree, Right, TEXT("Put away held film"), NAME_None, UDCButton_Tab::StaticClass());
+	DiscardButton = DCUI::Button(WidgetTree, Right, LOCTEXT("Craft_PutAway", "Put away held film"), NAME_None, UDCButton_Tab::StaticClass());
 	DiscardButton->OnPayloadClicked.AddDynamic(this, &UDCFilmCraftingWidget::OnDiscard);
 	Cast<UVerticalBoxSlot>(DiscardButton->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	HeldText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
 	StatusText = DCUI::Text(WidgetTree, Right, TEXT(""), UDCText_Accent::StaticClass());
 	StatusText->SetWrapTextAt(400.f);
+	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &UDCFilmCraftingWidget::HandleLanguageChanged);
+}
+
+void UDCFilmCraftingWidget::NativeDestruct()
+{
+	UDCSettings::OnLanguageChanged.Remove(LanguageChangedHandle);
+	Super::NativeDestruct();
+}
+
+void UDCFilmCraftingWidget::HandleLanguageChanged()
+{
+	CraftedShown = -1;
+	Refresh();
 }
 
 void UDCFilmCraftingWidget::NativeOnActivated()
@@ -517,7 +558,7 @@ void UDCFilmCraftingWidget::ShowFilm(int32 Index)
 {
 	const FCreatedFilm* Film = Crafting->CraftedFilms.IsValidIndex(Index) ? &Crafting->CraftedFilms[Index] : nullptr;
 	ShownFilm = Film ? Index : INDEX_NONE;
-	CraftedTitle->SetText(Film ? Film->Title : FText::FromString(TEXT("No films yet")));
+	CraftedTitle->SetText(Film ? Film->Title : LOCTEXT("Craft_NoFilmsDetail", "No films yet"));
 	CraftedSkills->ClearChildren();
 	TMap<FName, int32> Counts;
 	int32 RatingSum = 0, Filled = 0;
@@ -588,7 +629,7 @@ void UDCFilmCraftingWidget::Refresh()
 		const FName Row = Crafting->SlotRows.IsValidIndex(i) ? Crafting->SlotRows[i] : NAME_None;
 		FVHSData Tape;
 		const bool bHas = !Row.IsNone() && Inventory->GetVHSData(Row, Tape);
-		SlotTexts[i]->SetText(bHas ? FText::FromString(DCUI::CleanTitle(Tape.Title)) : FText::FromString(TEXT("(empty)")));
+		SlotTexts[i]->SetText(bHas ? FText::FromString(DCUI::CleanTitle(Tape.Title)) : LOCTEXT("Craft_EmptySlot", "(empty)"));
 		SlotClears[i]->SetVisibility(bHas ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
 	}
 	if (Crafting->CraftedFilms.Num() != CraftedShown) // rebuilt only when a film is added: a click on one must not destroy its own button
@@ -636,7 +677,7 @@ void UDCFilmCraftingWidget::Refresh()
 		}
 		if (CraftedShown == 0)
 		{
-			DCUI::Text(WidgetTree, CraftedList, TEXT("No films yet."));
+			DCUI::Text(WidgetTree, CraftedList, LOCTEXT("Craft_NoFilmsList", "No films yet."));
 		}
 		if (CraftedBody->GetVisibility() != ESlateVisibility::Collapsed)
 		{
@@ -645,9 +686,10 @@ void UDCFilmCraftingWidget::Refresh()
 	}
 	const bool bHasLocked = Crafting->UnlockedSlots < Config->MaxSlots;
 	LockedBox->SetVisibility(bHasLocked ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
-	LockedText->SetText(FText::FromString(FString::Printf(TEXT("SLOT %d  LOCKED\nUnlock it at the computer"), Crafting->UnlockedSlots + 1)));
+	LockedText->SetText(FText::Format(LOCTEXT("Craft_SlotLocked", "SLOT {0}  LOCKED\nUnlock it at the computer"), FText::FromString(FString::FromInt(Crafting->UnlockedSlots + 1))));
 	const int32 Filled = Crafting->GetFilledSlots();
-	SlotsHeader->SetText(FText::FromString(FString::Printf(TEXT("SELECTED VHS (%d/%d)"), Filled, Crafting->UnlockedSlots)));
+	SlotsHeader->SetText(FText::Format(LOCTEXT("Craft_SelectedVHS", "SELECTED VHS ({0}/{1})"),
+		FText::FromString(FString::FromInt(Filled)), FText::FromString(FString::FromInt(Crafting->UnlockedSlots))));
 	ProfileText->ClearChildren();
 	DCUI::SkillList(WidgetTree, ProfileText, Crafting->GetProfile(), Config->SkillCap);
 	const ADCClient* Front = Director ? Director->GetFrontClient() : nullptr;
@@ -655,31 +697,35 @@ void UDCFilmCraftingWidget::Refresh()
 	{
 		const FClientRuntime& Rt = Front->Runtime;
 		DCUI::OrderLines(WidgetTree, OrderText, Rt, PickerWidth - 24.f);
-		OrderHeading->SetText(FText::FromString(TEXT("ORDER   ") + DCUI::ClientTierLabel(Config, Rt.Tier)));
+		OrderHeading->SetText(FText::Format(LOCTEXT("Order_HeadingTier", "ORDER   {0}"), DCUI::ClientTierLabel(Config, Rt.Tier)));
 		OrderPatience->SetPercent(Front->PatienceMax > 0.f ? Rt.PatienceLeft / Front->PatienceMax : 0.f);
 		DCUI::OrderLines(WidgetTree, CraftedOrderText, Rt, 0.f);
 		CraftedOrderHeading->SetText(OrderHeading->GetText());
 		CraftedOrderPatience->SetPercent(Front->PatienceMax > 0.f ? Rt.PatienceLeft / Front->PatienceMax : 0.f);
 	}
 	// The order's size is public: one tape never reaches it, so the player knows a combination is needed
-	PointsText->SetText(FText::FromString(Front && Front->IsAtFront()
-		? FString::Printf(TEXT("Order size: %d points   Your film: %d"), Front->Runtime.Target.Total(), Crafting->GetProfile().Total())
-		: FString()));
+	PointsText->SetText(Front && Front->IsAtFront()
+		? FText::Format(LOCTEXT("Craft_OrderPoints", "Order size: {0} points   Your film: {1}"),
+			FText::FromString(FString::FromInt(Front->Runtime.Target.Total())),
+			FText::FromString(FString::FromInt(Crafting->GetProfile().Total())))
+		: FText::GetEmpty());
 	if (Front && Front->IsAtFront() && Filled >= 1)
 	{
 		const float Known = UBPFL_Scoring::ComputeErrorRatio(Crafting->GetProfile(), Front->Runtime.Target, Config); // same ratio as the real reaction, so the meter never lies
 		switch (UBPFL_Scoring::GetReaction(Known, Config))
 		{
-		case EReaction::Loved: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(FText::FromString(TEXT("GREAT"))); break;
-		case EReaction::Liked: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(FText::FromString(TEXT("GOOD"))); break;
-		case EReaction::Neutral: MatchText->SetStyle(UDCText_Caution::StaticClass()); MatchText->SetText(FText::FromString(TEXT("OKAY"))); break;
-		default: MatchText->SetStyle(UDCText_Warn::StaticClass()); MatchText->SetText(FText::FromString(TEXT("POOR"))); break;
+		case EReaction::Loved: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(LOCTEXT("Craft_MatchGreat", "GREAT")); break;
+		case EReaction::Liked: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(LOCTEXT("Craft_MatchGood", "GOOD")); break;
+		case EReaction::Neutral: MatchText->SetStyle(UDCText_Caution::StaticClass()); MatchText->SetText(LOCTEXT("Craft_MatchOkay", "OKAY")); break;
+		default: MatchText->SetStyle(UDCText_Warn::StaticClass()); MatchText->SetText(LOCTEXT("Craft_MatchPoor", "POOR")); break;
 		}
 	}
 	else
 	{
 		MatchText->SetStyle(UDCText_Body::StaticClass());
-		MatchText->SetText(FText::FromString(Front && Front->IsAtFront() ? TEXT("Pick a tape to see how it fits") : TEXT("No client at the counter")));
+		MatchText->SetText(Front && Front->IsAtFront()
+			? LOCTEXT("Craft_PickTapeHint", "Pick a tape to see how it fits")
+			: LOCTEXT("Craft_NoClient", "No client at the counter"));
 	}
 	TitleBox->SetIsEnabled(Filled >= 1); // title only editable once a tape is in
 	if (Crafting->SlotRows != LastSlotRows) // new mix: rename it, unless the player wrote their own title
@@ -693,10 +739,12 @@ void UDCFilmCraftingWidget::Refresh()
 		}
 	}
 	ConfirmButton->SetIsEnabled(Crafting->CanConfirm());
-	ConfirmButton->Label->SetText(FText::FromString(Filled < Config->MinTapesToCombine ? FString::Printf(TEXT("NEED %d+ TAPES"), Config->MinTapesToCombine) : FString(TEXT("COMBINE"))));
+	ConfirmButton->Label->SetText(Filled < Config->MinTapesToCombine
+		? FText::Format(LOCTEXT("Craft_NeedTapes", "NEED {0}+ TAPES"), FText::FromString(FString::FromInt(Config->MinTapesToCombine)))
+		: LOCTEXT("Craft_CombineBtn", "COMBINE"));
 	DiscardButton->SetIsEnabled(Crafting->HeldFilms.Num() > 0);
 	HeldText->SetText(Crafting->HeldFilms.Num() > 0
-		? FText::FromString(FString::Printf(TEXT("In hand: %s"), *Crafting->HeldFilms[0].Title.ToString()))
+		? FText::Format(LOCTEXT("Stats_InHand", "In hand: {0}"), Crafting->HeldFilms[0].Title)
 		: FText::GetEmpty());
 }
 
@@ -708,12 +756,12 @@ void UDCFilmCraftingWidget::OnPicked(FName VHSRow)
 		{
 			const bool bOk = Crafting->SetSlot(i, VHSRow);
 			ADCAudioManager::PlayCueStatic(this, bOk ? TEXT("FilmPlace") : TEXT("SlotFull"));
-			StatusText->SetText(bOk ? FText::GetEmpty() : FText::FromString(TEXT("No copies of that tape left")));
+			StatusText->SetText(bOk ? FText::GetEmpty() : LOCTEXT("Craft_NoCopies", "No copies of that tape left"));
 			return;
 		}
 	}
 	ADCAudioManager::PlayCueStatic(this, TEXT("SlotFull"));
-	StatusText->SetText(FText::FromString(TEXT("All slots are full: remove a tape first")));
+	StatusText->SetText(LOCTEXT("Craft_SlotsFull", "All slots are full: remove a tape first"));
 }
 
 void UDCFilmCraftingWidget::OnClearClicked(FName SlotName)
@@ -749,7 +797,7 @@ void UDCDialogueWidget::NativeOnInitialized()
 	Super::NativeOnInitialized();
 	// Wide strip along the bottom of the screen, between the key bar (left) and the cash box (right)
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, -48.f));
-	HeadingText = DCUI::Text(WidgetTree, V, TEXT("CUSTOMER"), UDCText_Heading::StaticClass());
+	HeadingText = DCUI::Text(WidgetTree, V, LOCTEXT("Dialogue_Customer", "CUSTOMER"), UDCText_Heading::StaticClass());
 	HeadingText->SetMargin(FMargin(0.f, 0.f, 0.f, 8.f));
 	LineBox = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(LineBox);
@@ -757,7 +805,7 @@ void UDCDialogueWidget::NativeOnInitialized()
 	UVerticalBoxSlot* ButtonSlot = V->AddChildToVerticalBox(Buttons);
 	ButtonSlot->SetHorizontalAlignment(HAlign_Right);
 	ButtonSlot->SetPadding(FMargin(0.f, 14.f, 0.f, 0.f));
-	RejectButton = DCUI::Button(WidgetTree, Buttons, TEXT("No, sorry"), NAME_None, UDCButton_Tab::StaticClass());
+	RejectButton = DCUI::Button(WidgetTree, Buttons, LOCTEXT("Dialogue_Reject", "No, sorry"), NAME_None, UDCButton_Tab::StaticClass());
 	RejectButton->OnPayloadClicked.AddDynamic(this, &UDCDialogueWidget::HandleReject);
 	Button = DCUI::Button(WidgetTree, Buttons, TEXT(""));
 	Button->OnPayloadClicked.AddDynamic(this, &UDCDialogueWidget::HandleButton);
@@ -769,13 +817,13 @@ void UDCDialogueWidget::Show(const FText& Line, const FText& ButtonLabel, bool b
 	if (Order)
 	{
 		DCUI::OrderLines(WidgetTree, LineBox, *Order, 1400.f);
-		HeadingText->SetText(FText::FromString(TEXT("CUSTOMER   ") + DCUI::ClientTierLabel(GetWorld()->GetAuthGameMode<ADCGameMode>()->Config, Order->Tier)));
+		HeadingText->SetText(FText::Format(LOCTEXT("Dialogue_CustomerTier", "CUSTOMER   {0}"), DCUI::ClientTierLabel(GetWorld()->GetAuthGameMode<ADCGameMode>()->Config, Order->Tier)));
 	}
 	else
 	{
 		LineBox->ClearChildren();
-		HeadingText->SetText(FText::FromString(TEXT("CUSTOMER")));
-		DCUI::Text(WidgetTree, LineBox, Line.ToString())->SetWrapTextAt(1400.f);
+		HeadingText->SetText(LOCTEXT("Dialogue_Customer", "CUSTOMER"));
+		DCUI::Text(WidgetTree, LineBox, Line)->SetWrapTextAt(1400.f);
 	}
 	Button->Label->SetText(ButtonLabel);
 	RejectButton->SetVisibility(bCanReject ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -789,12 +837,24 @@ void UDCOrderPanelWidget::NativeOnInitialized()
 	UCommonBorder* Panel = nullptr;
 	UVerticalBox* V = DCUI::Panel(WidgetTree, FAnchors(0.f, 0.f), FVector2D::ZeroVector, FVector2D(24.f, 24.f), &Panel);
 	PanelRoot = Panel;
-	HeadingText = DCUI::Text(WidgetTree, V, TEXT("ORDER"), UDCText_Heading::StaticClass());
+	HeadingText = DCUI::Text(WidgetTree, V, LOCTEXT("Order_Heading", "ORDER"), UDCText_Heading::StaticClass());
 	HeadingText->SetMargin(FMargin(0.f, 0.f, 0.f, 6.f));
 	OrderText = WidgetTree->ConstructWidget<UVerticalBox>();
 	V->AddChild(OrderText);
 	PatienceBar = DCUI::Bar(WidgetTree, V, 360.f);
 	PanelRoot->SetVisibility(ESlateVisibility::Collapsed);
+	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &UDCOrderPanelWidget::HandleLanguageChanged);
+}
+
+void UDCOrderPanelWidget::NativeDestruct()
+{
+	UDCSettings::OnLanguageChanged.Remove(LanguageChangedHandle);
+	Super::NativeDestruct();
+}
+
+void UDCOrderPanelWidget::HandleLanguageChanged()
+{
+	ShownClient.Reset();
 }
 
 void UDCOrderPanelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -812,7 +872,9 @@ void UDCOrderPanelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 	{
 		ShownClient = Front;
 		DCUI::OrderLines(WidgetTree, OrderText, Rt, 360.f);
-		HeadingText->SetText(FText::FromString(TEXT("ORDER   ") + DCUI::ClientTierLabel(GetWorld()->GetAuthGameMode<ADCGameMode>()->Config, Rt.Tier)));
+		HeadingText->SetText(FText::Format(LOCTEXT("Order_HeadingTier", "ORDER   {0}"), DCUI::ClientTierLabel(GetWorld()->GetAuthGameMode<ADCGameMode>()->Config, Rt.Tier)));
 	}
 	PatienceBar->SetPercent(Front->PatienceMax > 0.f ? Front->Runtime.PatienceLeft / Front->PatienceMax : 0.f);
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -1,12 +1,24 @@
 #include "Core/DCGameInstance.h"
 #include "Core/DCAudioManager.h"
 #include "Core/DCGameMode.h"
+#include "Core/DCSettings.h"
 #include "Components/DCComponents.h"
+#include "Internationalization/Culture.h"
+#include "Internationalization/Internationalization.h"
+#include "Internationalization/TextLocalizationManager.h"
 #include "Kismet/GameplayStatics.h"
 
 void UDCGameInstance::Init()
 {
 	Super::Init();
+#if WITH_EDITOR
+	if (GIsEditor)
+	{
+		EditorCultureToRestore = FInternationalization::Get().GetCurrentLanguage()->GetName();
+	}
+#endif
+	TextRevisionHandle = FTextLocalizationManager::Get().OnTextRevisionChangedEvent.AddStatic(&UDCSettings::HandleTextRevisionChanged);
+	UDCSettings::Get()->ApplyLanguage();
 	ADCAudioManager::SetGlobalParameterStatic("Location", 2.f);
 	ADCAudioManager::SetGlobalParameterStatic("Day-Night", 0.f);
 	ADCAudioManager::EnsurePersistentMusicStarted(this);
@@ -15,6 +27,21 @@ void UDCGameInstance::Init()
 void UDCGameInstance::Shutdown()
 {
 	ADCAudioManager::StopPersistentMusic();
+	FTextLocalizationManager::Get().OnTextRevisionChangedEvent.Remove(TextRevisionHandle);
+	TextRevisionHandle.Reset();
+#if WITH_EDITOR
+	if (GIsEditor)
+	{
+		if (FTextLocalizationManager::Get().IsGameLocalizationPreviewEnabled())
+		{
+			FTextLocalizationManager::Get().DisableGameLocalizationPreview();
+		}
+		if (!EditorCultureToRestore.IsEmpty() && FInternationalization::Get().GetCurrentLanguage()->GetName() != EditorCultureToRestore)
+		{
+			FInternationalization::Get().SetCurrentCulture(EditorCultureToRestore);
+		}
+	}
+#endif
 	Super::Shutdown();
 }
 

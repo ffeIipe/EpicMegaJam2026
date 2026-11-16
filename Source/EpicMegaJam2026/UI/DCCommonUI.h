@@ -23,6 +23,7 @@ class UImage;
 class UTexture2D;
 struct FSkillVector;
 struct FClientRuntime;
+enum class ESkill : uint8;
 
 // Saturated retro-store palette (menu mockup). Names are roles: Grey = body text, Beige = headings and buttons, Lime = accents.
 // SourceArt/UI/gen_ui_textures.js bakes the same values into the panel and title textures: change both together.
@@ -108,7 +109,7 @@ public:
 	UPROPERTY() TObjectPtr<UDataTable> Actions;
 
 private:
-	void Add(FName Name, const TCHAR* DisplayName, const FKey& Key, const FKey& GamepadKey, const TCHAR* Cap);
+	void Add(FName Name, const FText& DisplayName, const FKey& Key, const FKey& GamepadKey, const FText& Cap);
 	TMap<FName, FText> KeyCaps;
 };
 
@@ -144,9 +145,14 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 
 private:
+	void RefreshLanguage();
+
 	UPROPERTY() TObjectPtr<UCommonTextBlock> KeyText;
+	FUIActionBindingHandle CachedBindingHandle;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 // A screen pushed on the root layout's stack: menu input (cursor, no look/move), Esc goes back unless bIsBackHandler is cleared
@@ -182,16 +188,29 @@ namespace DCUI
 	// Content padding for the title plate (UDCBorder_Header): clears its slanted ends and stripe
 	inline const FMargin HeaderPadding(48.f, 12.f, 36.f, 12.f);
 
-	EPICMEGAJAM2026_API UCommonTextBlock* Text(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Text, TSubclassOf<UCommonTextStyle> Style = UDCText_Body::StaticClass());
+	EPICMEGAJAM2026_API UCommonTextBlock* Text(UWidgetTree* Tree, UPanelWidget* Parent, const FText& Text, TSubclassOf<UCommonTextStyle> Style = UDCText_Body::StaticClass());
+	inline UCommonTextBlock* Text(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Str, TSubclassOf<UCommonTextStyle> Style = UDCText_Body::StaticClass())
+	{
+		return Text(Tree, Parent, FText::FromString(Str), Style);
+	}
 	EPICMEGAJAM2026_API UCommonBorder* Border(UWidgetTree* Tree, UPanelWidget* Parent, TSubclassOf<UCommonBorderStyle> Style, FMargin Padding);
-	EPICMEGAJAM2026_API UDCButton* Button(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Label, FName Payload = NAME_None, TSubclassOf<UCommonButtonStyle> Style = UDCButton_Primary::StaticClass());
+	EPICMEGAJAM2026_API UDCButton* Button(UWidgetTree* Tree, UPanelWidget* Parent, const FText& Label, FName Payload = NAME_None, TSubclassOf<UCommonButtonStyle> Style = UDCButton_Primary::StaticClass());
+	inline UDCButton* Button(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Label, FName Payload = NAME_None, TSubclassOf<UCommonButtonStyle> Style = UDCButton_Primary::StaticClass())
+	{
+		return Button(Tree, Parent, FText::FromString(Label), Payload, Style);
+	}
 	// Makes a canvas the tree root with a styled panel anchored on it; returns the panel's content box
 	EPICMEGAJAM2026_API UVerticalBox* Panel(UWidgetTree* Tree, FAnchors Anchors, FVector2D Alignment, FVector2D Position, UCommonBorder** OutPanel = nullptr, TSubclassOf<UCommonBorderStyle> Style = UDCBorder_Panel::StaticClass());
 	// Title bar of a screen (blue plate, display font), with an optional subtitle under it
-	EPICMEGAJAM2026_API void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle = FString());
+	EPICMEGAJAM2026_API void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FText& Title, const FText& Subtitle = FText::GetEmpty());
+	inline void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle = FString())
+	{
+		Header(Tree, Parent, FText::FromString(Title), Subtitle.IsEmpty() ? FText::GetEmpty() : FText::FromString(Subtitle));
+	}
+	EPICMEGAJAM2026_API FText SkillName(ESkill Skill);
 	EPICMEGAJAM2026_API FString Stars(int32 Rating);
 	// "★ 3 Enthusiast": the client level as stars plus its DT_ClientTiers name
-	EPICMEGAJAM2026_API FString ClientTierLabel(const UPDA_GameConfig* Config, int32 Tier);
+	EPICMEGAJAM2026_API FText ClientTierLabel(const UPDA_GameConfig* Config, int32 Tier);
 	// Hover tooltip on Target listing the skills that are not zero (section 4.1)
 	EPICMEGAJAM2026_API void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills);
 	// Tape titles come from the table with a "★" the fonts can't draw: drop it

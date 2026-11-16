@@ -90,7 +90,7 @@ class EPICMEGAJAM2026_API UDCEndScreenWidget : public UDCScreen
 	GENERATED_BODY()
 public:
 	UDCEndScreenWidget(const FObjectInitializer& ObjectInitializer);
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Title = FText::FromString(TEXT("Eviction notice"));
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Title = NSLOCTEXT("DirectorsCut", "EndScreen_DefaultTitle", "Eviction notice");
 	UFUNCTION(BlueprintCallable) void Show(int32 DayReached);
 
 protected:

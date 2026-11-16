@@ -18,6 +18,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Kismet/GameplayStatics.h"
 
+#define LOCTEXT_NAMESPACE "DirectorsCut"
+
 // Shared money "punch": P goes 1 -> 0. A gain swells and jumps up; a loss swells, sinks and shakes sideways.
 static void ApplyPunch(UWidget* W, float P, bool bGain, float Time)
 {
@@ -57,7 +59,7 @@ void UDCHUDWidget::NativeOnInitialized()
 	BackRoomKeyText = DCUI::Text(WidgetTree, nullptr, TEXT("SPACE"), UDCText_Heading::StaticClass()); // set each tick from the rebindable key
 	HintCap->SetContent(BackRoomKeyText);
 	Cast<UHorizontalBoxSlot>(HintCap->Slot)->SetVerticalAlignment(VAlign_Center);
-	UCommonTextBlock* HintLabel = DCUI::Text(WidgetTree, HintRow, TEXT("Back room"));
+	UCommonTextBlock* HintLabel = DCUI::Text(WidgetTree, HintRow, LOCTEXT("HUD_BackRoom", "Back room"));
 	Cast<UHorizontalBoxSlot>(HintLabel->Slot)->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
 	Cast<UHorizontalBoxSlot>(HintLabel->Slot)->SetVerticalAlignment(VAlign_Center);
 
@@ -169,16 +171,21 @@ void UDCStatsWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 
 	const int32 Goal = GM->Config->MovieBudgetGoal;
 	GoalBar->SetPercent(Goal > 0 ? FMath::Clamp((float)Money / Goal, 0.f, 1.f) : 0.f);
-	GoalText->SetText(FText::FromString(FString::Printf(TEXT("Goal: $%d"), Goal)));
-	DayText->SetText(FText::FromString(FString::Printf(TEXT("Day %d - %s"), GM->DayNightCycle->DayIndex,
-		GM->DayNightCycle->CurrentPhase == EPhase::Day ? TEXT("Day") : TEXT("Night"))));
+	GoalText->SetText(FText::Format(LOCTEXT("Stats_Goal", "Goal: ${0}"), FText::FromString(FString::FromInt(Goal))));
+	const FText PhaseLabel = GM->DayNightCycle->CurrentPhase == EPhase::Day
+		? LOCTEXT("Phase_Day", "Day")
+		: LOCTEXT("Phase_Night", "Night");
+	DayText->SetText(FText::Format(LOCTEXT("Stats_DayPhase", "Day {0} - {1}"), FText::FromString(FString::FromInt(GM->DayNightCycle->DayIndex)), PhaseLabel));
 	ClockText->SetText(GM->DayNightCycle->bTutorialPaused
-		? FText::Format(INVTEXT("{0} (Tutorial)"), GM->DayNightCycle->GetClockText())
+		? FText::Format(LOCTEXT("Stats_TutorialClock", "{0} (Tutorial)"), GM->DayNightCycle->GetClockText())
 		: GM->DayNightCycle->GetClockText());
 	const int32 DueMinutes = FMath::RoundToInt(GM->Config->ClockNightEndHour * 60.f) % (24 * 60); // rent is collected when the night ends
-	RentText->SetText(FText::FromString(FString::Printf(TEXT("Rent $%d due %02d:%02d"), GM->Economy->GetRentForDay(GM->DayNightCycle->DayIndex), DueMinutes / 60, DueMinutes % 60)));
+	const FString DueTimeStr = FString::Printf(TEXT("%02d:%02d"), DueMinutes / 60, DueMinutes % 60);
+	RentText->SetText(FText::Format(LOCTEXT("Stats_RentDue", "Rent ${0} due {1}"),
+		FText::FromString(FString::FromInt(GM->Economy->GetRentForDay(GM->DayNightCycle->DayIndex))),
+		FText::FromString(DueTimeStr)));
 	HeldText->SetText(GM->FilmCrafting->HeldFilms.Num() > 0
-		? FText::FromString(FString::Printf(TEXT("In hand: %s"), *GM->FilmCrafting->HeldFilms[0].Title.ToString()))
+		? FText::Format(LOCTEXT("Stats_InHand", "In hand: {0}"), GM->FilmCrafting->HeldFilms[0].Title)
 		: FText::GetEmpty());
 }
 
@@ -247,16 +254,26 @@ void UDCEndScreenWidget::NativeOnInitialized()
 	TitleBlock = DCUI::Text(WidgetTree, V, TEXT(""), UDCText_Title::StaticClass());
 	DayBlock = DCUI::Text(WidgetTree, V, TEXT(""));
 	DayBlock->SetMargin(FMargin(0.f, 12.f));
-	DCUI::Button(WidgetTree, V, TEXT("RESTART"))->OnPayloadClicked.AddDynamic(this, &UDCEndScreenWidget::OnRestart);
-	UDCButton* MainMenuBtn = DCUI::Button(WidgetTree, V, TEXT("BACK TO MAIN MENU"));
+	DCUI::Button(WidgetTree, V, LOCTEXT("EndScreen_Restart", "RESTART"))->OnPayloadClicked.AddDynamic(this, &UDCEndScreenWidget::OnRestart);
+	UDCButton* MainMenuBtn = DCUI::Button(WidgetTree, V, LOCTEXT("EndScreen_MainMenu", "BACK TO MAIN MENU"));
 	MainMenuBtn->OnPayloadClicked.AddDynamic(this, &UDCEndScreenWidget::OnMainMenu);
 	Cast<UVerticalBoxSlot>(MainMenuBtn->Slot)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 }
 
 void UDCEndScreenWidget::Show(int32 DayReached)
 {
-	TitleBlock->SetText(Title);
-	DayBlock->SetText(FText::FromString(FString::Printf(TEXT("Day reached: %d"), DayReached)));
+	FText DisplayTitle = Title;
+	const FString RawTitle = Title.ToString();
+	if (RawTitle.Equals(TEXT("Eviction notice"), ESearchCase::IgnoreCase))
+	{
+		DisplayTitle = LOCTEXT("EndScreen_GameOver", "Eviction notice");
+	}
+	else if (RawTitle.Equals(TEXT("Your Director's Cut gets greenlit"), ESearchCase::IgnoreCase))
+	{
+		DisplayTitle = LOCTEXT("EndScreen_Victory", "Your Director's Cut gets greenlit");
+	}
+	TitleBlock->SetText(DisplayTitle);
+	DayBlock->SetText(FText::Format(LOCTEXT("EndScreen_DayReached", "Day reached: {0}"), FText::FromString(FString::FromInt(DayReached))));
 }
 
 void UDCEndScreenWidget::OnRestart(FName Unused)
@@ -332,7 +349,7 @@ void UDCIntroSkipWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 	UVerticalBox* Box = DCUI::Panel(WidgetTree, FAnchors(1.f, 1.f), FVector2D(1.f, 1.f), FVector2D(-24.f, -24.f));
-	DCUI::Text(WidgetTree, Box, TEXT("Hold any key to skip"), UDCText_Body::StaticClass());
+	DCUI::Text(WidgetTree, Box, LOCTEXT("IntroSkip_Prompt", "Hold any key to skip"), UDCText_Body::StaticClass());
 	ProgressBar = DCUI::Bar(WidgetTree, Box, 220.f);
 	if (UVerticalBoxSlot* BarSlot = Cast<UVerticalBoxSlot>(ProgressBar->GetParent()->Slot))
 	{
@@ -348,3 +365,5 @@ void UDCIntroSkipWidget::SetSkipProgress(float Progress)
 		ProgressBar->SetPercent(FMath::Clamp(Progress, 0.f, 1.f));
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

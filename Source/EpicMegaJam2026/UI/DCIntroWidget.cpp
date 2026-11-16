@@ -15,6 +15,8 @@
 #include "MediaTexture.h"
 #include "Misc/Paths.h"
 
+#define LOCTEXT_NAMESPACE "DirectorsCut"
+
 namespace
 {
 	constexpr float IntroFade = 0.6f;
@@ -53,7 +55,7 @@ void UDCIntroWidget::NativeOnInitialized()
 		Content->SetVisibility(ESlateVisibility::Collapsed);
 		Cards.Add(Content);
 	};
-	auto Line = [this](UVerticalBox* Box, const TCHAR* Text, TSubclassOf<UCommonTextStyle> Style, float Top)
+	auto Line = [this](UVerticalBox* Box, const FText& Text, TSubclassOf<UCommonTextStyle> Style, float Top)
 	{
 		UCommonTextBlock* T = DCUI::Text(WidgetTree, Box, Text, Style);
 		T->SetJustification(ETextJustify::Center);
@@ -62,16 +64,16 @@ void UDCIntroWidget::NativeOnInitialized()
 
 	// Card 0: Unreal Engine (Epic's license asks for the notice, not for a logo file)
 	UVerticalBox* Unreal = WidgetTree->ConstructWidget<UVerticalBox>();
-	Line(Unreal, TEXT("MADE WITH"), UDCText_Accent::StaticClass(), 0.f);
-	Line(Unreal, TEXT("UNREAL ENGINE"), UDCText_Title::StaticClass(), 8.f);
-	Line(Unreal, TEXT("Unreal® Engine. Copyright 1998 – 2026, Epic Games, Inc. All rights reserved."), UDCText_Body::StaticClass(), 24.f);
+	Line(Unreal, LOCTEXT("Intro_MadeWith", "MADE WITH"), UDCText_Accent::StaticClass(), 0.f);
+	Line(Unreal, INVTEXT("UNREAL ENGINE"), UDCText_Title::StaticClass(), 8.f);
+	Line(Unreal, LOCTEXT("Intro_UnrealLegal", "Unreal® Engine. Copyright 1998 – 2026, Epic Games, Inc. All rights reserved."), UDCText_Body::StaticClass(), 24.f);
 	AddCard(Unreal);
 
 	// Card 1: FMOD attribution required by its license
 	UVerticalBox* Fmod = WidgetTree->ConstructWidget<UVerticalBox>();
-	Line(Fmod, TEXT("AUDIO ENGINE"), UDCText_Accent::StaticClass(), 0.f);
-	Line(Fmod, TEXT("FMOD STUDIO"), UDCText_Title::StaticClass(), 8.f);
-	Line(Fmod, TEXT("FMOD Studio by Firelight Technologies Pty Ltd."), UDCText_Body::StaticClass(), 24.f);
+	Line(Fmod, LOCTEXT("Intro_AudioEngine", "AUDIO ENGINE"), UDCText_Accent::StaticClass(), 0.f);
+	Line(Fmod, INVTEXT("FMOD STUDIO"), UDCText_Title::StaticClass(), 8.f);
+	Line(Fmod, LOCTEXT("Intro_FmodLegal", "FMOD Studio by Firelight Technologies Pty Ltd."), UDCText_Body::StaticClass(), 24.f);
 	AddCard(Fmod);
 
 	// Card 2: studio logo; falls back to the name when the texture asset is missing
@@ -88,7 +90,7 @@ void UDCIntroWidget::NativeOnInitialized()
 	}
 	else
 	{
-		AddCard(DCUI::Text(WidgetTree, nullptr, TEXT("AMPERSAND GAMES"), UDCText_Title::StaticClass()));
+		AddCard(DCUI::Text(WidgetTree, nullptr, INVTEXT("AMPERSAND GAMES"), UDCText_Title::StaticClass()));
 	}
 
 	// Opening cinematic, letterboxed on the black stage
@@ -103,7 +105,7 @@ void UDCIntroWidget::NativeOnInitialized()
 	VideoLayer = VideoScale;
 
 	// Skip hint, bottom right (the key bar owns the bottom left)
-	UCommonTextBlock* SkipHint = DCUI::Text(WidgetTree, nullptr, TEXT("▶ PRESS ANY KEY TO SKIP"), UDCText_Body::StaticClass());
+	UCommonTextBlock* SkipHint = DCUI::Text(WidgetTree, nullptr, LOCTEXT("Intro_SkipHint", "▶ PRESS ANY KEY TO SKIP"), UDCText_Body::StaticClass());
 	UCanvasPanelSlot* HintSlot = Root->AddChildToCanvas(SkipHint);
 	HintSlot->SetAnchors(FAnchors(1.f, 1.f));
 	HintSlot->SetAlignment(FVector2D(1.f, 1.f));
@@ -260,3 +262,5 @@ void UDCIntroWidget::Finish()
 		OnFinished.Broadcast();
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

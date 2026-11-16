@@ -28,11 +28,24 @@ public:
 	UPROPERTY(Config) bool bVSync = false;
 	UPROPERTY(Config) bool bFullscreen = true;
 	UPROPERTY(Config) int32 ResolutionScale = 100; // percent of screen resolution, 50..100
+	// "en" or "es"; empty on first launch -> detected from the OS culture
+	UPROPERTY(Config) FString Language;
+
+	DECLARE_MULTICAST_DELEGATE(FOnDCLanguageChanged);
+	static FOnDCLanguageChanged OnLanguageChanged;
 
 	static UDCSettings* Get() { return GetMutableDefault<UDCSettings>(); }
 	FKey& Key(EDCAction Action);
 	static const TCHAR* ActionLabel(EDCAction Action);
-	// Pushes the volume to FMOD's master bus (no-op when FMOD isn't running)
+	static FText ActionDisplayLabel(EDCAction Action);
+	static FString DetectDefaultLanguage();
+	static FText LanguageDisplayName(const FString& Code);
+	FString GetEffectiveLanguage() const;
+	void ApplyLanguage() const;
+	void SetLanguage(const FString& NewLanguage);
+	static void RefreshWorldTextRenders();
+	static void HandleTextRevisionChanged();
+	// Pushes settings (language, graphics, FMOD volume)
 	void Apply() const;
 	void Save();
 };
