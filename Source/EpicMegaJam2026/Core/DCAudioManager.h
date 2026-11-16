@@ -25,8 +25,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
 	TMap<FName, TObjectPtr<UFMODEvent>> Cues;
 
+	ADCAudioManager();
+
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	UFUNCTION(BlueprintPure, Category = "Audio")
 	UFMODEvent* ResolveEvent(FName Name) const;
@@ -54,6 +57,12 @@ public:
 	void SetPauseOrDialogueActive(bool bActive);
 
 	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void BeginIntroMusicFadeOut(float DurationSec = 2.f);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
+	void EndIntroMusicFadeIn(float DurationSec = 2.f);
+
+	UFUNCTION(BlueprintCallable, Category = "Audio")
 	void SetZoneAmbience(ECameraZone Zone);
 
 	UFUNCTION(BlueprintCallable, Category = "Audio")
@@ -73,11 +82,21 @@ public:
 	static void SetGlobalParameterStatic(const char* Name, float Value);
 
 private:
+	enum class EMusicFadeState : uint8
+	{
+		None,
+		FadingOutForIntro,
+		MutedInIntro,
+		FadingInFromIntro
+	};
+
 	void EnsureAudioConfig();
 	const FDCAudioCue* ResolveCueStruct(FName Name) const;
 	void PlayCueInternal(FName Name, bool bAtLocation, FVector Location, const TMap<FName, float>* ExtraParameters);
 	void StartOrSwitchLoop(FFMODEventInstance& Instance, TWeakObjectPtr<UFMODEvent>& CurrentEvent, const FDCAudioCue* TargetCue);
+	void AdvanceIntroFade(float DeltaSeconds, float TargetVolume, EMusicFadeState CompletedState, bool bSwitchToCounterOnFinish);
 	static void ApplyParametersToInstance(FFMODEventInstance Instance, const TMap<FName, float>& Parameters);
+	static void SetPersistentMusicVolume(float Volume);
 
 	FFMODEventInstance AmbienceInstance;
 	FFMODEventInstance LightBuzzInstance;
@@ -87,4 +106,8 @@ private:
 	TWeakObjectPtr<UFMODEvent> CurrentLightBuzzEvent;
 	bool bCurrentBackRoom = false;
 	EPhase CurrentPhase = EPhase::Day;
+	EMusicFadeState MusicFadeState = EMusicFadeState::None;
+	float MusicFadeStartVolume = 1.f;
+	float MusicFadeElapsed = 0.f;
+	float MusicFadeDuration = 2.f;
 };

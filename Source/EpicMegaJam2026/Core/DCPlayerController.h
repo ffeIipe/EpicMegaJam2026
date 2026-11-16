@@ -128,6 +128,7 @@ private:
 	UFUNCTION() void HandleReview(const FReview& Review);
 	UFUNCTION() void HandleGameOver();
 	UFUNCTION() void HandleVictory();
+	UFUNCTION() void FinishWinSequence();
 	UFUNCTION() void HandleDayClosed(const FDaySummary& Summary);
 	UFUNCTION() void HandleOpenStore();
 	UFUNCTION() void HandleClientReached(AActor* Client);
@@ -156,6 +157,7 @@ private:
 	UFUNCTION() void FinishIntro();
 
 	bool bPlayingIntro = false;
+	bool bPlayingWin = false;
 	float IntroSkipHoldElapsed = 0.f;
 	float ShakeLeft = 0.f;
 	FRotator CounterRot = FRotator::ZeroRotator; // Starting direction: the look range is centred on it
@@ -180,6 +182,7 @@ private:
 
 	UPROPERTY() TObjectPtr<ULevelSequencePlayer> SequencePlayer;
 	UPROPERTY() TObjectPtr<ULevelSequencePlayer> IntroSequencePlayer;
+	UPROPERTY() TObjectPtr<ULevelSequencePlayer> WinSequencePlayer;
 	UPROPERTY() TObjectPtr<UDCOrderPanelWidget> OrderPanelWidget;
 	UPROPERTY() TObjectPtr<UDCHUDWidget> HUDWidget;
 	UPROPERTY() TObjectPtr<UDCStatsWidget> StatsWidget;

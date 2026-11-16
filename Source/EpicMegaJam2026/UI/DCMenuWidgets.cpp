@@ -412,12 +412,7 @@ static UVerticalBox* AddCard(UWidgetTree* Tree, UVerticalBox* List, const FLinea
 	TileSize->SetWidthOverride(TileDims.X);
 	TileSize->SetHeightOverride(TileDims.Y);
 	UImage* Tile = Tree->ConstructWidget<UImage>();
-	if (!Cover.IsNull())
-	{
-		Tile->SetColorAndOpacity(FLinearColor::White);
-		Tile->SetBrushFromSoftTexture(Cover);
-	}
-	else
+	if (!DCUI::SetCoverTexture(Tile, Cover))
 	{
 		Tile->SetBrush(FSlateBrush());
 		Tile->SetColorAndOpacity(TileColor);
@@ -777,7 +772,7 @@ void UDCMainMenuWidget::NativeOnInitialized()
 	PanelSlot->SetAutoSize(true);
 
 	UCommonBorder* HeaderPlate = DCUI::Border(WidgetTree, nullptr, UDCBorder_Header::StaticClass(), DCUI::HeaderPadding);
-	HeaderPlate->SetContent(DCUI::Text(WidgetTree, nullptr, TEXT("REWIND: RENT TONIGHT"), UDCText_Title::StaticClass()));
+	HeaderPlate->SetContent(DCUI::Text(WidgetTree, nullptr, TEXT("RENT TONIGHT"), UDCText_Title::StaticClass()));
 	UVerticalBoxSlot* PlateSlot = Stack->AddChildToVerticalBox(HeaderPlate);
 	PlateSlot->SetHorizontalAlignment(HAlign_Left);
 	PlateSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));

@@ -1,6 +1,7 @@
 #include "Core/DCGameMode.h"
 #include "Core/DCCounterCamera.h"
 #include "Core/DCPlayerController.h"
+#include "Core/DCGameInstance.h"
 
 ADCGameMode::ADCGameMode()
 {
@@ -27,9 +28,24 @@ void ADCGameMode::BeginPlay()
 		Cls = ADCAudioManager::StaticClass();
 	}
 	AudioManager = GetWorld()->SpawnActor<ADCAudioManager>(Cls);
-	if (AudioManager)
+}
+
+void ADCGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Covers returning to the menu and quitting; components are still valid before Super.
+	SaveProgress();
+	Super::EndPlay(EndPlayReason);
+}
+
+void ADCGameMode::SaveProgress() const
+{
+	// After game over/victory the slot is reset to day one by the end screen; saving here would undo that.
+	if (Economy && (Economy->bGameIsOver || Economy->bWon))
 	{
-		AudioManager->SetZoneAmbience(ECameraZone::Counter);
-		AudioManager->SetPhaseMusic(DayNightCycle ? DayNightCycle->CurrentPhase : EPhase::Day);
+		return;
+	}
+	if (UDCGameInstance* GI = GetGameInstance<UDCGameInstance>())
+	{
+		GI->CaptureGameModeToActiveSave(this);
 	}
 }

@@ -80,7 +80,7 @@ void ADCPlayerController::BeginPlay()
 	StatsWidget = MakeWidget<UDCStatsWidget>(this, nullptr, 5, PassThrough); // above the screens so the numbers are always visible
 	OrderPanelWidget = MakeWidget<UDCOrderPanelWidget>(this, OrderPanelWidgetClass, 1, ESlateVisibility::HitTestInvisible);
 	OrderPanelWidget->Setup(GM->ClientDirector);
-	ReviewToastWidget = MakeWidget<UDCReviewToastWidget>(this, ReviewToastWidgetClass, 3, PassThrough);
+	ReviewToastWidget = MakeWidget<UDCReviewToastWidget>(this, ReviewToastWidgetClass, 6, PassThrough); // above everything: it only lasts a few seconds
 	RootLayout = MakeWidget<UDCRootLayout>(this, nullptr, 4, PassThrough);
 	// Above RootLayout (ZOrder 4) so the guide remains visible over modal screens without blocking clicks
 	TutorialWidget = MakeWidget<UDCTutorialWidget>(this, TutorialWidgetClass, 5, PassThrough);
@@ -111,8 +111,9 @@ void ADCPlayerController::BeginPlay()
 	TutorialStep = bRunTutorial ? ETutorialStep::WaitForClient : ETutorialStep::Inactive;
 	GM->ClientDirector->bHoldExtraClientsForTutorial = bRunTutorial;
 	TryStartIntro();
-	if (GM->AudioManager)
+	if (!bPlayingIntro && GM->AudioManager)
 	{
+		GM->AudioManager->EndIntroMusicFadeIn(0.f);
 		GM->AudioManager->SetZoneAmbience(CameraZone);
 		if (GM->DayNightCycle)
 		{
@@ -148,10 +149,6 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 	if (const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr; GM && GM->AudioManager)
 	{
 		GM->AudioManager->SetPauseOrDialogueActive(bPauseOrDialogue);
-	}
-	if (ReviewToastWidget && Cast<UDCFilmCraftingWidget>(Screen))
-	{
-		ReviewToastWidget->Hide(); // a toast still up would sit behind the combine screen
 	}
 	if (OrderPanelWidget)
 	{
@@ -202,7 +199,7 @@ void ADCPlayerController::CloseScreen()
 
 void ADCPlayerController::TogglePause()
 {
-	if (bPlayingIntro)
+	if (bPlayingIntro || bPlayingWin)
 	{
 		return;
 	}
@@ -221,7 +218,7 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 	Super::PlayerTick(DeltaTime);
 
 	const ADCInteractable* Aimed = nullptr;
-	if (!bPlayingIntro && !bFallbackTransition && !DialogueClient.IsValid() && CameraZone == ECameraZone::Counter && !IsBlockedByUI())
+	if (!bPlayingIntro && !bPlayingWin && !bFallbackTransition && !DialogueClient.IsValid() && CameraZone == ECameraZone::Counter && !IsBlockedByUI())
 	{
 		ADCClient* AimedClient;
 		TraceTarget(AimedClient, Aimed);
@@ -239,6 +236,10 @@ void ADCPlayerController::PlayerTick(float DeltaTime)
 		HighlightedProp = Aimed;
 	}
 
+	if (bPlayingWin)
+	{
+		return;
+	}
 	if (bPlayingIntro)
 	{
 		TickIntro(DeltaTime);
@@ -492,6 +493,10 @@ void ADCPlayerController::TryStartIntro()
 
 	bPlayingIntro = true;
 	IntroSkipHoldElapsed = 0.f;
+	if (GM->AudioManager)
+	{
+		GM->AudioManager->BeginIntroMusicFadeOut(2.f);
+	}
 	Cue(TEXT("IntroStart"));
 	IntroSequencePlayer->Play();
 }
@@ -572,6 +577,7 @@ void ADCPlayerController::FinishIntro()
 		GM->DayNightCycle->bRunning = true;
 		if (GM->AudioManager)
 		{
+			GM->AudioManager->EndIntroMusicFadeIn(2.f);
 			GM->AudioManager->SetZoneAmbience(CameraZone);
 			if (GM->DayNightCycle)
 			{
@@ -829,6 +835,10 @@ void ADCPlayerController::HandleUnlockPurchased(FName UnlockId)
 {
 	Cue(TEXT("UnlockPurchased"));
 	const ADCGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<ADCGameMode>() : nullptr;
+	if (GM)
+	{
+		GM->SaveProgress();
+	}
 	const FUnlockData* Row = GM && GM->Unlocks ? GM->Unlocks->GetUnlockData(UnlockId) : nullptr;
 	if (Row && Row->Type == EUnlockType::Genre && IsTutorialActive())
 	{
@@ -844,6 +854,10 @@ void ADCPlayerController::HandleFilmCreated(const FCreatedFilm& Film)
 {
 	Cue(TEXT("FilmCreated"));
 	HitStop();
+	if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
+	{
+		GM->SaveProgress();
+	}
 	if (TutorialStep == ETutorialStep::CombinePick || TutorialStep == ETutorialStep::GoToBackRoom)
 	{
 		TutorialStep = ETutorialStep::DeliverFilm;
@@ -916,6 +930,10 @@ void ADCPlayerController::HandleTutorialFilmStateChanged()
 
 void ADCPlayerController::HandleTutorialTapePurchased(FName Row, int32 Count)
 {
+	if (const ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>())
+	{
+		GM->SaveProgress();
+	}
 	if (bTutorialGenreBought && IsTutorialActive())
 	{
 		bTutorialTapeAfterGenreBought = true;
@@ -1081,7 +1099,7 @@ void ADCPlayerController::RefreshTutorial()
 			EReaction Reaction = EReaction::Loved;
 			if (Front)
 			{
-				const float Known = UBPFL_Scoring::ComputeKnownErrorRatio(GM->FilmCrafting->GetProfile(), Front->Runtime.HintedSkills, Front->Runtime.bFullyHinted, Front->Runtime.Target.Total(), GM->Config);
+				const float Known = UBPFL_Scoring::ComputeErrorRatio(GM->FilmCrafting->GetProfile(), Front->Runtime.Target, GM->Config);
 				Reaction = UBPFL_Scoring::GetReaction(Known, GM->Config);
 			}
 			if (Reaction == EReaction::Loved || Reaction == EReaction::Liked)
@@ -1207,6 +1225,32 @@ void ADCPlayerController::HandleGameOver()
 
 void ADCPlayerController::HandleVictory()
 {
+	ADCGameMode* GM = GetWorld()->GetAuthGameMode<ADCGameMode>();
+	ULevelSequence* Sequence = GM->Config ? GM->Config->WinSequence.LoadSynchronous() : nullptr;
+	FMovieSceneSequencePlaybackSettings Settings;
+	Settings.bPauseAtEnd = true; // hold the last frame until the end screen covers it
+	ALevelSequenceActor* Actor = nullptr;
+	WinSequencePlayer = Sequence ? ULevelSequencePlayer::CreateLevelSequencePlayer(this, Sequence, Settings, Actor) : nullptr;
+	if (!WinSequencePlayer)
+	{
+		FinishWinSequence(); // no sequence: straight to the end screen
+		return;
+	}
+
+	CloseScreen();
+	GM->DayNightCycle->bRunning = false;
+	if (HUDWidget) HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (StatsWidget) StatsWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (OrderPanelWidget) OrderPanelWidget->SetVisibility(ESlateVisibility::Collapsed);
+	if (TutorialWidget) TutorialWidget->SetVisibility(ESlateVisibility::Collapsed);
+	bPlayingWin = true;
+	WinSequencePlayer->OnFinished.AddDynamic(this, &ADCPlayerController::FinishWinSequence);
+	WinSequencePlayer->Play();
+}
+
+void ADCPlayerController::FinishWinSequence()
+{
+	bPlayingWin = false;
 	Cue(TEXT("Victory"));
 	ShowEndScreen(VictoryWidgetClass ? VictoryWidgetClass : TSubclassOf<UDCEndScreenWidget>(UDCEndScreenWidget::StaticClass()));
 }

@@ -9,6 +9,7 @@
 #include "DCMainMenuMode.generated.h"
 
 class UDCMainMenuWidget;
+class UDCIntroWidget;
 class UDCRootLayout;
 
 UCLASS(Blueprintable)
@@ -36,11 +37,15 @@ class EPICMEGAJAM2026_API ADCMainMenuPlayerController : public APlayerController
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCMainMenuWidget> MainMenuWidgetClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI") TSubclassOf<UDCIntroWidget> IntroWidgetClass;
 
 	virtual void BeginPlay() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Audio") void PlayCue(FName Name) const;
 
 private:
+	void ShowMainMenu();
+	UFUNCTION() void HandleIntroFinished();
+
 	UPROPERTY() TObjectPtr<UDCRootLayout> RootLayout;
 };

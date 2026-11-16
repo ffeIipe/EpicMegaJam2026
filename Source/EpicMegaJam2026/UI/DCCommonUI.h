@@ -19,6 +19,8 @@ class UDataTable;
 class UCommonActivatableWidgetStack;
 class UProgressBar;
 class USlider;
+class UImage;
+class UTexture2D;
 struct FSkillVector;
 struct FClientRuntime;
 
@@ -75,7 +77,9 @@ UCLASS() class EPICMEGAJAM2026_API UDCBorder_Panel : public UCommonBorderStyle {
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Header : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Header(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Inset : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Inset(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Transparent : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Transparent(); };
-UCLASS() class EPICMEGAJAM2026_API UDCBorder_KeyCap : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_KeyCap(); };
+// Opaque black stage behind the startup intro
+UCLASS() class EPICMEGAJAM2026_API UDCBorder_Black : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Black(); };
+UCLASS() class EPICMEGAJAM2026_API UDCBorder_KeyCap: public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_KeyCap(); };
 // The two pieces of the padlock icon on a locked slot: hollow shackle, solid body
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_LockShackle : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_LockShackle(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_LockBody : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_LockBody(); };
@@ -171,6 +175,8 @@ protected:
 
 // ---------------------------------------------------------------- Tree-building helpers shared by every code-built widget
 
+class UPDA_GameConfig; // global scope: declaring it inside DCUI creates DCUI::UPDA_GameConfig
+
 namespace DCUI
 {
 	// Content padding for the title plate (UDCBorder_Header): clears its slanted ends and stripe
@@ -185,7 +191,7 @@ namespace DCUI
 	EPICMEGAJAM2026_API void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle = FString());
 	EPICMEGAJAM2026_API FString Stars(int32 Rating);
 	// "★ 3 Enthusiast": the client level as stars plus its DT_ClientTiers name
-	EPICMEGAJAM2026_API FString ClientTierLabel(const class UPDA_GameConfig* Config, int32 Tier);
+	EPICMEGAJAM2026_API FString ClientTierLabel(const UPDA_GameConfig* Config, int32 Tier);
 	// Hover tooltip on Target listing the skills that are not zero (section 4.1)
 	EPICMEGAJAM2026_API void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills);
 	// Tape titles come from the table with a "★" the fonts can't draw: drop it
@@ -202,4 +208,6 @@ namespace DCUI
 	EPICMEGAJAM2026_API UProgressBar* Bar(UWidgetTree* Tree, UPanelWidget* Parent, float Width);
 	// 0..1 slider in the same colors as Bar; the returned slider sits inside a size box added to Parent
 	EPICMEGAJAM2026_API USlider* Slider(UWidgetTree* Tree, UPanelWidget* Parent, float Width);
+	// Applies a VHS cover texture to Img through MI_UI_Posters (pixelated UI material), or raw texture if missing; returns false when Cover is unset.
+	EPICMEGAJAM2026_API bool SetCoverTexture(UImage* Img, const TSoftObjectPtr<UTexture2D>& Cover);
 }

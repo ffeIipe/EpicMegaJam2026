@@ -16,6 +16,9 @@ public:
 	static constexpr int32 MaxSaveSlots = 3;
 	static constexpr int32 SaveUserIndex = 0;
 
+	// Startup logos + opening cinematic play once per launch, not when returning to the menu from gameplay
+	bool bStartupIntroPlayed = false;
+
 	virtual void Init() override;
 	virtual void Shutdown() override;
 

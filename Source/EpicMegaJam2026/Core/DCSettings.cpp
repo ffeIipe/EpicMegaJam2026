@@ -20,10 +20,11 @@ const TCHAR* UDCSettings::ActionLabel(EDCAction Action)
 void UDCSettings::Apply() const
 {
 	// Graphics go through cvars so nothing is written to the engine's own scalability ini
-	if (Scalability::GetQualityLevels().GetSingleQualityLevel() != Quality)
+	Scalability::FQualityLevels Levels;
+	Levels.SetFromSingleQualityLevel(FMath::Clamp(Quality, 0, 3));
+	Levels.ShadowQuality = FMath::Max(Levels.ShadowQuality, 1); // Low would turn shadows off
+	if (!(Scalability::GetQualityLevels() == Levels))
 	{
-		Scalability::FQualityLevels Levels;
-		Levels.SetFromSingleQualityLevel(FMath::Clamp(Quality, 0, 3));
 		Scalability::SetQualityLevels(Levels, true);
 	}
 	auto SetCVar = [](const TCHAR* Name, int32 Value)

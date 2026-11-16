@@ -114,6 +114,8 @@ public:
 	// to the actor tagged BackRoomCameraTag (or just waits) for BackRoomTransitionSec.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") TSoftObjectPtr<class ULevelSequence> BackRoomSequence;
 	// Played once when starting a new game; hold any key for IntroSkipHoldSec to skip.
+	// Cinematic played when the goal is reached, before the victory screen
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") TSoftObjectPtr<class ULevelSequence> WinSequence = TSoftObjectPtr<class ULevelSequence>(FSoftObjectPath(TEXT("/Game/_MainGame/Sequences/Win/MS_Win.MS_Win")));
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera") TSoftObjectPtr<class ULevelSequence> IntroSequence = TSoftObjectPtr<class ULevelSequence>(FSoftObjectPath(TEXT("/Game/_MainGame/Sequences/Intro/MS_Intro.MS_Intro")));
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0.1")) float IntroSkipHoldSec = 3.f;
 	// Playback speed of BackRoomSequence in both directions (2 = twice as fast). Applies the next time the sequence player is created, i.e. on the next PIE.

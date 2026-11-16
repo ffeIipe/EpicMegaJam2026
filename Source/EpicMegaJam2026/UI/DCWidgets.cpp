@@ -46,10 +46,8 @@ namespace
 	// Cover art; the genre's color until the tape has one, dark when there's no tape
 	void SetCover(UImage* Img, const FVHSData* Tape, const UPDA_GameConfig* Config)
 	{
-		if (Tape && !Tape->Cover.IsNull())
+		if (Tape && DCUI::SetCoverTexture(Img, Tape->Cover))
 		{
-			Img->SetColorAndOpacity(FLinearColor::White);
-			Img->SetBrushFromSoftTexture(Tape->Cover);
 			return;
 		}
 		const FGenreData* Genre = Tape ? FindGenre(Config, Tape->PrimaryGenre) : nullptr;
@@ -669,7 +667,7 @@ void UDCFilmCraftingWidget::Refresh()
 		: FString()));
 	if (Front && Front->IsAtFront() && Filled >= 1)
 	{
-		const float Known = UBPFL_Scoring::ComputeKnownErrorRatio(Crafting->GetProfile(), Front->Runtime.HintedSkills, Front->Runtime.bFullyHinted, Front->Runtime.Target.Total(), Config);
+		const float Known = UBPFL_Scoring::ComputeErrorRatio(Crafting->GetProfile(), Front->Runtime.Target, Config); // same ratio as the real reaction, so the meter never lies
 		switch (UBPFL_Scoring::GetReaction(Known, Config))
 		{
 		case EReaction::Loved: MatchText->SetStyle(UDCText_Accent::StaticClass()); MatchText->SetText(FText::FromString(TEXT("GREAT"))); break;

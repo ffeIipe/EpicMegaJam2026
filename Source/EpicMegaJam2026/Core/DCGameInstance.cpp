@@ -251,11 +251,14 @@ void UDCGameInstance::CaptureGameModeToActiveSave(const ADCGameMode* GameMode, i
 	{
 		return;
 	}
+	const bool bHadGameplayState = Save->bHasSavedGameplayState;
 	Save->bHasSavedGameplayState = true;
 	Save->LastSavedAt = FDateTime::Now();
 	Save->Money = GameMode->Economy ? GameMode->Economy->Money : Save->Money;
 	Save->Criterio = GameMode->Economy ? GameMode->Economy->Criterio : 0;
-	const int32 RawDay = OverrideDayIndex > 0 ? OverrideDayIndex : (GameMode->DayNightCycle ? GameMode->DayNightCycle->DayIndex : 1);
+	// Without an override never go back a day: after the day closes the save already holds Day+1 while the cycle still shows Day.
+	const int32 CycleDay = GameMode->DayNightCycle ? GameMode->DayNightCycle->DayIndex : 1;
+	const int32 RawDay = OverrideDayIndex > 0 ? OverrideDayIndex : (bHadGameplayState ? FMath::Max(CycleDay, Save->DayIndex) : CycleDay);
 	Save->DayIndex = FMath::Max(1, RawDay);
 
 	if (GameMode->Unlocks)
@@ -341,7 +344,6 @@ void UDCGameInstance::ApplyActiveSaveToGameMode(ADCGameMode* GameMode)
 
 void UDCGameInstance::TravelToGameplay()
 {
-	ADCAudioManager::SetGlobalParameterStatic("Location", 0.f);
 	ADCAudioManager::SetGlobalParameterStatic("Day-Night", 0.f);
 	UGameplayStatics::SetGamePaused(this, false);
 	UGameplayStatics::OpenLevel(this, GameplayLevelName);

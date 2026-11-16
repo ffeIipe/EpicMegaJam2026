@@ -16,6 +16,9 @@ class EPICMEGAJAM2026_API ADCGameMode : public AGameModeBase
 public:
 	ADCGameMode();
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	// Writes money, unlocks, stock and films to the active slot (no-op without one or after game over/victory).
+	void SaveProgress() const;
 	// Always the C++ player: BP_CounterCamera was reparented to plain Character in the editor and lost this class.
 	virtual UClass* GetDefaultPawnClassForController_Implementation(AController*) override { return ADCCounterCamera::StaticClass(); }
 

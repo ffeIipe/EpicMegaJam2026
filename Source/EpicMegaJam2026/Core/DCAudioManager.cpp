@@ -69,6 +69,7 @@ namespace
 
 	FFMODEventInstance GPersistentMusicInstance;
 	TWeakObjectPtr<UFMODEvent> GPersistentMusicEvent;
+	float GPersistentMusicVolume = 1.f;
 
 	void StopEventInstance(FFMODEventInstance& Inst)
 	{
@@ -271,6 +272,12 @@ UFMODEvent* UPDA_AudioConfig::ResolveCue(FName Name) const
 	return Found ? Found->Get() : nullptr;
 }
 
+ADCAudioManager::ADCAudioManager()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
+}
+
 void ADCAudioManager::BeginPlay()
 {
 	Super::BeginPlay();
@@ -285,6 +292,19 @@ void ADCAudioManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		StopPersistentMusic();
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void ADCAudioManager::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (MusicFadeState == EMusicFadeState::FadingOutForIntro)
+	{
+		AdvanceIntroFade(DeltaSeconds, 0.f, EMusicFadeState::MutedInIntro, true);
+	}
+	else if (MusicFadeState == EMusicFadeState::FadingInFromIntro)
+	{
+		AdvanceIntroFade(DeltaSeconds, 1.f, EMusicFadeState::None, false);
+	}
 }
 
 void ADCAudioManager::EnsureAudioConfig()
@@ -607,6 +627,7 @@ void ADCAudioManager::EnsurePersistentMusicStarted(const UObject* WorldContextOb
 	{
 		GPersistentMusicInstance.Instance->start();
 		GPersistentMusicEvent = MusicEvent;
+		SetPersistentMusicVolume(GPersistentMusicVolume);
 	}
 }
 
@@ -614,6 +635,69 @@ void ADCAudioManager::StopPersistentMusic()
 {
 	StopEventInstance(GPersistentMusicInstance);
 	GPersistentMusicEvent.Reset();
+	GPersistentMusicVolume = 1.f;
+}
+
+void ADCAudioManager::SetPersistentMusicVolume(float Volume)
+{
+	GPersistentMusicVolume = FMath::Clamp(Volume, 0.f, 1.f);
+	if (UFMODBlueprintStatics::EventInstanceIsValid(GPersistentMusicInstance))
+	{
+		UFMODBlueprintStatics::EventInstanceSetVolume(GPersistentMusicInstance, GPersistentMusicVolume);
+	}
+}
+
+void ADCAudioManager::BeginIntroMusicFadeOut(float DurationSec)
+{
+	EnsureAudioConfig();
+	EnsurePersistentMusicStarted(this, AudioConfig);
+	if (DurationSec <= KINDA_SMALL_NUMBER)
+	{
+		SetPersistentMusicVolume(0.f);
+		SetGlobalParameterStatic("Location", 0.f);
+		SetGlobalParameterStatic("Day-Night", 0.f);
+		MusicFadeState = EMusicFadeState::MutedInIntro;
+		return;
+	}
+	MusicFadeState = EMusicFadeState::FadingOutForIntro;
+	MusicFadeStartVolume = GPersistentMusicVolume;
+	MusicFadeElapsed = 0.f;
+	MusicFadeDuration = DurationSec;
+}
+
+void ADCAudioManager::EndIntroMusicFadeIn(float DurationSec)
+{
+	EnsureAudioConfig();
+	EnsurePersistentMusicStarted(this, AudioConfig);
+	SetGlobalParameterStatic("Location", bCurrentBackRoom ? 1.f : 0.f);
+	SetGlobalParameterStatic("Day-Night", CurrentPhase == EPhase::Night ? 1.f : 0.f);
+	if (DurationSec <= KINDA_SMALL_NUMBER)
+	{
+		SetPersistentMusicVolume(1.f);
+		MusicFadeState = EMusicFadeState::None;
+		return;
+	}
+	MusicFadeState = EMusicFadeState::FadingInFromIntro;
+	MusicFadeStartVolume = GPersistentMusicVolume;
+	MusicFadeElapsed = 0.f;
+	MusicFadeDuration = DurationSec;
+}
+
+void ADCAudioManager::AdvanceIntroFade(float DeltaSeconds, float TargetVolume, EMusicFadeState CompletedState, bool bSwitchToCounterOnFinish)
+{
+	MusicFadeElapsed += DeltaSeconds;
+	const float Alpha = FMath::Clamp(MusicFadeElapsed / FMath::Max(MusicFadeDuration, KINDA_SMALL_NUMBER), 0.f, 1.f);
+	SetPersistentMusicVolume(FMath::Lerp(MusicFadeStartVolume, TargetVolume, Alpha));
+	if (Alpha >= 1.f)
+	{
+		SetPersistentMusicVolume(TargetVolume);
+		if (bSwitchToCounterOnFinish)
+		{
+			SetGlobalParameterStatic("Location", 0.f);
+			SetGlobalParameterStatic("Day-Night", 0.f);
+		}
+		MusicFadeState = CompletedState;
+	}
 }
 
 void ADCAudioManager::SetPauseOrDialogueActive(bool bActive)
@@ -671,8 +755,10 @@ void ADCAudioManager::SetPhaseMusic(EPhase Phase)
 void ADCAudioManager::StartMainMenuAudio()
 {
 	EnsureAudioConfig();
+	MusicFadeState = EMusicFadeState::None;
 	SetGlobalParameterStatic("Location", 2.f);
 	EnsurePersistentMusicStarted(this, AudioConfig);
+	SetPersistentMusicVolume(1.f);
 	if (AudioConfig && UFMODBlueprintStatics::EventInstanceIsValid(GPersistentMusicInstance))
 	{
 		ApplyParametersToInstance(GPersistentMusicInstance, AudioConfig->MainMenuMusic.Parameters);

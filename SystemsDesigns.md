@@ -277,7 +277,7 @@ ErrorRatio = \frac{Miss}{\max(1,\ \sum_{s} Target[s])} \qquad Accuracy = \operat
 ```
 
 - Se normaliza por el total del objetivo para que los umbrales sirvan igual en pedidos chicos (1★) y grandes (5★). El divisor tiene un piso: `max(ErrorFloor, total)` con `ErrorFloor` = 4 (inicial), para que un punto de más en un pedido chico no sea una multa.
-- **Medidor de coincidencia (Combine VHS).** Muestra Poor / Okay / Good / Great con `ComputeKnownErrorRatio` (mismos umbrales que la reacción), calculado **solo con las pistas dichas y el tamaño total del pedido** (`Target.Total()`, que la pantalla muestra como "Order size: N points"), nunca con el `Target` por skill. `Miss = max(error contra las pistas, |total de la película − total del pedido|)`: las dos son cotas inferiores del error real, así que el medidor nunca es optimista con el tamaño. Esto hace que **una sola cinta no alcance** un pedido que exige combinar (cada cinta de 1★ aporta 3 puntos y un pedido de 2 cintas pide 6). Las pistas: `High` pide ≥ `HintHighMin`, `Some` pide 1 a `HintHighMin-1`, `None` pide 0. Una skill sin pista se ignora, salvo que el cliente esté `bFullyHinted` (todas las skills que pide están hinteadas), y entonces cuenta como 0. Los clientes con `Tier ≤ FullHintMaxTier` (inicial 2) hintean siempre todas las skills que piden.
+- **Medidor de coincidencia (Combine VHS).** Muestra Poor / Okay / Good / Great con el mismo `ErrorRatio` y los mismos umbrales que la reacción real, así que nunca promete más de lo que el cliente va a sentir. Las pistas siguen sirviendo para saber qué skills buscar.
 - Pasarse cuenta igual que quedarse corto: `|Profile − Target|`.
 - Las estrellas de las cintas ya no entran en la fórmula: están en el presupuesto de puntos de cada cinta (sección 4.1).
 

@@ -8,6 +8,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
@@ -18,6 +19,8 @@
 #include "Components/WrapBox.h"
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Data/DCTypes.h"
 #include "Data/PDA_GameConfig.h"
 
@@ -118,6 +121,7 @@ UDCBorder_Header::UDCBorder_Header()
 }
 UDCBorder_Inset::UDCBorder_Inset() { Background = Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Blue, 0.2f), Box(DCPalette::NavyLight.CopyWithNewOpacity(0.6f), DCPalette::Blue)); }
 UDCBorder_Transparent::UDCBorder_Transparent() { Background = Box(FLinearColor::Transparent, FLinearColor::Transparent, 0.f, 0.f); }
+UDCBorder_Black::UDCBorder_Black() { Background = Box(FLinearColor::Black, FLinearColor::Black, 0.f, 0.f); }
 UDCBorder_KeyCap::UDCBorder_KeyCap() { Background = Box(DCPalette::Navy, DCPalette::Grey, 2.f, 3.f); }
 UDCBorder_LockShackle::UDCBorder_LockShackle() { Background = Box(FLinearColor::Transparent, DCPalette::Yellow, 3.f, 6.f); }
 UDCBorder_LockBody::UDCBorder_LockBody() { Background = Box(DCPalette::Yellow, DCPalette::Yellow, 2.f, 3.f); }
@@ -538,5 +542,37 @@ namespace DCUI
 		{
 			Parent->AddChild(Row);
 		}
+	}
+
+	bool SetCoverTexture(UImage* Img, const TSoftObjectPtr<UTexture2D>& Cover)
+	{
+		if (!Img || Cover.IsNull())
+		{
+			return false;
+		}
+		UTexture2D* Tex = Cover.LoadSynchronous();
+		if (!Tex)
+		{
+			return false;
+		}
+		Tex->bForceMiplevelsToBeResident = true;
+		Tex->bIgnoreStreamingMipBias = true;
+		Img->SetColorAndOpacity(FLinearColor::White);
+		UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/DirectorsCut/UI/Materials/MI_UI_Posters.MI_UI_Posters"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!BaseMat)
+		{
+			BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/DirectorsCut/UI/Materials/M_UI_Posters.M_UI_Posters"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		}
+		if (BaseMat)
+		{
+			if (UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(BaseMat, Img))
+			{
+				MID->SetTextureParameterValue(TEXT("BaseColor"), Tex);
+				Img->SetBrushFromMaterial(MID);
+				return true;
+			}
+		}
+		Img->SetBrushFromTexture(Tex);
+		return true;
 	}
 }
