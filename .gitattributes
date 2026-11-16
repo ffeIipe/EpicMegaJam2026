@@ -1,0 +1,21 @@
+# Unreal Engine file locking and LFS attributes
+*.uasset filter=lfs diff=lfs merge=lfs -text lockable
+*.umap filter=lfs diff=lfs merge=lfs -text lockable
+
+# Textures, models, audio and video
+*.fbx filter=lfs diff=lfs merge=lfs -text lockable
+*.obj filter=lfs diff=lfs merge=lfs -text lockable
+*.png filter=lfs diff=lfs merge=lfs -text lockable
+*.jpg filter=lfs diff=lfs merge=lfs -text lockable
+*.jpeg filter=lfs diff=lfs merge=lfs -text lockable
+*.tga filter=lfs diff=lfs merge=lfs -text lockable
+*.exr filter=lfs diff=lfs merge=lfs -text lockable
+*.hdr filter=lfs diff=lfs merge=lfs -text lockable
+*.psd filter=lfs diff=lfs merge=lfs -text lockable
+*.wav filter=lfs diff=lfs merge=lfs -text lockable
+*.mp3 filter=lfs diff=lfs merge=lfs -text lockable
+*.ogg filter=lfs diff=lfs merge=lfs -text lockable
+*.mp4 filter=lfs diff=lfs merge=lfs -text lockable
+*.mov filter=lfs diff=lfs merge=lfs -text lockable
+*.avi filter=lfs diff=lfs merge=lfs -text lockable
+*.blend filter=lfs diff=lfs merge=lfs -text lockable
