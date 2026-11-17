@@ -86,8 +86,11 @@ public:
 	UFUNCTION(BlueprintPure) ECameraZone GetCameraZone() const { return CameraZone; }
 	// Only at the counter, with no screen up
 	UFUNCTION(BlueprintPure) bool CanGoToBackRoom() const;
-	// A screen is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
+	// A screen or modal tutorial prompt is up: CommonUI shows the cursor and blocks game input; this also stops look, clicks and the prompt
 	bool IsBlockedByUI() const;
+	bool IsTutorialModalOpen() const;
+	// Opens pause even while a modal tutorial prompt is blocking the screen
+	void OpenPauseFromTutorial();
 	// The "SPACE Back room" hint of the HUD: at the counter with nothing up, or over the computer / the register (Space works there too)
 	bool ShowsBackRoomHint() const;
 	// Plays the camera sequence to the back room; the crafting panel opens when it ends. Closing the panel brings the camera back.
@@ -150,6 +153,8 @@ private:
 	void EndTutorialPause();
 	void CompleteTutorial();
 	void DismissCompletedTutorial();
+	void ShowTutorialStepPrompt(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip = true);
+	UFUNCTION() void HandleTutorialAccepted();
 	void HandleLanguageChanged();
 	void HitStop();
 	void Cue(const TCHAR* Name) const;
@@ -170,6 +175,8 @@ private:
 	ETutorialStep TutorialStep = ETutorialStep::Inactive;
 	bool bTutorialGenreBought = false;
 	bool bTutorialTapeAfterGenreBought = false;
+	FString CurrentTutorialPromptKey;
+	FString AcceptedTutorialPromptKey;
 	FTimerHandle TutorialCompleteHideTimer;
 	FDelegateHandle LanguageChangedHandle;
 

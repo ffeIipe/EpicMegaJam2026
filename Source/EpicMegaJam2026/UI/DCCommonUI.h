@@ -38,6 +38,7 @@ namespace DCPalette
 	inline const FLinearColor Navy(FColor(0x0C, 0x18, 0x38));
 	inline const FLinearColor NavyLight(FColor(0x18, 0x30, 0x6E));
 	inline const FLinearColor Red(FColor(0xFF, 0x4F, 0x4F));
+	inline const FLinearColor White(FColor(0xFF, 0xFF, 0xFF));
 	// One color per skill, taken from the genre that maps to it (SystemsDesigns.md 4.1): Comedy white, Horror black, Action red, Drama violet, Romance pink.
 	// Black can't be read on navy, so Scary is a mid grey.
 	inline const FLinearColor SkillFunny(FColor(0xFF, 0xFF, 0xFF));
@@ -71,6 +72,12 @@ UCLASS() class EPICMEGAJAM2026_API UDCText_SkillThoughtful : public UCommonTextS
 UCLASS() class EPICMEGAJAM2026_API UDCText_SkillRomantic : public UCommonTextStyle { GENERATED_BODY() public: UDCText_SkillRomantic(); };
 // Genre tabs: eight of them have to fit the width of a list
 UCLASS() class EPICMEGAJAM2026_API UDCText_Tab : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Tab(); };
+// Top parallelogram view tabs ("COMBINE VHS" / "CRAFTED VHS")
+UCLASS() class EPICMEGAJAM2026_API UDCText_HeaderTab : public UCommonTextStyle { GENERATED_BODY() public: UDCText_HeaderTab(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_HeaderTabActive : public UCommonTextStyle { GENERATED_BODY() public: UDCText_HeaderTabActive(); };
+// Red "DISCARD" action button under Combine
+UCLASS() class EPICMEGAJAM2026_API UDCText_Discard : public UCommonTextStyle { GENERATED_BODY() public: UDCText_Discard(); };
+UCLASS() class EPICMEGAJAM2026_API UDCText_DiscardDisabled : public UCommonTextStyle { GENERATED_BODY() public: UDCText_DiscardDisabled(); };
 
 // ---------------------------------------------------------------- Border styles
 
@@ -80,6 +87,8 @@ UCLASS() class EPICMEGAJAM2026_API UDCBorder_Inset : public UCommonBorderStyle {
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Transparent : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Transparent(); };
 // Opaque black stage behind the startup intro
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_Black : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_Black(); };
+// Semi-transparent black backdrop behind modal tutorial prompts
+UCLASS() class EPICMEGAJAM2026_API UDCBorder_TutorialBackdrop : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_TutorialBackdrop(); };
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_KeyCap: public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_KeyCap(); };
 // The two pieces of the padlock icon on a locked slot: hollow shackle, solid body
 UCLASS() class EPICMEGAJAM2026_API UDCBorder_LockShackle : public UCommonBorderStyle { GENERATED_BODY() public: UDCBorder_LockShackle(); };
@@ -90,8 +99,14 @@ UCLASS() class EPICMEGAJAM2026_API UDCBorder_LockBody : public UCommonBorderStyl
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Primary : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Primary(); };
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Menu : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Menu(); };
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Tab : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Tab(); };
+// Slanted parallelogram tab button (T_UI_Header) for top-level screen views
+UCLASS() class EPICMEGAJAM2026_API UDCButton_HeaderTab : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_HeaderTab(); };
+// Compact red-text discard button
+UCLASS() class EPICMEGAJAM2026_API UDCButton_Discard : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Discard(); };
 // List rows, cover tiles and key hints: flat until hovered/selected
 UCLASS() class EPICMEGAJAM2026_API UDCButton_Row : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_Row(); };
+// Card-framed list rows (green T_UI_Panel border, navy fill), matching the Supplier cards
+UCLASS() class EPICMEGAJAM2026_API UDCButton_CardRow : public UCommonButtonStyle { GENERATED_BODY() public: UDCButton_CardRow(); };
 
 // ---------------------------------------------------------------- Input
 
@@ -216,10 +231,13 @@ namespace DCUI
 	// Tape titles come from the table with a "★" the fonts can't draw: drop it
 	EPICMEGAJAM2026_API FString CleanTitle(const FText& Title);
 	EPICMEGAJAM2026_API TSubclassOf<UCommonTextStyle> SkillStyle(int32 SkillIndex);
+	EPICMEGAJAM2026_API FLinearColor SkillColor(ESkill Skill);
 	// The client's order as stacked lines: the greeting in body text, each hint in the color of its skill. DisplayName prefixes the greeting.
 	EPICMEGAJAM2026_API void OrderLines(UWidgetTree* Tree, UPanelWidget* Box, const FClientRuntime& Client, float Wrap);
 	// One line per skill in its color: "Funny 3", or "Funny 3/10" with a cap; zeros are skipped when bHideZero
 	EPICMEGAJAM2026_API void SkillList(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap = 0, bool bHideZero = false);
+	// Call-of-Duty style segmented bar rows for all 5 skills (fixed Cap segments, default 10)
+	EPICMEGAJAM2026_API void SkillBars(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap = 10);
 	// Compact inline wrap row of non-zero colored skills (e.g. "Funny 3  Scary 1") for VHS rows
 	EPICMEGAJAM2026_API void InlineSkills(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills);
 	EPICMEGAJAM2026_API FSlateBrush Box(const FLinearColor& Fill, const FLinearColor& Outline, float OutlineWidth = 2.f, float Radius = 4.f);

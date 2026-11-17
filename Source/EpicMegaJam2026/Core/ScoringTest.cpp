@@ -33,29 +33,29 @@ bool FDCScoringExamplesTest::RunTest(const FString& Parameters)
 
 	Run(TEXT("Case1"), 1.0f, SV(3), SV(3), 0, 0.f, EReaction::Loved, 10, 12, 0);
 	Run(TEXT("Case2"), 1.0f, SV(3, 3), SV(3, 2), 1, 0.167f, EReaction::Liked, 13, 10, 0);
-	Run(TEXT("Case3"), 1.0f, SV(3), SV(0, 3), 6, 1.5f, EReaction::Hated, 10, 0, 15);
+	Run(TEXT("Case3"), 1.0f, SV(3), SV(0, 3), 3, 0.75f, EReaction::Hated, 10, 0, 15);
 	Run(TEXT("Case4"), 1.5f, SV(5, 0, 2, 0, 1), SV(5, 0, 1, 0, 1), 1, 0.125f, EReaction::Liked, 23, 16, 0);
-	Run(TEXT("Case5"), 1.0f, SV(3), SV(3, 0, 0, 3), 3, 0.75f, EReaction::Hated, 10, 0, 15);
+	Run(TEXT("Case5"), 1.0f, SV(3), SV(3, 0, 0, 3), 0, 0.f, EReaction::Loved, 10, 12, 0);
 
 	// Case 6: four Funny 3 tapes cap at SkillCap
 	TestEqual(TEXT("Case6 profile cap"), UBPFL_Scoring::ComputeProfile({ SV(3), SV(3), SV(3), SV(3) }, Cfg).Funny, 10);
 
-	// 6.3: case 5 only misses Thoughtful, and by excess
+	// 6.3: surplus beyond target does not trigger negative feedback
 	ESkill Skill = ESkill::Funny;
 	EFeedbackDirection Dir = EFeedbackDirection::TooLittle;
-	TestTrue(TEXT("Feedback found"), UBPFL_Scoring::GetFeedbackSkill(SV(3, 0, 0, 3), SV(3), Skill, Dir));
-	TestTrue(TEXT("Feedback skill"), Skill == ESkill::Thoughtful);
-	TestTrue(TEXT("Feedback direction"), Dir == EFeedbackDirection::TooMuch);
+	TestFalse(TEXT("No feedback when target met with surplus"), UBPFL_Scoring::GetFeedbackSkill(SV(3, 0, 0, 3), SV(3), Skill, Dir));
 	// Case 4 misses Brave by shortage
 	TestTrue(TEXT("Feedback found 2"), UBPFL_Scoring::GetFeedbackSkill(SV(5, 0, 1, 0, 1), SV(5, 0, 2, 0, 1), Skill, Dir));
 	TestTrue(TEXT("Feedback skill 2"), Skill == ESkill::Brave);
 	TestTrue(TEXT("Feedback direction 2"), Dir == EFeedbackDirection::TooLittle);
 	TestFalse(TEXT("No feedback on an exact film"), UBPFL_Scoring::GetFeedbackSkill(SV(3), SV(3), Skill, Dir));
-	// Error floor: one stray point on a Funny 3 order is 1/4, not 1/3
-	TestEqual(TEXT("Floor"), UBPFL_Scoring::ComputeErrorRatio(SV(3, 1), SV(3), Cfg), 0.25f, 0.001f);
+	// Error floor: one missing point on a Funny 3 order is 1/4, not 1/3; surplus is 0
+	TestEqual(TEXT("Floor"), UBPFL_Scoring::ComputeErrorRatio(SV(2), SV(3), Cfg), 0.25f, 0.001f);
+	TestEqual(TEXT("Surplus is 0"), UBPFL_Scoring::ComputeErrorRatio(SV(3, 1), SV(3), Cfg), 0.f, 0.001f);
 
-	// Match meter uses the real ratio: a film off in an unhinted skill must not read GOOD (it would be fined)
-	TestTrue(TEXT("Meter band equals the real reaction"), UBPFL_Scoring::GetReaction(UBPFL_Scoring::ComputeErrorRatio(SV(3, 0, 0, 3), SV(3, 0, 0, 0, 3), Cfg), Cfg) == EReaction::Hated);
+	// Match meter uses the real ratio: missing 3 of 6 -> Neutral (OKAY), missing 6 of 6 -> Hated (POOR)
+	TestTrue(TEXT("Meter band equals Neutral"), UBPFL_Scoring::GetReaction(UBPFL_Scoring::ComputeErrorRatio(SV(3, 0, 0, 3), SV(3, 0, 0, 0, 3), Cfg), Cfg) == EReaction::Neutral);
+	TestTrue(TEXT("Meter band equals Hated"), UBPFL_Scoring::GetReaction(UBPFL_Scoring::ComputeErrorRatio(SV(0, 0, 0, 3), SV(3, 0, 0, 0, 3), Cfg), Cfg) == EReaction::Hated);
 	return true;
 }
 

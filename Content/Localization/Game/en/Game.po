@@ -6037,43 +6037,43 @@ msgstr "Change category"
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(426)
 #: Source/EpicMegaJam2026/UI/DCCommonUI.cpp(426)
 msgctxt "DirectorsCut,Skill_Funny"
-msgid "Funny"
-msgstr "Funny"
+msgid "Comedy"
+msgstr "Comedy"
 
 #. Key:	Skill_Scary
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(427)
 #: Source/EpicMegaJam2026/UI/DCCommonUI.cpp(427)
 msgctxt "DirectorsCut,Skill_Scary"
-msgid "Scary"
-msgstr "Scary"
+msgid "Horror"
+msgstr "Horror"
 
 #. Key:	Skill_Brave
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(428)
 #: Source/EpicMegaJam2026/UI/DCCommonUI.cpp(428)
 msgctxt "DirectorsCut,Skill_Brave"
-msgid "Brave"
-msgstr "Brave"
+msgid "Action"
+msgstr "Action"
 
 #. Key:	Skill_Thoughtful
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(429)
 #: Source/EpicMegaJam2026/UI/DCCommonUI.cpp(429)
 msgctxt "DirectorsCut,Skill_Thoughtful"
-msgid "Thoughtful"
-msgstr "Thoughtful"
+msgid "Drama"
+msgstr "Drama"
 
 #. Key:	Skill_Romantic
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(430)
 #: Source/EpicMegaJam2026/UI/DCCommonUI.cpp(430)
 msgctxt "DirectorsCut,Skill_Romantic"
-msgid "Romantic"
-msgstr "Romantic"
+msgid "Romance"
+msgstr "Romance"
 
 #. Key:	Tooltip_Skills
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(505)
 #: Source/EpicMegaJam2026/UI/DCCommonUI.cpp(505)
 msgctxt "DirectorsCut,Tooltip_Skills"
-msgid "SKILLS"
-msgstr "SKILLS"
+msgid "GENRES"
+msgstr "GENRES"
 
 #. Key:	Tooltip_None
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCCommonUI.cpp(509)
@@ -6684,6 +6684,13 @@ msgctxt "DirectorsCut,Tutorial_SkipBtn"
 msgid "Skip (F3)"
 msgstr "Skip (F3)"
 
+#. Key:	Tutorial_AcceptBtn
+#. SourceLocation:	Source/EpicMegaJam2026/UI/DCMenuWidgets.cpp(755)
+#: Source/EpicMegaJam2026/UI/DCMenuWidgets.cpp(755)
+msgctxt "DirectorsCut,Tutorial_AcceptBtn"
+msgid "Accept"
+msgstr "Accept"
+
 #. Key:	Summary_OpenStore
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCMenuWidgets.cpp(71)
 #: Source/EpicMegaJam2026/UI/DCMenuWidgets.cpp(71)
@@ -6835,8 +6842,8 @@ msgstr "Genre:"
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCWidgets.cpp(186)
 #: Source/EpicMegaJam2026/UI/DCWidgets.cpp(186)
 msgctxt "DirectorsCut,Inv_Skills"
-msgid "Skills:"
-msgstr "Skills:"
+msgid "Genres:"
+msgstr "Genres:"
 
 #. Key:	Inv_EmptyPicker
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCWidgets.cpp(244)
@@ -6877,8 +6884,8 @@ msgstr "COMBINE"
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCWidgets.cpp(348)
 #: Source/EpicMegaJam2026/UI/DCWidgets.cpp(348)
 msgctxt "DirectorsCut,Craft_TabCrafted"
-msgid "CRAFTED FILMS"
-msgstr "CRAFTED FILMS"
+msgid "CRAFTED VHS"
+msgstr "CRAFTED VHS"
 
 #. Key:	Order_Heading
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCWidgets.cpp(362)
@@ -6891,8 +6898,8 @@ msgstr "ORDER"
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCWidgets.cpp(406)
 #: Source/EpicMegaJam2026/UI/DCWidgets.cpp(406)
 msgctxt "DirectorsCut,Craft_Skills"
-msgid "SKILLS"
-msgstr "SKILLS"
+msgid "GENRES"
+msgstr "GENRES"
 
 #. Key:	Craft_MadeFrom
 #. SourceLocation:	Source/EpicMegaJam2026/UI/DCWidgets.cpp(409)

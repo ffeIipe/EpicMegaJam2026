@@ -95,8 +95,11 @@ public:
 		{
 			const FClientRuntime& Rt = Client->Runtime;
 			const int32 Total = Rt.Target.Funny + Rt.Target.Scary + Rt.Target.Brave + Rt.Target.Thoughtful + Rt.Target.Romantic;
+			int32 Distinct = 0;
+			for (int32 i = 0; i < DCNumSkills; ++i) Distinct += Rt.Target.Get((ESkill)i) > 0 ? 1 : 0;
 			Test->TestEqual(TEXT("generated client is level 1"), Rt.Tier, 1);
 			Test->TestEqual(TEXT("every order is a combination: 2 one-star tapes with the starting 2 slots = 6 points"), Total, 6);
+			Test->TestTrue(TEXT("tier 1 asks for at most 2 distinct skills"), Distinct >= 1 && Distinct <= 2);
 			Test->TestTrue(TEXT("level 1 hints everything it wants"), Rt.HintedSkills.Num() >= 2 && Rt.bFullyHinted);
 			// Buying slots scales the next order (5.1): 4 slots = level 3 with 3 to 4 tapes
 			GM->FilmCrafting->SetUnlockedSlots(4);
@@ -109,8 +112,11 @@ public:
 		{
 			const FClientRuntime& Rt = Client->Runtime;
 			const int32 Total = Rt.Target.Funny + Rt.Target.Scary + Rt.Target.Brave + Rt.Target.Thoughtful + Rt.Target.Romantic;
+			int32 Distinct = 0;
+			for (int32 i = 0; i < DCNumSkills; ++i) Distinct += Rt.Target.Get((ESkill)i) > 0 ? 1 : 0;
 			Test->TestEqual(TEXT("4 slots give a level 3 client"), Rt.Tier, 3);
 			Test->TestTrue(TEXT("4 slots: at least 3 one-star tapes = 9 points"), Total >= 9);
+			Test->TestTrue(TEXT("tier 3 asks for at most 4 distinct skills"), Distinct >= 1 && Distinct <= 4);
 			return true;
 		}
 		}

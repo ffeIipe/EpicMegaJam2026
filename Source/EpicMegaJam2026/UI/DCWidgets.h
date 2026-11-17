@@ -85,7 +85,10 @@ private:
 	UFUNCTION() void OnPicked(FName VHSRow);
 	UFUNCTION() void OnConfirm(FName Unused);
 	UFUNCTION() void OnCraftedClicked(FName Index);
+	UFUNCTION() void OnCraftedTabClicked(FName Tab);
 	UFUNCTION() void OnViewClicked(FName View);
+	void RebuildCraftedTabs();
+	void RebuildCraftedList();
 	void ShowView(bool bCrafted);
 	// Fills the library's detail panel with CraftedFilms[Index]
 	void ShowFilm(int32 Index);
@@ -125,12 +128,14 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> CombineBody;
 	UPROPERTY() TObjectPtr<UWidget> CraftedBody;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> ViewTabButtons;
+	UPROPERTY() TObjectPtr<UWrapBox> CraftedTabs;
 	UPROPERTY() TObjectPtr<UVerticalBox> CraftedList;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> CraftedButtons;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedTitle;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedStars;
 	UPROPERTY() TObjectPtr<UVerticalBox> CraftedSkills;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedTapes;
+	FName CraftedGenreTab = "All";
 	int32 CraftedShown = -1;
 	int32 ShownFilm = INDEX_NONE;
 	UPROPERTY() TObjectPtr<UWidget> LockedBox;

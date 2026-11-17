@@ -14,6 +14,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
+#include "Components/ProgressBar.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScrollBox.h"
 #include "Input/CommonUIInputTypes.h"
@@ -37,6 +38,7 @@
 
 namespace
 {
+	const FName AllGenreTab = "All";
 	const FAnchors Center(0.5f, 0.5f);
 	const FVector2D Middle(0.5f, 0.5f);
 
@@ -137,6 +139,7 @@ void UDCSupplierWidget::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 	ADCAudioManager::PlayCueStatic(this, TEXT("OpenSupplier"));
+	SelectedGenre = AllGenreTab;
 	Refresh(); // what is on sale changes with the unlocks
 }
 
@@ -169,9 +172,10 @@ void UDCSupplierWidget::Refresh()
 	}
 	auto Select = [](UDCButton* Btn, bool bSelected) { bSelected ? Btn->SetIsSelected(true, false) : Btn->ClearSelection(); };
 
-	// Genre tabs: the unlocked ones, in DT_Genres order
+	// Genre tabs: ALL + the unlocked ones, in DT_Genres order
 	Tabs->ClearChildren();
 	TArray<TPair<FName, FText>> Genres;
+	Genres.Emplace(AllGenreTab, LOCTEXT("Supplier_TabAll", "ALL"));
 	for (const TPair<FName, uint8*>& P : Config->GenreTable->GetRowMap())
 	{
 		const FGenreData* Row = reinterpret_cast<const FGenreData*>(P.Value);
@@ -182,7 +186,7 @@ void UDCSupplierWidget::Refresh()
 	}
 	if (!Genres.ContainsByPredicate([this](const TPair<FName, FText>& Entry) { return Entry.Key == SelectedGenre; }))
 	{
-		SelectedGenre = Genres.IsEmpty() ? NAME_None : Genres[0].Key;
+		SelectedGenre = AllGenreTab;
 	}
 	for (const TPair<FName, FText>& Genre : Genres)
 	{
@@ -217,7 +221,8 @@ void UDCSupplierWidget::Refresh()
 	for (const TPair<FName, uint8*>& P : Config->VHSTable->GetRowMap())
 	{
 		const FVHSData* Tape = reinterpret_cast<const FVHSData*>(P.Value);
-		if (Inventory->IsTapeForSale(P.Key) && StaticEnum<EGenre>()->GetNameStringByValue((int64)Tape->PrimaryGenre) == SelectedGenre.ToString()
+		if (Inventory->IsTapeForSale(P.Key)
+			&& (SelectedGenre == AllGenreTab || StaticEnum<EGenre>()->GetNameStringByValue((int64)Tape->PrimaryGenre) == SelectedGenre.ToString())
 			&& (SelectedStars == 0 || Tape->Rating == SelectedStars))
 		{
 			Rows.Add(P.Key);
@@ -454,8 +459,39 @@ void UDCComputerWidget::BuildRent()
 	const int32 Day = GM->DayNightCycle->DayIndex;
 	const int32 Rent = GM->Economy->GetRentForDay(Day);
 	const int32 Money = GM->Economy->Money;
+	const int32 Goal = GM->Config->MovieBudgetGoal;
+
+	// Store status: day, phase, clock and movie budget goal
+	UVerticalBox* Status = AddCard(WidgetTree, List, DCPalette::Blue);
+	const FText PhaseLabel = GM->DayNightCycle->CurrentPhase == EPhase::Day
+		? LOCTEXT("Phase_Day", "Day")
+		: LOCTEXT("Phase_Night", "Night");
+	const FText ClockLabel = GM->DayNightCycle->bTutorialPaused
+		? FText::Format(LOCTEXT("Stats_TutorialClock", "{0} (Tutorial)"), GM->DayNightCycle->GetClockText())
+		: GM->DayNightCycle->GetClockText();
+	DCUI::Text(WidgetTree, Status, FText::Format(LOCTEXT("Rent_DayClock", "DAY {0} - {1}   {2}"),
+		FText::FromString(FString::FromInt(Day)), PhaseLabel, ClockLabel), UDCText_Heading::StaticClass());
+	UHorizontalBox* GoalRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	Status->AddChildToVerticalBox(GoalRow)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+	UProgressBar* GoalBar = DCUI::Bar(WidgetTree, GoalRow, 220.f);
+	Cast<UHorizontalBoxSlot>(GoalBar->GetParent()->Slot)->SetVerticalAlignment(VAlign_Center);
+	GoalBar->SetPercent(Goal > 0 ? FMath::Clamp((float)Money / Goal, 0.f, 1.f) : 0.f);
+	UCommonTextBlock* GoalText = DCUI::Text(WidgetTree, GoalRow,
+		FText::Format(LOCTEXT("Rent_GoalProgress", "Goal: ${0} / ${1}"),
+			FText::FromString(FString::FromInt(Money)),
+			FText::FromString(FString::FromInt(Goal))),
+		UDCText_Accent::StaticClass());
+	Cast<UHorizontalBoxSlot>(GoalText->Slot)->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
+	Cast<UHorizontalBoxSlot>(GoalText->Slot)->SetVerticalAlignment(VAlign_Center);
+
+	// Tonight's rent
+	const int32 DueMinutes = FMath::RoundToInt(GM->Config->ClockNightEndHour * 60.f) % (24 * 60);
+	const FString DueTimeStr = FString::Printf(TEXT("%02d:%02d"), DueMinutes / 60, DueMinutes % 60);
 	UVerticalBox* Now = AddCard(WidgetTree, List, Money >= Rent ? DCPalette::Lime : DCPalette::Red);
-	DCUI::Text(WidgetTree, Now, FText::Format(LOCTEXT("Rent_ForDay", "RENT FOR DAY {0}: ${1}"), FText::FromString(FString::FromInt(Day)), FText::FromString(FString::FromInt(Rent))), UDCText_Heading::StaticClass());
+	DCUI::Text(WidgetTree, Now, FText::Format(LOCTEXT("Rent_ForDayDue", "RENT FOR DAY {0}: ${1} (DUE {2})"),
+		FText::FromString(FString::FromInt(Day)),
+		FText::FromString(FString::FromInt(Rent)),
+		FText::FromString(DueTimeStr)), UDCText_Heading::StaticClass());
 	DCUI::Text(WidgetTree, Now, LOCTEXT("Rent_Explanation", "It is collected automatically when the night ends. If you can't cover it, you are evicted."))->SetWrapTextAt(520.f);
 	DCUI::Text(WidgetTree, Now, Money >= Rent
 		? FText::Format(LOCTEXT("Rent_Covered", "Covered: you have ${0}, ${1} to spare."), FText::FromString(FString::FromInt(Money)), FText::FromString(FString::FromInt(Money - Rent)))
@@ -625,6 +661,37 @@ void UDCShelfWidget::ShowGenre(EGenre Genre)
 
 // ---------------------------------------------------------------- Tutorial sign
 
+UDCTutorialWidget::UDCTutorialWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	bAutoActivate = false;
+	bIsBackHandler = true;
+	bIsBackActionDisplayedInActionBar = false;
+}
+
+TOptional<FUIInputConfig> UDCTutorialWidget::GetDesiredInputConfig() const
+{
+	return FUIInputConfig(ECommonInputMode::Menu, EMouseCaptureMode::NoCapture);
+}
+
+bool UDCTutorialWidget::NativeOnHandleBackAction()
+{
+	if (ADCPlayerController* PC = GetOwningPlayer<ADCPlayerController>())
+	{
+		PC->OpenPauseFromTutorial();
+	}
+	return true;
+}
+
+FReply UDCTutorialWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == EKeys::F3 && SkipButton && SkipButton->GetVisibility() == ESlateVisibility::Visible)
+	{
+		HandleSkip(NAME_None);
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
 void UDCTutorialWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -632,12 +699,21 @@ void UDCTutorialWidget::NativeOnInitialized()
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = Canvas;
 
+	// Fullscreen semi-transparent black backdrop that blocks interaction with everything behind the tutorial
+	Backdrop = DCUI::Border(WidgetTree, Canvas, UDCBorder_TutorialBackdrop::StaticClass(), FMargin(0.f));
+	Backdrop->SetVisibility(ESlateVisibility::Collapsed);
+	if (UCanvasPanelSlot* BackdropSlot = Cast<UCanvasPanelSlot>(Backdrop->Slot))
+	{
+		BackdropSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+		BackdropSlot->SetOffsets(FMargin(0.f));
+	}
+
 	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>();
 	Stack->SetVisibility(ESlateVisibility::Collapsed);
 	Panel = Stack;
 	PanelSlot = Canvas->AddChildToCanvas(Stack);
 	PanelSlot->SetAutoSize(true);
-	SetTopPlacement(false);
+	SetPlacement(ETutorialPlacement::BottomCenter);
 
 	UHorizontalBox* TopRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 	TopRow->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
@@ -661,10 +737,10 @@ void UDCTutorialWidget::NativeOnInitialized()
 		SkipSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
 	}
 
-	UCommonBorder* BodyBorder = DCUI::Border(WidgetTree, Stack, UDCBorder_Panel::StaticClass(), FMargin(18.f, 10.f));
-	BodyBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UCommonBorder* BodyBorder = DCUI::Border(WidgetTree, Stack, UDCBorder_Panel::StaticClass(), FMargin(18.f, 12.f));
+	BodyBorder->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	UVerticalBox* BodyV = WidgetTree->ConstructWidget<UVerticalBox>();
-	BodyV->SetVisibility(ESlateVisibility::HitTestInvisible);
+	BodyV->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	BodyBorder->SetContent(BodyV);
 
 	HintText = DCUI::Text(WidgetTree, BodyV, TEXT(""), UDCText_Body::StaticClass());
@@ -672,6 +748,17 @@ void UDCTutorialWidget::NativeOnInitialized()
 	ActionText = DCUI::Text(WidgetTree, BodyV, TEXT(""), UDCText_Accent::StaticClass());
 	ActionText->SetWrapTextAt(780.f);
 	ActionText->SetMargin(FMargin(0.f, 4.f, 0.f, 0.f));
+
+	UHorizontalBox* AcceptRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+	AcceptRow->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (UVerticalBoxSlot* AcceptRowSlot = BodyV->AddChildToVerticalBox(AcceptRow))
+	{
+		AcceptRowSlot->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
+		AcceptRowSlot->SetHorizontalAlignment(HAlign_Right);
+	}
+	AcceptButton = DCUI::Button(WidgetTree, AcceptRow, LOCTEXT("Tutorial_AcceptBtn", "Accept"), NAME_None, UDCButton_Primary::StaticClass());
+	AcceptButton->SetIsFocusable(false);
+	AcceptButton->OnPayloadClicked.AddDynamic(this, &UDCTutorialWidget::HandleAccept);
 }
 
 void UDCTutorialWidget::SetPlacement(ETutorialPlacement Placement)
@@ -680,7 +767,7 @@ void UDCTutorialWidget::SetPlacement(ETutorialPlacement Placement)
 	{
 		return;
 	}
-	const float WrapWidth = Placement == ETutorialPlacement::TopRight ? 540.f : 780.f;
+	const float WrapWidth = 780.f;
 	if (HintText)
 	{
 		HintText->SetWrapTextAt(WrapWidth);
@@ -689,24 +776,15 @@ void UDCTutorialWidget::SetPlacement(ETutorialPlacement Placement)
 	{
 		ActionText->SetWrapTextAt(WrapWidth);
 	}
-	switch (Placement)
-	{
-	case ETutorialPlacement::TopCenter:
-		PanelSlot->SetAnchors(FAnchors(0.5f, 0.f));
-		PanelSlot->SetAlignment(FVector2D(0.5f, 0.f));
-		PanelSlot->SetPosition(FVector2D(0.f, 20.f));
-		break;
-	case ETutorialPlacement::TopRight:
-		PanelSlot->SetAnchors(FAnchors(1.f, 0.f));
-		PanelSlot->SetAlignment(FVector2D(1.f, 0.f));
-		PanelSlot->SetPosition(FVector2D(-24.f, 14.f));
-		break;
-	default:
-		PanelSlot->SetAnchors(FAnchors(0.5f, 1.f));
-		PanelSlot->SetAlignment(FVector2D(0.5f, 1.f));
-		PanelSlot->SetPosition(FVector2D(0.f, -18.f));
-		break;
-	}
+	// Always stay bottom-center
+	PanelSlot->SetAnchors(FAnchors(0.5f, 1.f));
+	PanelSlot->SetAlignment(FVector2D(0.5f, 1.f));
+	PanelSlot->SetPosition(FVector2D(0.f, -18.f));
+}
+
+bool UDCTutorialWidget::IsModalOpen() const
+{
+	return Panel && Panel->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
 void UDCTutorialWidget::ShowHint(const FText& Text)
@@ -716,6 +794,7 @@ void UDCTutorialWidget::ShowHint(const FText& Text)
 
 void UDCTutorialWidget::ShowStep(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip)
 {
+	SetPlacement(ETutorialPlacement::BottomCenter);
 	if (StepTitleText)
 	{
 		StepTitleText->SetText(StepHeader);
@@ -736,23 +815,46 @@ void UDCTutorialWidget::ShowStep(const FText& StepHeader, const FText& Body, con
 	{
 		SkipButton->SetVisibility(bShowSkip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
+	if (Backdrop)
+	{
+		Backdrop->SetVisibility(ESlateVisibility::Visible);
+	}
 	if (Panel)
 	{
 		Panel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+	if (!IsActivated())
+	{
+		ActivateWidget();
 	}
 }
 
 void UDCTutorialWidget::HideHint()
 {
+	if (Backdrop)
+	{
+		Backdrop->SetVisibility(ESlateVisibility::Collapsed);
+	}
 	if (Panel)
 	{
 		Panel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (IsActivated())
+	{
+		DeactivateWidget();
 	}
 }
 
 void UDCTutorialWidget::HandleSkip(FName Unused)
 {
+	HideHint();
 	OnSkipped.Broadcast();
+}
+
+void UDCTutorialWidget::HandleAccept(FName Unused)
+{
+	HideHint();
+	OnAccepted.Broadcast();
 }
 
 // ---------------------------------------------------------------- Main menu / pause

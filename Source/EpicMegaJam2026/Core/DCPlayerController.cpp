@@ -84,9 +84,10 @@ void ADCPlayerController::BeginPlay()
 	OrderPanelWidget->Setup(GM->ClientDirector);
 	ReviewToastWidget = MakeWidget<UDCReviewToastWidget>(this, ReviewToastWidgetClass, 6, PassThrough); // above everything: it only lasts a few seconds
 	RootLayout = MakeWidget<UDCRootLayout>(this, nullptr, 4, PassThrough);
-	// Above RootLayout (ZOrder 4) so the guide remains visible over modal screens without blocking clicks
-	TutorialWidget = MakeWidget<UDCTutorialWidget>(this, TutorialWidgetClass, 5, PassThrough);
+	// Above RootLayout (ZOrder 4), StatsWidget (5) and ReviewToastWidget (6) so the tutorial backdrop dims everything behind it
+	TutorialWidget = MakeWidget<UDCTutorialWidget>(this, TutorialWidgetClass, 10, PassThrough);
 	TutorialWidget->OnSkipped.AddDynamic(this, &ADCPlayerController::HandleTutorialSkipped);
+	TutorialWidget->OnAccepted.AddDynamic(this, &ADCPlayerController::HandleTutorialAccepted);
 	RootLayout->Stack->OnDisplayedWidgetChanged().AddUObject(this, &ADCPlayerController::HandleScreenChanged);
 	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &ADCPlayerController::HandleLanguageChanged);
 
@@ -145,9 +146,14 @@ void ADCPlayerController::SetupInputComponent()
 
 // ---------------------------------------------------------------- Screens
 
+bool ADCPlayerController::IsTutorialModalOpen() const
+{
+	return !GIsAutomationTesting && TutorialWidget && TutorialWidget->IsModalOpen();
+}
+
 bool ADCPlayerController::IsBlockedByUI() const
 {
-	return RootLayout && RootLayout->Stack->GetActiveWidget() != nullptr;
+	return (RootLayout && RootLayout->Stack->GetActiveWidget() != nullptr) || IsTutorialModalOpen();
 }
 
 void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
@@ -175,9 +181,7 @@ void ADCPlayerController::HandleScreenChanged(UCommonActivatableWidget* Screen)
 	}
 	if (TutorialWidget)
 	{
-		const bool bTopRight = Cast<UDCFilmCraftingWidget>(Screen) || Cast<UDCComputerWidget>(Screen) || Cast<UDCSupplierWidget>(Screen);
-		TutorialWidget->SetPlacement(Cast<UDCDialogueWidget>(Screen) ? ETutorialPlacement::TopCenter
-			: (bTopRight ? ETutorialPlacement::TopRight : ETutorialPlacement::BottomCenter));
+		TutorialWidget->SetPlacement(ETutorialPlacement::BottomCenter);
 	}
 	// The crafting panel was closed (Back, Combine) or replaced (day summary): the camera goes home
 	if (CameraZone == ECameraZone::BackRoom && !Cast<UDCFilmCraftingWidget>(Screen))
@@ -213,7 +217,20 @@ void ADCPlayerController::TogglePause()
 		return;
 	}
 	// Only reached in game mode: with a screen up, Esc is the CommonUI back action
-	if (RootLayout && !IsBlockedByUI())
+	if (RootLayout && !RootLayout->Stack->GetActiveWidget())
+	{
+		Cue(TEXT("PauseOpen"));
+		PushScreen<UDCPauseWidget>(RootLayout, PauseWidgetClass);
+	}
+}
+
+void ADCPlayerController::OpenPauseFromTutorial()
+{
+	if (bPlayingIntro || bPlayingWin || !RootLayout)
+	{
+		return;
+	}
+	if (!Cast<UDCPauseWidget>(RootLayout->Stack->GetActiveWidget()))
 	{
 		Cue(TEXT("PauseOpen"));
 		PushScreen<UDCPauseWidget>(RootLayout, PauseWidgetClass);
@@ -971,6 +988,8 @@ void ADCPlayerController::SkipTutorial()
 	GetWorldTimerManager().ClearTimer(TutorialCompleteHideTimer);
 	EndTutorialPause();
 	TutorialStep = ETutorialStep::Complete;
+	CurrentTutorialPromptKey.Empty();
+	AcceptedTutorialPromptKey.Empty();
 	if (TutorialWidget)
 	{
 		TutorialWidget->HideHint();
@@ -994,25 +1013,22 @@ void ADCPlayerController::CompleteTutorial()
 	}
 	EndTutorialPause();
 	TutorialStep = ETutorialStep::Complete;
+	AcceptedTutorialPromptKey.Empty();
 	Cue(TEXT("TutorialComplete"));
-	if (TutorialWidget)
-	{
-		TutorialWidget->SetPlacement(ETutorialPlacement::BottomCenter);
-		TutorialWidget->ShowStep(
-			LOCTEXT("Tutorial_CompleteHeader", "TUTORIAL COMPLETE!"),
-			LOCTEXT("Tutorial_CompleteBody", "You know clues, VHS combinations, genre unlocks, and supplier orders. Watch patience bars and cover tonight's rent!"),
-			LOCTEXT("Tutorial_CompleteAction", "Close the Supplier (Esc) - your next customer is on the way!"),
-			false);
-	}
+	ShowTutorialStepPrompt(
+		LOCTEXT("Tutorial_CompleteHeader", "TUTORIAL COMPLETE!"),
+		LOCTEXT("Tutorial_CompleteBody", "You know clues, VHS combinations, genre unlocks, and supplier orders. Watch patience bars and cover tonight's rent!"),
+		LOCTEXT("Tutorial_CompleteAction", "Close the Supplier (Esc) - your next customer is on the way!"),
+		false);
 	GetWorldTimerManager().SetTimer(TutorialCompleteHideTimer, this, &ADCPlayerController::DismissCompletedTutorial, 6.f, false);
 }
 
 void ADCPlayerController::HandleLanguageChanged()
 {
-	if (TutorialStep == ETutorialStep::Complete && TutorialWidget && TutorialWidget->GetVisibility() != ESlateVisibility::Collapsed
+	if (TutorialStep == ETutorialStep::Complete && TutorialWidget && TutorialWidget->IsModalOpen()
 		&& GetWorldTimerManager().IsTimerActive(TutorialCompleteHideTimer))
 	{
-		TutorialWidget->ShowStep(
+		ShowTutorialStepPrompt(
 			LOCTEXT("Tutorial_CompleteHeader", "TUTORIAL COMPLETE!"),
 			LOCTEXT("Tutorial_CompleteBody", "You know clues, VHS combinations, genre unlocks, and supplier orders. Watch patience bars and cover tonight's rent!"),
 			LOCTEXT("Tutorial_CompleteAction", "Close the Supplier (Esc) - your next customer is on the way!"),
@@ -1025,9 +1041,39 @@ void ADCPlayerController::HandleLanguageChanged()
 void ADCPlayerController::DismissCompletedTutorial()
 {
 	TutorialStep = ETutorialStep::Inactive;
+	CurrentTutorialPromptKey.Empty();
+	AcceptedTutorialPromptKey.Empty();
 	if (TutorialWidget)
 	{
 		TutorialWidget->HideHint();
+	}
+}
+
+void ADCPlayerController::ShowTutorialStepPrompt(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip)
+{
+	if (!TutorialWidget)
+	{
+		return;
+	}
+	const FString HeaderKey = FTextInspector::GetKey(StepHeader).Get(StepHeader.ToString());
+	const FString PromptKey = FString::Printf(TEXT("%d:%s"), (int32)TutorialStep, *HeaderKey);
+	CurrentTutorialPromptKey = PromptKey;
+	if (AcceptedTutorialPromptKey == PromptKey)
+	{
+		TutorialWidget->HideHint();
+		return;
+	}
+	TutorialWidget->SetPlacement(ETutorialPlacement::BottomCenter);
+	TutorialWidget->ShowStep(StepHeader, Body, Action, bShowSkip);
+}
+
+void ADCPlayerController::HandleTutorialAccepted()
+{
+	AcceptedTutorialPromptKey = CurrentTutorialPromptKey;
+	if (TutorialStep == ETutorialStep::Complete)
+	{
+		GetWorldTimerManager().ClearTimer(TutorialCompleteHideTimer);
+		DismissCompletedTutorial();
 	}
 }
 
@@ -1071,18 +1117,18 @@ void ADCPlayerController::RefreshTutorial()
 	switch (TutorialStep)
 	{
 	case ETutorialStep::ApproachClient:
-		TutorialWidget->ShowStep(
+		ShowTutorialStepPrompt(
 			LOCTEXT("Tutorial_1_Header", "TUTORIAL 1/6: FIRST CUSTOMER"),
-			LOCTEXT("Tutorial_1_Body", "Customers give mood clues - never exact skill or genre names. Turn toward them at the counter to talk."),
+			LOCTEXT("Tutorial_1_Body", "Customers give mood clues - never exact genre names. Turn toward them at the counter to talk."),
 			ActiveScreen
 				? FText::Format(LOCTEXT("Tutorial_1_ActionScreen", "Close this screen (Esc), look at the customer and press [{0}]"), InteractKey)
 				: FText::Format(LOCTEXT("Tutorial_1_Action", "Look at the customer and press [{0}] to listen"), InteractKey));
 		break;
 
 	case ETutorialStep::DialogueOrder:
-		TutorialWidget->ShowStep(
+		ShowTutorialStepPrompt(
 			LOCTEXT("Tutorial_1b_Header", "TUTORIAL 1/6: INTERPRET CLUES"),
-			LOCTEXT("Tutorial_1b_Body", "Clues map to hidden Skills (Funny, Scary, Brave...). Slapstick/laughs = Funny high; 'sleep tonight' / 'no scares' = Scary 0. Next you'll combine 2+ tapes to hit 6 pts."),
+			LOCTEXT("Tutorial_1b_Body", "Clues map to hidden Genres (Comedy, Horror, Action...). Slapstick/laughs = Comedy high; 'sleep tonight' / 'no scares' = Horror 0. Next you'll combine 2+ tapes to hit 6 pts."),
 			LOCTEXT("Tutorial_1b_Action", "Read the clues, then click 'Coming right up'"));
 		break;
 
@@ -1093,7 +1139,7 @@ void ADCPlayerController::RefreshTutorial()
 		}
 		else
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_2_Header", "TUTORIAL 2/6: BACK ROOM"),
 				LOCTEXT("Tutorial_2_Body", "The ORDER box (top-left) keeps their clues pinned. Head to the back room to combine 2+ VHS tapes into one 6-point film."),
 				FText::Format(LOCTEXT("Tutorial_2_Action", "Press [{0}] to go to the back room"), BackRoomKey));
@@ -1105,15 +1151,15 @@ void ADCPlayerController::RefreshTutorial()
 		const int32 Filled = GM->FilmCrafting->GetFilledSlots();
 		if (Filled == 0)
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_3a_Header", "TUTORIAL 3/6: INSPECT & PICK"),
-				LOCTEXT("Tutorial_3a_Body", "Skills show right under each tape title. Pick tapes whose skills match the ORDER clues (here: Funny high, Scary zero)."),
-				LOCTEXT("Tutorial_3a_Action", "Click a Comedy tape (Funny 3) to load Slot 1"));
+				LOCTEXT("Tutorial_3a_Body", "Genres show right under each tape title. Pick tapes whose genres match the ORDER clues (here: Comedy high, Horror zero)."),
+				LOCTEXT("Tutorial_3a_Action", "Click a Comedy tape (Comedy 3) to load Slot 1"));
 		}
 		else if (!GM->FilmCrafting->CanConfirm())
 		{
-			TutorialWidget->ShowStep(
-				LOCTEXT("Tutorial_3b_Header", "TUTORIAL 3/6: SKILLS ADD UP"),
+			ShowTutorialStepPrompt(
+				LOCTEXT("Tutorial_3b_Header", "TUTORIAL 3/6: GENRES ADD UP"),
 				LOCTEXT("Tutorial_3b_Body", "Slotted tapes add together in FILM PROFILE - and you can repeat copies of the same tape! Watch Order size & MATCH WITH THE ORDER."),
 				LOCTEXT("Tutorial_3b_Action", "Click a 2nd Comedy tape (repeats work!) so MATCH turns GREAT"));
 		}
@@ -1128,14 +1174,14 @@ void ADCPlayerController::RefreshTutorial()
 			}
 			if (Reaction == EReaction::Loved || Reaction == EReaction::Liked)
 			{
-				TutorialWidget->ShowStep(
+				ShowTutorialStepPrompt(
 					LOCTEXT("Tutorial_3c_Header", "TUTORIAL 3/6: COMBINE FILM"),
 					LOCTEXT("Tutorial_3c_Body", "MATCH WITH THE ORDER looks great! Edit the title if you want - combining consumes the slotted tape copies."),
 					LOCTEXT("Tutorial_3c_Action", "Click COMBINE to return to the counter with your film"));
 			}
 			else
 			{
-				TutorialWidget->ShowStep(
+				ShowTutorialStepPrompt(
 					LOCTEXT("Tutorial_3d_Header", "TUTORIAL 3/6: CHECK THE MATCH"),
 					LOCTEXT("Tutorial_3d_Body", "MATCH WITH THE ORDER is low. Click 'x' next to a slot to swap tapes until Funny is high and Scary stays 0."),
 					LOCTEXT("Tutorial_3d_Action", "Swap tapes with 'x' or click COMBINE when ready"));
@@ -1151,14 +1197,14 @@ void ADCPlayerController::RefreshTutorial()
 		}
 		else if (Cast<UDCDialogueWidget>(ActiveScreen))
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_4a_Header", "TUTORIAL 4/6: DELIVERY & PAY"),
 				FText::Format(LOCTEXT("Tutorial_4a_Body", "Base rental (${0}) pays immediately. Bonus tips (or fines!) arrive shortly after on ReelTalk.net."), FText::FromString(FString::FromInt(GM->Config->BaseRentalPrice))),
 				LOCTEXT("Tutorial_4a_Action", "Click 'Here you go' to deliver your film"));
 		}
 		else
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_4b_Header", "TUTORIAL 4/6: HAND OVER FILM"),
 				LOCTEXT("Tutorial_4b_Body", "Your combined VHS is ready! Base rental pays on delivery; tips (or fines) arrive with the customer's review."),
 				FText::Format(LOCTEXT("Tutorial_4b_Action", "Look at the customer and press [{0}] to deliver"), InteractKey));
@@ -1166,7 +1212,7 @@ void ADCPlayerController::RefreshTutorial()
 		break;
 
 	case ETutorialStep::WaitReview:
-		TutorialWidget->ShowStep(
+		ShowTutorialStepPrompt(
 			LOCTEXT("Tutorial_4c_Header", "TUTORIAL 4/6: REELTALK REVIEW"),
 			LOCTEXT("Tutorial_4c_Body", "Base rent is paid! Customers post star ratings, bonus tips (or fines), and missing-skill feedback on ReelTalk.net."),
 			LOCTEXT("Tutorial_4c_Action", "Wait a moment for the customer's review..."));
@@ -1175,14 +1221,14 @@ void ADCPlayerController::RefreshTutorial()
 	case ETutorialStep::ComputerBuyGenre:
 		if (Cast<UDCComputerWidget>(ActiveScreen))
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_5a_Header", "TUTORIAL 5/6: SHOP UPGRADES"),
 				LOCTEXT("Tutorial_5a_Body", "GENRES adds genres to your catalog (future customers ask for them!). COMBINE MACHINE adds slots; STAR LICENSES raise tape tier."),
 				LOCTEXT("Tutorial_5a_Action", "On the GENRES tab, buy a new genre (e.g. ROMANCE for $40)"));
 		}
 		else
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_5b_Header", "TUTORIAL 5/6: OPEN COMPUTER"),
 				LOCTEXT("Tutorial_5b_Body", "See ReelTalk.net above - tips boost your cash and Criterio! Now unlock a new genre on the Computer."),
 				FText::Format(LOCTEXT("Tutorial_5b_Action", "Look at the COMPUTER on the counter and press [{0}]"), InteractKey));
@@ -1192,14 +1238,14 @@ void ADCPlayerController::RefreshTutorial()
 	case ETutorialStep::SupplierBuyTape:
 		if (Cast<UDCSupplierWidget>(ActiveScreen))
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_6a_Header", "TUTORIAL 6/6: SUPPLIER STOCK"),
 				LOCTEXT("Tutorial_6a_Body", "Switch Genre tabs (try your new genre!) and filter by stars. Skills show below each tape - x1 buys one copy, x5 buys five."),
 				LOCTEXT("Tutorial_6a_Action", "Buy any tape (x1 or x5) to stock your shelf and finish!"));
 		}
 		else
 		{
-			TutorialWidget->ShowStep(
+			ShowTutorialStepPrompt(
 				LOCTEXT("Tutorial_6b_Header", "TUTORIAL 6/6: BUY FROM SUPPLIER"),
 				LOCTEXT("Tutorial_6b_Body", "Unlocking a genre on the Computer does NOT add copies to stock! You must order physical tapes at the Cash Register."),
 				Cast<UDCComputerWidget>(ActiveScreen)

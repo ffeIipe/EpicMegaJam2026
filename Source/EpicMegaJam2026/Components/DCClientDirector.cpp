@@ -234,7 +234,26 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 			Genres = GM->Unlocks->UnlockedGenres;
 		}
 
-		struct FCandidate { FSkillVector Skills; float Weight; };
+		struct FCandidate { FSkillVector Skills; float Weight; uint32 Mask = 0; };
+		auto ComputeSkillMask = [](const FSkillVector& V) -> uint32
+		{
+			uint32 M = 0;
+			for (int32 i = 0; i < DCNumSkills; ++i)
+			{
+				if (V.Get((ESkill)i) > 0) M |= (1u << i);
+			}
+			return M;
+		};
+		auto CountBits = [](uint32 M) -> int32
+		{
+			int32 C = 0;
+			for (int32 i = 0; i < DCNumSkills; ++i)
+			{
+				if (M & (1u << i)) ++C;
+			}
+			return C;
+		};
+
 		TArray<FCandidate> Candidates;
 		if (Cfg->VHSTable)
 		{
@@ -250,7 +269,7 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 				}
 				if (Points > 0 && Tape->Rating >= StarMin && Tape->Rating <= StarMax && Genres.Contains(Tape->PrimaryGenre)) // Points > 0 skips the v1 rows
 				{
-					Candidates.Add({ Tape->Skills, Cfg->GeneratorBiasFloor + Taste });
+					Candidates.Add({ Tape->Skills, Cfg->GeneratorBiasFloor + Taste, ComputeSkillMask(Tape->Skills) });
 				}
 			}
 		}
@@ -258,29 +277,73 @@ void UAC_ClientDirector::GenerateOrder(const FClientArchetypeData& Arch, const F
 		{
 			UE_LOG(LogTemp, Warning, TEXT("GenerateOrder: no tapes for tier %d, the order has no target"), Tier);
 		}
+		const int32 MaxTargetSkills = (TierRow && TierRow->MaxTargetSkills > 0)
+			? TierRow->MaxTargetSkills
+			: FMath::Clamp(Tier + 1, 2, DCNumSkills); // Tier 1->2, 2->3, 3->4, 4->5, 5->5
+
 		TArray<FSkillVector> Recipe;
 		TArray<bool> Used;
 		Used.Init(false, Candidates.Num());
+		uint32 ActiveMask = 0;
 		for (int32 k = 0; k < Tapes && !Candidates.IsEmpty(); ++k)
 		{
-			float Sum = 0.f;
-			for (int32 i = 0; i < Candidates.Num(); ++i) Sum += Used[i] ? 0.f : Candidates[i].Weight;
-			if (Sum <= 0.f) // every distinct tape is in the recipe already: repeats are allowed when the group is small
+			// Prefer unused candidates that keep distinct skills <= MaxTargetSkills; allow repeats before exceeding the cap,
+			// and only fall back to the smallest skill-count increase if no tape in the pool can stay within the cap.
+			auto FindEligible = [&](bool bAllowUsed, int32 SkillLimit, TArray<int32>& OutIndices, float& OutSum)
 			{
-				Used.Init(false, Candidates.Num());
-				for (int32 i = 0; i < Candidates.Num(); ++i) Sum += Candidates[i].Weight;
-			}
-			float Roll = FMath::FRandRange(0.f, Sum);
-			int32 Pick = Candidates.Num() - 1;
-			for (int32 i = 0; i < Candidates.Num(); ++i)
-			{
-				if (!Used[i] && (Roll -= Candidates[i].Weight) <= 0.f)
+				OutIndices.Reset();
+				OutSum = 0.f;
+				for (int32 i = 0; i < Candidates.Num(); ++i)
 				{
-					Pick = i;
-					break;
+					if (!bAllowUsed && Used[i]) continue;
+					if (CountBits(ActiveMask | Candidates[i].Mask) <= SkillLimit)
+					{
+						OutIndices.Add(i);
+						OutSum += Candidates[i].Weight;
+					}
+				}
+			};
+
+			TArray<int32> Eligible;
+			float Sum = 0.f;
+			FindEligible(false, MaxTargetSkills, Eligible, Sum);
+			if (Eligible.IsEmpty())
+			{
+				FindEligible(true, MaxTargetSkills, Eligible, Sum);
+			}
+			if (Eligible.IsEmpty())
+			{
+				int32 MinNewSkills = DCNumSkills + 1;
+				for (int32 i = 0; i < Candidates.Num(); ++i)
+				{
+					MinNewSkills = FMath::Min(MinNewSkills, CountBits(ActiveMask | Candidates[i].Mask));
+				}
+				FindEligible(false, MinNewSkills, Eligible, Sum);
+				if (Eligible.IsEmpty())
+				{
+					FindEligible(true, MinNewSkills, Eligible, Sum);
 				}
 			}
+
+			int32 Pick = Eligible.Last();
+			if (Sum > 0.f)
+			{
+				float Roll = FMath::FRandRange(0.f, Sum);
+				for (int32 Idx : Eligible)
+				{
+					if ((Roll -= Candidates[Idx].Weight) <= 0.f)
+					{
+						Pick = Idx;
+						break;
+					}
+				}
+			}
+			else
+			{
+				Pick = Eligible[FMath::RandRange(0, Eligible.Num() - 1)];
+			}
 			Used[Pick] = true;
+			ActiveMask |= Candidates[Pick].Mask;
 			Recipe.Add(Candidates[Pick].Skills);
 		}
 		Rt.Target = UBPFL_Scoring::ComputeProfile(Recipe, Cfg);

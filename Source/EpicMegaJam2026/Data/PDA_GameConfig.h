@@ -32,7 +32,7 @@ public:
 
 	// --- Skills (section 3, 4.1)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 SkillCap = 10;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 TapeSkillMax = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 TapeSkillMax = 4;
 	// Skill points of a tape by stars, index 0 = 1 star
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") TArray<int32> StarPoints;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills") int32 TapesPerStar = 10;
