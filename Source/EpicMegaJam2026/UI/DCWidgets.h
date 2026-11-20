@@ -36,8 +36,11 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 
 private:
+	void RebuildTabs();
+	void HandleLanguageChanged();
 	UFUNCTION() void OnTabClicked(FName Tab) { SelectedTab = Tab; Refresh(); }
 	UFUNCTION() void OnTapeClicked(FName Row);
 	void CycleTab(int32 Dir);
@@ -58,6 +61,7 @@ private:
 	FName SelectedTab = "All"; // "All" or an EGenre name
 	FName SelectedTape;
 	bool bPicker = false;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 // WBP_FilmCrafting ("Combine VHS"): a click on a tape fills the first empty slot (3 to 5 slots, empty and repeated allowed),
@@ -72,14 +76,19 @@ public:
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeOnActivated() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
+	void HandleLanguageChanged();
 	UFUNCTION() void OnClearClicked(FName SlotName);
 	UFUNCTION() void OnPicked(FName VHSRow);
 	UFUNCTION() void OnConfirm(FName Unused);
 	UFUNCTION() void OnCraftedClicked(FName Index);
+	UFUNCTION() void OnCraftedTabClicked(FName Tab);
 	UFUNCTION() void OnViewClicked(FName View);
+	void RebuildCraftedTabs();
+	void RebuildCraftedList();
 	void ShowView(bool bCrafted);
 	// Fills the library's detail panel with CraftedFilms[Index]
 	void ShowFilm(int32 Index);
@@ -119,16 +128,19 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> CombineBody;
 	UPROPERTY() TObjectPtr<UWidget> CraftedBody;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> ViewTabButtons;
+	UPROPERTY() TObjectPtr<UWrapBox> CraftedTabs;
 	UPROPERTY() TObjectPtr<UVerticalBox> CraftedList;
 	UPROPERTY() TArray<TObjectPtr<UDCButton>> CraftedButtons;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedTitle;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedStars;
 	UPROPERTY() TObjectPtr<UVerticalBox> CraftedSkills;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> CraftedTapes;
+	FName CraftedGenreTab = "All";
 	int32 CraftedShown = -1;
 	int32 ShownFilm = INDEX_NONE;
 	UPROPERTY() TObjectPtr<UWidget> LockedBox;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> LockedText;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDialogueButton);
@@ -167,13 +179,16 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
+	void HandleLanguageChanged();
 	UPROPERTY() TObjectPtr<UAC_ClientDirector> Director;
 	UPROPERTY() TObjectPtr<UVerticalBox> OrderText;
 	TWeakObjectPtr<const class ADCClient> ShownClient; // the order is rebuilt only when the front client changes
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HeadingText;
 	UPROPERTY() TObjectPtr<UProgressBar> PatienceBar;
 	UPROPERTY() TObjectPtr<UWidget> PanelRoot;
+	FDelegateHandle LanguageChangedHandle;
 };

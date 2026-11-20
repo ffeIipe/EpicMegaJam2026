@@ -46,6 +46,10 @@ private:
 
 	bool bIntroPlayedWithoutSlot = false;
 	bool bTutorialCompletedWithoutSlot = false;
+	FDelegateHandle TextRevisionHandle;
+#if WITH_EDITOR
+	FString EditorCultureToRestore;
+#endif
 
 public:
 

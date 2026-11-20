@@ -1,6 +1,7 @@
 #include "UI/DCCommonUI.h"
 #include "CommonUITypes.h"
 #include "Core/DCAudioManager.h"
+#include "Core/DCSettings.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
@@ -23,6 +24,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Data/DCTypes.h"
 #include "Data/PDA_GameConfig.h"
+
+#define LOCTEXT_NAMESPACE "DirectorsCut"
 
 using DCUI::Box;
 
@@ -86,7 +89,7 @@ namespace
 // ---------------------------------------------------------------- Styles
 
 // Sizes are pixels (FontDPI=72 in DefaultEngine.ini); Press Start 2P stays crisp on multiples of 8
-UDCText_Title::UDCText_Title() { SetText(this, true, 32, DCPalette::Yellow, true); }
+UDCText_Title::UDCText_Title() { SetText(this, true, 32, DCPalette::White, true); }
 UDCText_Heading::UDCText_Heading() { SetText(this, true, 16, DCPalette::Beige); }
 UDCText_Body::UDCText_Body() { SetText(this, false, 32, DCPalette::Grey); }
 UDCText_Accent::UDCText_Accent() { SetText(this, false, 32, DCPalette::Lime); }
@@ -108,6 +111,10 @@ UDCText_Button::UDCText_Button() { SetText(this, true, 16, DCPalette::Beige); }
 UDCText_MenuButton::UDCText_MenuButton() { SetText(this, true, 16, FLinearColor::White, true); }
 UDCText_MenuButtonDisabled::UDCText_MenuButtonDisabled() { SetText(this, true, 16, FLinearColor(1.f, 1.f, 1.f, 0.45f), true); }
 UDCText_Tab::UDCText_Tab() { SetText(this, true, 10, DCPalette::Beige); }
+UDCText_HeaderTab::UDCText_HeaderTab() { SetText(this, true, 22, DCPalette::Grey.CopyWithNewOpacity(0.75f), true); }
+UDCText_HeaderTabActive::UDCText_HeaderTabActive() { SetText(this, true, 22, DCPalette::Yellow, true); }
+UDCText_Discard::UDCText_Discard() { SetText(this, true, 12, DCPalette::SkillBrave); }
+UDCText_DiscardDisabled::UDCText_DiscardDisabled() { SetText(this, true, 12, DCPalette::SkillBrave.CopyWithNewOpacity(0.35f)); }
 
 // Frames are 10px thick (panel) and 8px (plate): content padding must be at least that
 UDCBorder_Panel::UDCBorder_Panel()
@@ -122,6 +129,7 @@ UDCBorder_Header::UDCBorder_Header()
 UDCBorder_Inset::UDCBorder_Inset() { Background = Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Blue, 0.2f), Box(DCPalette::NavyLight.CopyWithNewOpacity(0.6f), DCPalette::Blue)); }
 UDCBorder_Transparent::UDCBorder_Transparent() { Background = Box(FLinearColor::Transparent, FLinearColor::Transparent, 0.f, 0.f); }
 UDCBorder_Black::UDCBorder_Black() { Background = Box(FLinearColor::Black, FLinearColor::Black, 0.f, 0.f); }
+UDCBorder_TutorialBackdrop::UDCBorder_TutorialBackdrop() { Background = Box(FLinearColor(0.f, 0.f, 0.f, 0.68f), FLinearColor::Transparent, 0.f, 0.f); }
 UDCBorder_KeyCap::UDCBorder_KeyCap() { Background = Box(DCPalette::Navy, DCPalette::Grey, 2.f, 3.f); }
 UDCBorder_LockShackle::UDCBorder_LockShackle() { Background = Box(FLinearColor::Transparent, DCPalette::Yellow, 3.f, 6.f); }
 UDCBorder_LockBody::UDCBorder_LockBody() { Background = Box(DCPalette::Yellow, DCPalette::Yellow, 2.f, 3.f); }
@@ -157,10 +165,44 @@ UDCButton_Tab::UDCButton_Tab()
 	MinHeight = 30;
 }
 
+UDCButton_HeaderTab::UDCButton_HeaderTab()
+{
+	const FSlateBrush Normal = SliceBrush(TEXT("T_UI_Header"), FVector2D(100.f, 66.f), FMargin(50.f, 0.f, 34.f, 0.f),
+		FLinearColor(0.45f, 0.50f, 0.65f, 0.92f), Box(DCPalette::NavyLight, DCPalette::Blue, 2.f));
+	const FSlateBrush Hovered = SliceBrush(TEXT("T_UI_Header"), FVector2D(100.f, 66.f), FMargin(50.f, 0.f, 34.f, 0.f),
+		FLinearColor(0.80f, 0.85f, 1.0f, 1.0f), Box(DCPalette::Blue, DCPalette::Lime, 2.f));
+	const FSlateBrush Selected = SliceBrush(TEXT("T_UI_Header"), FVector2D(100.f, 66.f), FMargin(50.f, 0.f, 34.f, 0.f),
+		FLinearColor::White, Box(DCPalette::Blue, DCPalette::Green, 3.f));
+	SetButton(this, Normal, Hovered, Selected, Normal, UDCText_HeaderTab::StaticClass(), FMargin(44.f, 12.f, 36.f, 12.f));
+	SelectedTextStyle = UDCText_HeaderTabActive::StaticClass();
+	SelectedHoveredTextStyle = UDCText_HeaderTabActive::StaticClass();
+	MinHeight = 54;
+}
+
+UDCButton_Discard::UDCButton_Discard()
+{
+	SetButton(this,
+		Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Red, 0.25f), Box(DCPalette::Navy, DCPalette::SkillBrave.CopyWithNewOpacity(0.6f), 2.f, 3.f)),
+		Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Red, 0.55f), Box(DCPalette::NavyLight, DCPalette::SkillBrave, 2.f, 3.f)),
+		Plate(FMath::Lerp(DCPalette::NavyLight, DCPalette::Red, 0.7f), Box(DCPalette::NavyLight, DCPalette::SkillBrave, 2.f, 3.f)),
+		Plate(DCPalette::Navy, Box(DCPalette::Navy, DCPalette::Grey.CopyWithNewOpacity(0.2f), 1.f, 3.f)),
+		UDCText_Discard::StaticClass(), FMargin(12.f, 6.f));
+	DisabledTextStyle = UDCText_DiscardDisabled::StaticClass();
+	MinHeight = 28;
+}
+
 UDCButton_Row::UDCButton_Row()
 {
 	SetButton(this, Box(FLinearColor::Transparent, FLinearColor::Transparent, 0.f), Box(DCPalette::NavyLight, DCPalette::Blue), Box(DCPalette::Green.CopyWithNewOpacity(0.35f), DCPalette::Lime),
 		Box(FLinearColor::Transparent, FLinearColor::Transparent, 0.f), UDCText_Body::StaticClass(), FMargin(10.f, 4.f));
+}
+
+UDCButton_CardRow::UDCButton_CardRow()
+{
+	const FSlateBrush Normal = SliceBrush(TEXT("T_UI_Panel"), FVector2D(48.f, 48.f), FMargin(20.f), FLinearColor::White, Box(DCPalette::Navy.CopyWithNewOpacity(0.94f), DCPalette::Green, 3.f, 6.f));
+	const FSlateBrush Hovered = SliceBrush(TEXT("T_UI_Panel"), FVector2D(48.f, 48.f), FMargin(20.f), FLinearColor(1.20f, 1.35f, 1.20f, 1.f), Box(DCPalette::NavyLight, DCPalette::Lime, 3.f, 6.f));
+	const FSlateBrush Selected = SliceBrush(TEXT("T_UI_Panel"), FVector2D(48.f, 48.f), FMargin(20.f), FLinearColor(1.0f, 1.40f, 0.90f, 1.f), Box(DCPalette::NavyLight, DCPalette::Yellow, 3.f, 6.f));
+	SetButton(this, Normal, Hovered, Selected, Normal, UDCText_Heading::StaticClass(), FMargin(14.f, 12.f));
 }
 
 // ---------------------------------------------------------------- Input
@@ -169,29 +211,29 @@ UDCUIInputData::UDCUIInputData()
 {
 	Actions = CreateDefaultSubobject<UDataTable>(TEXT("Actions"));
 	Actions->RowStruct = FCommonInputActionDataBase::StaticStruct();
-	Add("Confirm", TEXT("Select"), EKeys::Enter, EKeys::Gamepad_FaceButton_Bottom, TEXT("ENTER"));
-	Add("Back", TEXT("Back"), EKeys::Escape, EKeys::Gamepad_FaceButton_Right, TEXT("ESC"));
+	Add("Confirm", LOCTEXT("UIAction_Select", "Select"), EKeys::Enter, EKeys::Gamepad_FaceButton_Bottom, FText::FromString(TEXT("ENTER")));
+	Add("Back", LOCTEXT("UIAction_Back", "Back"), EKeys::Escape, EKeys::Gamepad_FaceButton_Right, FText::FromString(TEXT("ESC")));
 	// Space: shown as "ESC / SPACE" on the combine screen (its own back action), and as the warehouse shortcut on the computer and the register
-	Add("BackSpace", TEXT("Back"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Top, TEXT("ESC / SPACE"));
-	Add("Warehouse", TEXT("Warehouse"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Left, TEXT("SPACE"));
-	Add("PrevTab", TEXT("Previous category"), EKeys::Left, EKeys::Gamepad_LeftShoulder, TEXT("◀"));
+	Add("BackSpace", LOCTEXT("UIAction_BackSpace", "Back"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Top, LOCTEXT("KeyCap_EscSpace", "ESC / SPACE"));
+	Add("Warehouse", LOCTEXT("UIAction_Warehouse", "Warehouse"), EKeys::SpaceBar, EKeys::Gamepad_FaceButton_Left, LOCTEXT("KeyCap_Space", "SPACE"));
+	Add("PrevTab", LOCTEXT("UIAction_PrevTab", "Previous category"), EKeys::Left, EKeys::Gamepad_LeftShoulder, FText::FromString(TEXT("◀")));
 	// Its hint stands for both directions: PrevTab is registered hidden from the bar
-	Add("NextTab", TEXT("Change category"), EKeys::Right, EKeys::Gamepad_RightShoulder, TEXT("◀ ▶"));
+	Add("NextTab", LOCTEXT("UIAction_NextTab", "Change category"), EKeys::Right, EKeys::Gamepad_RightShoulder, FText::FromString(TEXT("◀ ▶")));
 	DefaultClickAction.DataTable = DefaultBackAction.DataTable = Actions;
 	DefaultClickAction.RowName = "Confirm";
 	DefaultBackAction.RowName = "Back";
 }
 
-void UDCUIInputData::Add(FName Name, const TCHAR* DisplayName, const FKey& Key, const FKey& GamepadKey, const TCHAR* Cap)
+void UDCUIInputData::Add(FName Name, const FText& DisplayName, const FKey& Key, const FKey& GamepadKey, const FText& Cap)
 {
 	FCommonInputActionDataBase Row;
-	Row.DisplayName = FText::FromString(DisplayName);
+	Row.DisplayName = DisplayName;
 	// The per-device key infos are protected; set them through reflection like the data table editor does
 	const UScriptStruct* RowType = FCommonInputActionDataBase::StaticStruct();
 	FindFProperty<FStructProperty>(RowType, TEXT("KeyboardInputTypeInfo"))->ContainerPtrToValuePtr<FCommonInputTypeInfo>(&Row)->SetKey(Key);
 	FindFProperty<FStructProperty>(RowType, TEXT("DefaultGamepadInputTypeInfo"))->ContainerPtrToValuePtr<FCommonInputTypeInfo>(&Row)->SetKey(GamepadKey);
 	Actions->AddRow(Name, Row);
-	KeyCaps.Add(Name, FText::FromString(Cap));
+	KeyCaps.Add(Name, Cap);
 }
 
 FDataTableRowHandle UDCUIInputData::Action(FName Name)
@@ -266,14 +308,35 @@ void UDCActionButton::NativeOnInitialized()
 	UHorizontalBoxSlot* NameSlot = H->AddChildToHorizontalBox(Text_ActionName);
 	NameSlot->SetPadding(FMargin(10.f, 0.f, 4.f, 0.f));
 	NameSlot->SetVerticalAlignment(VAlign_Center);
+	LanguageChangedHandle = UDCSettings::OnLanguageChanged.AddUObject(this, &UDCActionButton::RefreshLanguage);
+}
+
+void UDCActionButton::NativeDestruct()
+{
+	UDCSettings::OnLanguageChanged.Remove(LanguageChangedHandle);
+	Super::NativeDestruct();
+}
+
+void UDCActionButton::RefreshLanguage()
+{
+	if (CachedBindingHandle.IsValid())
+	{
+		if (Text_ActionName)
+		{
+			Text_ActionName->SetText(CachedBindingHandle.GetDisplayName());
+		}
+		if (KeyText)
+		{
+			KeyText->SetText(UDCUIInputData::KeyCap(CachedBindingHandle.GetActionName()));
+		}
+	}
 }
 
 void UDCActionButton::SetRepresentedAction(FUIActionBindingHandle InBindingHandle)
 {
 	Super::SetRepresentedAction(InBindingHandle);
-	// The base class only fills the name when it has an icon widget; this button shows a text key cap instead
-	Text_ActionName->SetText(InBindingHandle.GetDisplayName());
-	KeyText->SetText(UDCUIInputData::KeyCap(InBindingHandle.GetActionName()));
+	CachedBindingHandle = InBindingHandle;
+	RefreshLanguage();
 }
 
 // ---------------------------------------------------------------- Screen and root layout
@@ -313,11 +376,11 @@ void UDCRootLayout::NativeOnInitialized()
 
 namespace DCUI
 {
-	UCommonTextBlock* Text(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Text, TSubclassOf<UCommonTextStyle> Style)
+	UCommonTextBlock* Text(UWidgetTree* Tree, UPanelWidget* Parent, const FText& Text, TSubclassOf<UCommonTextStyle> Style)
 	{
 		UCommonTextBlock* T = Tree->ConstructWidget<UCommonTextBlock>();
 		T->SetStyle(Style);
-		T->SetText(FText::FromString(Text));
+		T->SetText(Text);
 		if (Parent)
 		{
 			Parent->AddChild(T);
@@ -337,12 +400,12 @@ namespace DCUI
 		return B;
 	}
 
-	UDCButton* Button(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Label, FName Payload, TSubclassOf<UCommonButtonStyle> Style)
+	UDCButton* Button(UWidgetTree* Tree, UPanelWidget* Parent, const FText& Label, FName Payload, TSubclassOf<UCommonButtonStyle> Style)
 	{
 		UDCButton* Btn = Tree->ConstructWidget<UDCButton>();
 		Btn->Payload = Payload;
 		Btn->SetStyle(Style);
-		Btn->Label->SetText(FText::FromString(Label));
+		Btn->Label->SetText(Label);
 		// Mouse only: a focused button would be pressed again by Space (buy again, add the tape again) instead of the Space shortcuts
 		Btn->SetIsFocusable(false);
 		if (Parent)
@@ -376,7 +439,7 @@ namespace DCUI
 		return V;
 	}
 
-	void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FString& Title, const FString& Subtitle)
+	void Header(UWidgetTree* Tree, UPanelWidget* Parent, const FText& Title, const FText& Subtitle)
 	{
 		// Parent is the panel's content box: its parent is the border, whose parent is the stack made by Panel()
 		UVerticalBox* Stack = Parent->GetParent() ? Cast<UVerticalBox>(Parent->GetParent()->GetParent()) : nullptr;
@@ -392,6 +455,18 @@ namespace DCUI
 		if (!Subtitle.IsEmpty())
 		{
 			Text(Tree, Parent, Subtitle)->SetMargin(FMargin(4.f, 0.f, 0.f, 12.f));
+		}
+	}
+
+	FText SkillName(ESkill Skill)
+	{
+		switch (Skill)
+		{
+		case ESkill::Funny: return LOCTEXT("Skill_Funny", "Comedy");
+		case ESkill::Scary: return LOCTEXT("Skill_Scary", "Horror");
+		case ESkill::Brave: return LOCTEXT("Skill_Brave", "Action");
+		case ESkill::Thoughtful: return LOCTEXT("Skill_Thoughtful", "Drama");
+		default: return LOCTEXT("Skill_Romantic", "Romance");
 		}
 	}
 
@@ -443,9 +518,9 @@ namespace DCUI
 		return FString::Printf(TEXT("★ %d"), FMath::Clamp(Rating, 0, 5)); // one star + the number, e.g. "★ 4"
 	}
 
-	FString ClientTierLabel(const UPDA_GameConfig* Config, int32 Tier)
+	FText ClientTierLabel(const UPDA_GameConfig* Config, int32 Tier)
 	{
-		FString Name;
+		FText Name;
 		if (Config && Config->ClientTierTable)
 		{
 			for (const TPair<FName, uint8*>& P : Config->ClientTierTable->GetRowMap())
@@ -453,11 +528,12 @@ namespace DCUI
 				const FClientTierData* Row = reinterpret_cast<const FClientTierData*>(P.Value);
 				if (Row->Tier == Tier)
 				{
-					Name = Row->DebugName.ToString();
+					Name = Row->DebugName;
 				}
 			}
 		}
-		return Name.IsEmpty() ? Stars(Tier) : FString::Printf(TEXT("%s %s"), *Stars(Tier), *Name);
+		const FText StarsText = FText::FromString(Stars(Tier));
+		return Name.IsEmpty() ? StarsText : FText::Format(FText::FromString(TEXT("{0} {1}")), StarsText, Name);
 	}
 
 	void SkillTooltip(UWidgetTree* Tree, UWidget* Target, const FSkillVector& Skills)
@@ -465,11 +541,11 @@ namespace DCUI
 		UCommonBorder* Box = Border(Tree, nullptr, UDCBorder_Panel::StaticClass(), FMargin(12.f));
 		UVerticalBox* V = Tree->ConstructWidget<UVerticalBox>();
 		Box->SetContent(V);
-		Text(Tree, V, TEXT("SKILLS"), UDCText_Heading::StaticClass());
+		Text(Tree, V, LOCTEXT("Tooltip_Skills", "GENRES"), UDCText_Heading::StaticClass());
 		SkillList(Tree, V, Skills, 0, true);
 		if (V->GetChildrenCount() == 1)
 		{
-			Text(Tree, V, TEXT("None"));
+			Text(Tree, V, LOCTEXT("Tooltip_None", "None"));
 		}
 		Target->SetToolTip(Box);
 	}
@@ -491,6 +567,18 @@ namespace DCUI
 		}
 	}
 
+	FLinearColor SkillColor(ESkill Skill)
+	{
+		switch (Skill)
+		{
+		case ESkill::Funny: return DCPalette::SkillFunny;
+		case ESkill::Scary: return DCPalette::SkillScary;
+		case ESkill::Brave: return DCPalette::SkillBrave;
+		case ESkill::Thoughtful: return DCPalette::SkillThoughtful;
+		default: return DCPalette::SkillRomantic;
+		}
+	}
+
 	void OrderLines(UWidgetTree* Tree, UPanelWidget* Box, const FClientRuntime& Client, float Wrap)
 	{
 		Box->ClearChildren();
@@ -498,14 +586,18 @@ namespace DCUI
 		auto Wrapped = [Wrap](UCommonTextBlock* T) { if (Wrap > 0.f) { T->SetWrapTextAt(Wrap); } else { T->SetAutoWrapText(true); } return T; };
 		if (Client.OrderLines.IsEmpty()) // scripted or legacy orders without per-skill lines
 		{
-			Wrapped(Text(Tree, Box, Client.DisplayName.IsEmpty() ? Client.OrderText.ToString() : FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Client.OrderText.ToString())));
+			const FText LineText = Client.DisplayName.IsEmpty()
+				? Client.OrderText
+				: FText::Format(FText::FromString(TEXT("{0}: {1}")), Client.DisplayName, Client.OrderText);
+			Wrapped(Text(Tree, Box, LineText));
 			return;
 		}
 		for (const FOrderLine& Line : Client.OrderLines)
 		{
 			const bool bGreeting = Line.Skill < 0;
-			const FString Content = bGreeting && !Client.DisplayName.IsEmpty()
-				? FString::Printf(TEXT("%s: %s"), *Client.DisplayName.ToString(), *Line.Text.ToString()) : Line.Text.ToString();
+			const FText Content = bGreeting && !Client.DisplayName.IsEmpty()
+				? FText::Format(FText::FromString(TEXT("{0}: {1}")), Client.DisplayName, Line.Text)
+				: Line.Text;
 			// Hint colors by skill are switched off (grey Scary read as disabled); to bring them back use SkillStyle(Line.Skill) for the hints
 			// Text(Tree, Box, Content, bGreeting ? TSubclassOf<UCommonTextStyle>(UDCText_Body::StaticClass()) : SkillStyle(Line.Skill))->SetWrapTextAt(Wrap);
 			Wrapped(Text(Tree, Box, Content, UDCText_Body::StaticClass()));
@@ -519,9 +611,57 @@ namespace DCUI
 			const int32 Value = Skills.Get((ESkill)i);
 			if (!bHideZero || Value > 0)
 			{
-				const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
-				Text(Tree, Parent, Cap > 0 ? FString::Printf(TEXT("%s %d/%d"), *Name, Value, Cap) : FString::Printf(TEXT("%s %d"), *Name, Value), SkillStyle(i));
+				const FText Name = SkillName((ESkill)i);
+				const FText Line = Cap > 0
+					? FText::Format(FText::FromString(TEXT("{0} {1}/{2}")), Name, FText::FromString(FString::FromInt(Value)), FText::FromString(FString::FromInt(Cap)))
+					: FText::Format(FText::FromString(TEXT("{0} {1}")), Name, FText::FromString(FString::FromInt(Value)));
+				Text(Tree, Parent, Line, SkillStyle(i));
 			}
+		}
+	}
+
+	void SkillBars(UWidgetTree* Tree, UPanelWidget* Parent, const FSkillVector& Skills, int32 Cap)
+	{
+		const int32 Segments = FMath::Max(Cap, 1);
+		for (int32 i = 0; i < DCNumSkills; ++i)
+		{
+			const ESkill Skill = (ESkill)i;
+			const int32 Value = Skills.Get(Skill);
+			const FLinearColor Color = SkillColor(Skill);
+
+			UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>();
+			if (UVerticalBox* V = Cast<UVerticalBox>(Parent))
+			{
+				V->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
+			}
+			else if (Parent)
+			{
+				Parent->AddChild(Row);
+			}
+
+			USizeBox* LabelBox = Tree->ConstructWidget<USizeBox>();
+			LabelBox->SetWidthOverride(130.f);
+			LabelBox->AddChild(Text(Tree, nullptr, SkillName(Skill), SkillStyle(i)));
+			Row->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
+
+			UHorizontalBox* Segs = Tree->ConstructWidget<UHorizontalBox>();
+			const FSlateBrush FilledBrush = Box(Color, Color, 1.f, 1.f);
+			const FSlateBrush EmptyBrush = Box(DCPalette::Navy, DCPalette::NavyLight, 1.f, 1.f);
+			for (int32 s = 0; s < Segments; ++s)
+			{
+				USizeBox* SegBox = Tree->ConstructWidget<USizeBox>();
+				SegBox->SetWidthOverride(12.f);
+				SegBox->SetHeightOverride(14.f);
+				UImage* SegImg = Tree->ConstructWidget<UImage>();
+				SegImg->SetBrush(s < Value ? FilledBrush : EmptyBrush);
+				SegBox->AddChild(SegImg);
+				Segs->AddChildToHorizontalBox(SegBox)->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
+			}
+			UHorizontalBoxSlot* SegsSlot = Row->AddChildToHorizontalBox(Segs);
+			SegsSlot->SetVerticalAlignment(VAlign_Center);
+			SegsSlot->SetPadding(FMargin(8.f, 0.f, 8.f, 0.f));
+
+			Row->AddChildToHorizontalBox(Text(Tree, nullptr, FString::Printf(TEXT("%d/%d"), Value, Segments), SkillStyle(i)))->SetVerticalAlignment(VAlign_Center);
 		}
 	}
 
@@ -534,8 +674,8 @@ namespace DCUI
 			const int32 Value = Skills.Get((ESkill)i);
 			if (Value > 0)
 			{
-				const FString Name = StaticEnum<ESkill>()->GetNameStringByValue(i);
-				Text(Tree, Row, FString::Printf(TEXT("%s %d"), *Name, Value), SkillStyle(i));
+				const FText Name = SkillName((ESkill)i);
+				Text(Tree, Row, FText::Format(FText::FromString(TEXT("{0} {1}")), Name, FText::FromString(FString::FromInt(Value))), SkillStyle(i));
 			}
 		}
 		if (Row->GetChildrenCount() > 0 && Parent)
@@ -576,3 +716,5 @@ namespace DCUI
 		return true;
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

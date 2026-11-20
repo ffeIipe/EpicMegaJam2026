@@ -1,5 +1,11 @@
 {
-  "config": { "TapeSkillMax": 3, "StarPoints": [3, 4, 5, 6, 7], "TapesPerStar": 10, "GeneratorBiasFloor": 0.25 },
+  "config": {
+    "TapeSkillMax": 4,
+    "StarPoints": [3, 4, 5, 6, 7],
+    "TapesPerStarByStar": [3, 3, 8, 10, 10],
+    "MaxSkillsByStar": [1, 1, 2, 3, 3],
+    "GeneratorBiasFloorByStar": [0.0, 0.0, 0.05, 0.05, 0.05]
+  },
   "genres": [
     { "Genre": "Horror",       "DisplayName": "Horror",              "Seed": 101, "SkillBias": [0, 3, 1, 1, 0] },
     { "Genre": "Comedy",       "DisplayName": "Comedy",              "Seed": 102, "SkillBias": [3, 0, 1, 0, 1] },

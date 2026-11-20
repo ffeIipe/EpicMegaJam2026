@@ -232,6 +232,8 @@ struct FClientTierData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 RecipeStarMin = 1;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 RecipeStarMax = 1;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 MaxHintedSkills = 2;
+	// Maximum distinct non-zero skills in a generated order's target (0 = tier default: 2, 3, 4, 5, 5)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 0, ClampMax = 5)) int32 MaxTargetSkills = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) float PayMultiplier = 1.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) float SpawnWeight = 1.f;
 };

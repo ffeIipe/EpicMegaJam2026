@@ -33,7 +33,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> BackRoomKeyText;
 };
 
-// WBP_Stats: money, goal, day / clock and rent, top right. A plain overlay above every screen so the numbers never disappear
+// WBP_Stats: money counter, top right. A plain overlay above every screen so the number never disappears
 // (it must not be the activatable HUD: that one hands input back to the game and has to stay at the bottom of the stack).
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCStatsWidget : public UUserWidget
@@ -45,12 +45,6 @@ protected:
 
 private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> MoneyText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> GoalText;
-	UPROPERTY() TObjectPtr<UProgressBar> GoalBar;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> DayText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> ClockText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> RentText;
-	UPROPERTY() TObjectPtr<UCommonTextBlock> HeldText;
 	float DisplayedMoney = -1.f;
 	int32 LastMoney = -1;
 	float Punch = 0.f;      // 1 right after the money changes, decays to 0
@@ -90,7 +84,7 @@ class EPICMEGAJAM2026_API UDCEndScreenWidget : public UDCScreen
 	GENERATED_BODY()
 public:
 	UDCEndScreenWidget(const FObjectInitializer& ObjectInitializer);
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Title = FText::FromString(TEXT("Eviction notice"));
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) FText Title = NSLOCTEXT("DirectorsCut", "EndScreen_DefaultTitle", "Eviction notice");
 	UFUNCTION(BlueprintCallable) void Show(int32 DayReached);
 
 protected:

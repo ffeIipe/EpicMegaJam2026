@@ -18,7 +18,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Scoring")
 	static FSkillVector ComputeProfile(const TArray<FSkillVector>& TapeSkills, const UPDA_GameConfig* Config);
 
-	// 6.1: sum over skills of |Profile - Target|
+	// 6.1: sum over skills of max(0, Target - Profile) (surplus beyond Target is not penalized)
 	UFUNCTION(BlueprintPure, Category = "Scoring")
 	static int32 ComputeMiss(const FSkillVector& Profile, const FSkillVector& Target);
 
@@ -46,8 +46,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Scoring")
 	static int32 ComputeFine(EReaction Reaction, float PayMultiplier, const UPDA_GameConfig* Config);
 
-	// 6.3: the skill with the largest |Profile - Target| (ties at random) and which way it missed.
-	// False when the film is exact (nothing to give feedback on).
+	// 6.3: the skill with the largest deficit max(0, Target - Profile) (ties at random).
+	// False when all target skills are met (surplus does not trigger negative feedback).
 	UFUNCTION(BlueprintCallable, Category = "Scoring")
 	static bool GetFeedbackSkill(const FSkillVector& Profile, const FSkillVector& Target, ESkill& OutSkill, EFeedbackDirection& OutDirection);
 

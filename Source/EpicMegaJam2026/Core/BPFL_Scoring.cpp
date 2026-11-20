@@ -23,7 +23,7 @@ int32 UBPFL_Scoring::ComputeMiss(const FSkillVector& Profile, const FSkillVector
 	int32 Miss = 0;
 	for (int32 i = 0; i < DCNumSkills; ++i)
 	{
-		Miss += FMath::Abs(Profile.Get((ESkill)i) - Target.Get((ESkill)i));
+		Miss += FMath::Max(0, Target.Get((ESkill)i) - Profile.Get((ESkill)i));
 	}
 	return Miss;
 }
@@ -82,13 +82,13 @@ bool UBPFL_Scoring::GetFeedbackSkill(const FSkillVector& Profile, const FSkillVe
 	TArray<ESkill, TInlineAllocator<DCNumSkills>> Ties;
 	for (int32 i = 0; i < DCNumSkills; ++i)
 	{
-		const int32 Diff = FMath::Abs(Profile.Get((ESkill)i) - Target.Get((ESkill)i));
-		if (Diff > Worst)
+		const int32 Deficit = FMath::Max(0, Target.Get((ESkill)i) - Profile.Get((ESkill)i));
+		if (Deficit > Worst)
 		{
-			Worst = Diff;
+			Worst = Deficit;
 			Ties.Reset();
 		}
-		if (Diff == Worst && Diff > 0)
+		if (Deficit == Worst && Deficit > 0)
 		{
 			Ties.Add((ESkill)i);
 		}
@@ -98,7 +98,7 @@ bool UBPFL_Scoring::GetFeedbackSkill(const FSkillVector& Profile, const FSkillVe
 		return false;
 	}
 	OutSkill = Ties[FMath::RandRange(0, Ties.Num() - 1)];
-	OutDirection = Profile.Get(OutSkill) < Target.Get(OutSkill) ? EFeedbackDirection::TooLittle : EFeedbackDirection::TooMuch;
+	OutDirection = EFeedbackDirection::TooLittle;
 	return true;
 }
 

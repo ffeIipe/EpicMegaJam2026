@@ -47,7 +47,7 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> BodyText;
 };
 
-// WBP_Supplier: the tapes on sale one copy at a time (genre unlocked, stars within the license), genre tabs, star filter, x1 / x5
+// WBP_Supplier: the tapes on sale one copy at a time (genre unlocked, stars within the license), ALL + genre tabs, star filter, x1 / x5
 UCLASS(Blueprintable)
 class EPICMEGAJAM2026_API UDCSupplierWidget : public UDCScreen
 {
@@ -79,7 +79,7 @@ private:
 	UPROPERTY() TObjectPtr<UVerticalBox> List;
 	struct FBuyButton { TWeakObjectPtr<UDCButton> Button; FName Row; int32 Count = 1; };
 	TArray<FBuyButton> BuyButtons;
-	FName SelectedGenre;
+	FName SelectedGenre = "All"; // "All" or an EGenre name
 	int32 SelectedStars = 0; // 0 = all
 };
 
@@ -136,6 +136,7 @@ private:
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTutorialSkipped);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTutorialAccepted);
 
 UENUM(BlueprintType)
 enum class ETutorialPlacement : uint8
@@ -145,33 +146,44 @@ enum class ETutorialPlacement : uint8
 	TopRight
 };
 
-// Contextual tutorial sign, one at a time
+// Contextual modal tutorial sign, one at a time, always bottom-center with a dimming backdrop until accepted
 UCLASS(Blueprintable)
-class EPICMEGAJAM2026_API UDCTutorialWidget : public UUserWidget
+class EPICMEGAJAM2026_API UDCTutorialWidget : public UCommonActivatableWidget
 {
 	GENERATED_BODY()
 public:
+	UDCTutorialWidget(const FObjectInitializer& ObjectInitializer);
+
 	UPROPERTY(BlueprintAssignable) FOnTutorialSkipped OnSkipped;
+	UPROPERTY(BlueprintAssignable) FOnTutorialAccepted OnAccepted;
 
 	UFUNCTION(BlueprintCallable) void ShowHint(const FText& Text);
 	UFUNCTION(BlueprintCallable) void ShowStep(const FText& StepHeader, const FText& Body, const FText& Action, bool bShowSkip = true);
 	UFUNCTION(BlueprintCallable) void HideHint();
-	// Repositions the banner cleanly away from bottom dialogues or full-screen crafting/computer/supplier panels
+	UFUNCTION(BlueprintCallable) bool IsModalOpen() const;
+	// Kept for blueprint/API compatibility; tutorial sign always stays bottom-center
 	UFUNCTION(BlueprintCallable) void SetPlacement(ETutorialPlacement Placement);
 	UFUNCTION(BlueprintCallable) void SetTopPlacement(bool bTop) { SetPlacement(bTop ? ETutorialPlacement::TopCenter : ETutorialPlacement::BottomCenter); }
 
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
+
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual bool NativeOnHandleBackAction() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	UFUNCTION() void HandleSkip(FName Unused);
+	UFUNCTION() void HandleAccept(FName Unused);
 
+	UPROPERTY() TObjectPtr<UCommonBorder> Backdrop;
 	UPROPERTY() TObjectPtr<UWidget> Panel;
 	UPROPERTY() TObjectPtr<UCanvasPanelSlot> PanelSlot;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> StepTitleText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> HintText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> ActionText;
 	UPROPERTY() TObjectPtr<UDCButton> SkipButton;
+	UPROPERTY() TObjectPtr<UDCButton> AcceptButton;
 };
 
 // WBP_MainMenu: left-aligned menu over a looping background video (Play/Continue, New Game, Credits, Options, Exit)
@@ -201,6 +213,7 @@ private:
 	void ShowPage(EMenuPage Page);
 	void RefreshMainButtons();
 	void RefreshSlots(bool bForNewGame);
+	void RefreshDynamicTexts();
 	void StartGameOnSlot(const FString& SlotName, bool bNewGame);
 	void Cue(const TCHAR* Name) const;
 
@@ -235,6 +248,7 @@ private:
 	UPROPERTY() TObjectPtr<UVerticalBox> CreditsPage;
 	UPROPERTY() TObjectPtr<UVerticalBox> OptionsPage;
 	UPROPERTY() TObjectPtr<UDCSettingsWidget> Settings;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 class FDCKeyCapture;
@@ -250,8 +264,10 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 
 private:
+	void HandleLanguageChanged();
 	UFUNCTION() void HandleRebind(FName ActionIndex);
 	UFUNCTION() void HandleStep(FName Id);
 	UFUNCTION() void HandleTab(FName Index);
@@ -275,8 +291,10 @@ private:
 	UPROPERTY() TObjectPtr<UCommonTextBlock> VSyncText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> ResScaleText;
 	UPROPERTY() TObjectPtr<UCommonTextBlock> FullscreenText;
+	UPROPERTY() TObjectPtr<UCommonTextBlock> LanguageText;
 	TSharedPtr<FDCKeyCapture> Capture;
 	int32 CapturingAction = INDEX_NONE;
+	FDelegateHandle LanguageChangedHandle;
 };
 
 // WBP_Pause: Continue (or Esc) closes it; Options swaps the buttons for the settings and Back returns to them
